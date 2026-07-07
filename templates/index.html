@@ -88,6 +88,10 @@
       border: 1px solid var(--border); border-radius: var(--radius); padding: 16px;
       font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; resize: vertical;
     }
+    .app-footer {
+      text-align: center; color: var(--muted); font-size: 12px;
+      padding: 24px 16px 32px;
+    }
   </style>
 </head>
 <body>
@@ -161,6 +165,8 @@
       <textarea id="md" spellcheck="false"></textarea>
     </div>
   </div>
+
+  <footer class="app-footer">Markdown converter · v{{ version }}</footer>
 
   <script>
     const $ = s => document.querySelector(s);

@@ -27,6 +27,18 @@ app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 32 * 1024 * 1024  # 32 MB upload limit
 
 
+def _read_version() -> str:
+    path = os.path.join(os.path.dirname(__file__), "VERSION")
+    try:
+        with open(path, encoding="utf-8") as f:
+            return f.read().strip() or "0.0.0"
+    except OSError:
+        return "0.0.0"
+
+
+APP_VERSION = _read_version()
+
+
 def _llm_available() -> bool:
     """Is an OpenRouter API key configured?"""
     return llm_is_available()
@@ -34,7 +46,7 @@ def _llm_available() -> bool:
 
 @app.route("/")
 def index():
-    return render_template("index.html")
+    return render_template("index.html", version=APP_VERSION)
 
 
 @app.get("/api/config")

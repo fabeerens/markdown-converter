@@ -21,7 +21,8 @@ Plak een ECLI of link; de tool herkent de bron automatisch:
 - **Formex-XML** (`.xml`) van EUR-Lex → eigen structuur-parser (nette koppen, recitals, artikelen, lijsten, voetnoten).
 - **Alle andere formaten** (PDF, Word, Excel, PowerPoint, HTML, CSV, JSON, EPUB…) → via [Microsoft MarkItDown](https://github.com/microsoft/markitdown). Bij PDF's worden de "zachte" regeleindes binnen een alinea automatisch samengevoegd.
 
-Uitvoer kun je kopiëren of downloaden als `.md`.
+Uitvoer kun je kopiëren of downloaden als `.md`. Het huidige versienummer (uit het
+`VERSION`-bestand) staat onderaan de pagina in de footer.
 
 ### Optioneel: opschonen met AI (Haiku)
 
