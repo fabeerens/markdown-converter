@@ -190,19 +190,57 @@ def estimate(markdown: str, profile: str = "generic") -> dict:
     }
 
 
-def _split_chunks(text: str, limit: int = _CHUNK_CHARS) -> list[str]:
-    """Split on blank lines, packing paragraphs up to `limit` characters."""
-    paras = text.split("\n\n")
+def _pack(pieces: list[str], sep: str, limit: int) -> list[str]:
+    """Greedily pack pieces (joined by `sep`) into chunks up to `limit` chars.
+
+    A single piece larger than `limit` is passed through as its own
+    (oversized) chunk — the caller is responsible for splitting it further.
+    """
     chunks: list[str] = []
     buf = ""
-    for para in paras:
-        if buf and len(buf) + len(para) + 2 > limit:
+    for piece in pieces:
+        candidate = f"{buf}{sep}{piece}" if buf else piece
+        if buf and len(candidate) > limit:
             chunks.append(buf)
-            buf = para
+            buf = piece
         else:
-            buf = f"{buf}\n\n{para}" if buf else para
-    if buf.strip():
+            buf = candidate
+    if buf:
         chunks.append(buf)
+    return chunks
+
+
+def _split_chunks(text: str, limit: int = _CHUNK_CHARS) -> list[str]:
+    """Split text into chunks of at most `limit` characters.
+
+    Prefers splitting on blank lines (paragraphs), then single newlines, then
+    whitespace, falling back to a hard character slice. This guarantees every
+    chunk respects `limit` even for text with no paragraph breaks at all —
+    e.g. a PDF/Word conversion that reflows into one continuous block — which
+    a paragraph-only split would otherwise pass through as a single oversized
+    chunk that never gets split.
+    """
+    chunks: list[str] = []
+    for chunk in _pack(text.split("\n\n"), "\n\n", limit) or [text]:
+        if len(chunk) <= limit:
+            chunks.append(chunk)
+            continue
+        # This "paragraph" alone exceeds the limit — split it further.
+        sub = _pack(chunk.split("\n"), "\n", limit)
+        for piece in sub:
+            if len(piece) <= limit:
+                chunks.append(piece)
+                continue
+            words = _pack(piece.split(" "), " ", limit)
+            for word_chunk in words:
+                if len(word_chunk) <= limit:
+                    chunks.append(word_chunk)
+                else:
+                    # A single "word" longer than the limit (e.g. no spaces
+                    # at all) — hard-slice as a last resort.
+                    chunks.extend(
+                        word_chunk[i:i + limit] for i in range(0, len(word_chunk), limit)
+                    )
     return chunks or [text]
 
 
