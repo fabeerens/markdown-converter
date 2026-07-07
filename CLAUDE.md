@@ -103,6 +103,16 @@ templates/index.html   web-interface (één pagina, vanilla JS)
 - Env-vars via compose: `OPENROUTER_API_KEY`, `LLM_MODEL`, `OPENROUTER_BASE_URL`. Code behandelt
   lege strings als "niet gezet" (`or DEFAULT`), zodat compose's `${VAR:-}` de defaults niet breekt.
 
+## Versienummer (footer)
+- `VERSION`-bestand = handmatige major.minor.patch. `app.py:_read_version()` plakt daar automatisch
+  `+{commit-count}.{short-hash}` achter — commit-count stijgt vanzelf bij elke commit.
+- Lokaal: leest dit rechtstreeks via `git rev-list --count HEAD` / `git rev-parse --short HEAD`
+  (subprocess, `cwd=_BASE_DIR`). In Docker is er geen `.git`/git-binary (bewust, zie `.dockerignore`),
+  dus daar valt het terug op de env-vars `GIT_COMMIT`/`GIT_COMMIT_COUNT`, die via Docker **build-args**
+  binnenkomen (`Dockerfile` ARG→ENV). `docker-compose.yml` leest die build-args uit de shell-omgeving
+  (`${GIT_COMMIT:-unknown}`); **`build.sh`** exporteert ze automatisch vóór `docker compose build`.
+  Kale `docker compose up --build` zonder `build.sh` → footer toont `unknown` i.p.v. de hash.
+
 ## Conventies
 - Alles lokaal (macOS-launcher) óf via Docker. Geen build-stap. Vanilla JS in één HTML-template.
 - Toelichtingen en UI-teksten zijn in het Nederlands.

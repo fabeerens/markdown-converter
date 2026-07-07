@@ -1,6 +1,13 @@
 services:
   markdown-converter:
-    build: .
+    build:
+      context: .
+      args:
+        # Versienummer in de footer: commit-hash + aantal commits.
+        # Automatisch gevuld door ./build.sh (leest de lokale git-repo op
+        # build-tijd). Bij een kale `docker compose build` blijft dit "unknown"/0.
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
+        GIT_COMMIT_COUNT: ${GIT_COMMIT_COUNT:-0}
     container_name: markdown-converter
     restart: unless-stopped
     ports:

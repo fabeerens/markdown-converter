@@ -9,6 +9,7 @@ from __future__ import annotations
 import io
 import os
 import re
+import subprocess
 from urllib.parse import urlparse, unquote
 
 import requests
@@ -27,13 +28,43 @@ app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 32 * 1024 * 1024  # 32 MB upload limit
 
 
-def _read_version() -> str:
-    path = os.path.join(os.path.dirname(__file__), "VERSION")
+_BASE_DIR = os.path.dirname(__file__)
+
+
+def _read_base_version() -> str:
+    """Major.minor.patch — bumped by hand in VERSION for meaningful releases."""
+    path = os.path.join(_BASE_DIR, "VERSION")
     try:
         with open(path, encoding="utf-8") as f:
             return f.read().strip() or "0.0.0"
     except OSError:
         return "0.0.0"
+
+
+def _git(*args: str) -> str | None:
+    try:
+        result = subprocess.run(
+            ["git", *args], cwd=_BASE_DIR, capture_output=True, text=True,
+            timeout=5, check=True,
+        )
+        return result.stdout.strip() or None
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def _read_version() -> str:
+    """Base version + build metadata: commit count (auto-increments every
+    commit) and short commit hash. Resolved from `git` when the repo is
+    present (local dev); falls back to GIT_COMMIT/GIT_COMMIT_COUNT baked in
+    at Docker build time (see Dockerfile), since the running container
+    doesn't have `git` or the `.git` history.
+    """
+    base = _read_base_version()
+    count = _git("rev-list", "--count", "HEAD") or os.environ.get("GIT_COMMIT_COUNT")
+    commit = _git("rev-parse", "--short", "HEAD") or os.environ.get("GIT_COMMIT")
+    if count and commit and commit != "unknown":
+        return f"{base}+{count}.{commit}"
+    return base
 
 
 APP_VERSION = _read_version()

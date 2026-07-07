@@ -21,8 +21,12 @@ Plak een ECLI of link; de tool herkent de bron automatisch:
 - **Formex-XML** (`.xml`) van EUR-Lex → eigen structuur-parser (nette koppen, recitals, artikelen, lijsten, voetnoten).
 - **Alle andere formaten** (PDF, Word, Excel, PowerPoint, HTML, CSV, JSON, EPUB…) → via [Microsoft MarkItDown](https://github.com/microsoft/markitdown). Bij PDF's worden de "zachte" regeleindes binnen een alinea automatisch samengevoegd.
 
-Uitvoer kun je kopiëren of downloaden als `.md`. Het huidige versienummer (uit het
-`VERSION`-bestand) staat onderaan de pagina in de footer.
+Uitvoer kun je kopiëren of downloaden als `.md`. Onderaan de pagina staat een footer
+met het versienummer, bv. `v1.0.0+10.a89866c`:
+- `1.0.0` komt uit het `VERSION`-bestand (major.minor.patch; handmatig aanpassen bij een echte release).
+- `+10.a89866c` wordt **automatisch** afgeleid van git: het aantal commits (loopt vanzelf
+  op bij elke wijziging) en de korte commit-hash. Lokaal leest de app dit rechtstreeks
+  uit de git-repo; in Docker wordt het meegegeven via build-args (zie hieronder).
 
 ### Optioneel: opschonen met AI (Haiku)
 
@@ -94,9 +98,14 @@ Er is een `Dockerfile` en `docker-compose.yml`. De container draait de app met *
 # 1. (optioneel) API-sleutel voor de AI-opschoning: maak een .env met
 #    OPENROUTER_API_KEY=sk-or-...
 
-# 2. bouwen en starten
-docker compose up -d --build
+# 2. bouwen en starten — gebruik ./build.sh (niet losse docker compose-commando's),
+#    zodat het versienummer in de footer de juiste commit-hash krijgt.
+./build.sh
 ```
+
+`build.sh` leest de huidige git-commit op de VPS uit en geeft die als build-args mee
+aan Docker. Een kale `docker compose up -d --build` werkt ook, maar toont dan `unknown`
+in de footer i.p.v. de commit-hash.
 
 De app draait dan op **http://127.0.0.1:5001** (op de VPS zelf). Compose bindt bewust
 op `127.0.0.1` — de tool heeft **geen ingebouwde authenticatie**.
