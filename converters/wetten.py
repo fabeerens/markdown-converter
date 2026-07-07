@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import re
 
+from urllib.parse import unquote
+
 import requests
 from bs4 import BeautifulSoup
 from markdownify import markdownify as md
@@ -49,22 +51,34 @@ def fetch_wetten(query: str) -> tuple[str, str]:
     path = bwb + (f"/{date.group(0)}" if date else "")
     url = f"https://wetten.overheid.nl/{path}"
 
-    r = requests.get(url, headers={"User-Agent": _UA}, timeout=30)
+    # Een fragment (#Hoofdstuk16, #Artikel5, …) betekent: alleen dat onderdeel.
+    anchor = unquote(query.split("#", 1)[1]).strip() if "#" in query else None
+
+    r = requests.get(url, headers={"User-Agent": _UA}, timeout=60)
     if r.status_code != 200 or not r.text.strip():
         raise ValueError(f"Kon regeling {bwb} niet ophalen (status {r.status_code}).")
     r.encoding = r.apparent_encoding or "utf-8"
 
-    markdown = _wetten_html_to_md(r.text)
+    markdown = _wetten_html_to_md(r.text, anchor)
     if len(markdown.strip()) < 40:
         raise ValueError(f"Geen leesbare wettekst gevonden voor {bwb}.")
-    label = f"wetten.overheid.nl • {path}"
+    label = f"wetten.overheid.nl • {path}" + (f" #{anchor}" if anchor else "")
     return markdown, label
 
 
-def _wetten_html_to_md(html: str) -> str:
+def _wetten_html_to_md(html: str, anchor: str | None = None) -> str:
     soup = BeautifulSoup(html, "lxml")
 
-    container = soup.select_one("#regeling") or soup.select_one("#content") or soup.body
+    if anchor:
+        # Alleen het aangeklikte onderdeel (hoofdstuk/afdeling/artikel).
+        container = soup.find(id=anchor)
+        if container is None:
+            raise ValueError(
+                f"Onderdeel '#{anchor}' niet gevonden in de regeling. "
+                f"Controleer het anker in de link."
+            )
+    else:
+        container = soup.select_one("#regeling") or soup.select_one("#content") or soup.body
     if container is None:
         return ""
 

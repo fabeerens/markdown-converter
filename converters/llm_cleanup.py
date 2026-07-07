@@ -28,9 +28,13 @@ import requests
 DEFAULT_MODEL = "~anthropic/claude-haiku-latest"
 DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
 
-# Roughly how much text to send per request (characters). Kept modest so each
-# chunk converts well within the output-token limit and avoids long requests.
-_CHUNK_CHARS = 12000
+# Chunk target: ~75000 tokens per request (≈ 4 characters per token). Most
+# documents then fit in a single call. Note: Claude Haiku caps output at ~64000
+# tokens, and cleanup output ≈ input length — so a single chunk that is truly
+# ~75k tokens could be truncated on output. Lower _CHUNK_TOKENS if you hit that.
+_CHUNK_TOKENS = 75000
+_CHUNK_CHARS = _CHUNK_TOKENS * 4        # ≈ 300000 characters
+_MAX_OUTPUT_TOKENS = 64000              # Haiku's output ceiling
 
 _SYSTEM_GENERIC = """\
 You clean up Markdown that was mechanically extracted from a document (often a
@@ -214,13 +218,13 @@ def _clean_chunk(chunk: str, api_key: str, model: str, base_url: str, system: st
         json={
             "model": model,
             "temperature": 0,
-            "max_tokens": 16000,
+            "max_tokens": _MAX_OUTPUT_TOKENS,
             "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": f"Clean up this Markdown fragment:\n\n{chunk}"},
             ],
         },
-        timeout=180,
+        timeout=600,
     )
     if resp.status_code == 401:
         raise ValueError(

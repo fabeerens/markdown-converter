@@ -90,7 +90,10 @@ templates/index.html   web-interface (één pagina, vanilla JS)
   Rechtspraak/HUDOC/`ECLI:EU:`/`CELEX:6…` = caselaw).
 - **Beide prompts** maken alléén echte sectietitels koppen; genummerde overwegingen/randnummers
   blijven alinea's (uitdrukkelijke wens gebruiker — niet terugdraaien).
-- Lange documenten worden per ~12.000 tekens in delen verwerkt (aparte API-calls); kosten schaalt mee.
+- Lange documenten worden per ~75.000 tokens (`_CHUNK_TOKENS`, ≈300k tekens) in delen verwerkt;
+  `max_tokens` = 64.000 (Haiku's output-plafond). De meeste wetten/uitspraken passen in één call.
+- **NL-wetgeving met een fragment** in de link (`…#Hoofdstuk16`) → `wetten.py` haalt alléén dat
+  element op (`soup.find(id=anchor)`), niet de hele regeling.
 
 ## Deployment (Docker / VPS)
 - `Dockerfile` (python:3.13-slim) draait de app met **gunicorn** (`app:app`, `0.0.0.0:5001`,

@@ -14,7 +14,7 @@ Plak een ECLI of link; de tool herkent de bron automatisch:
 
 ### 2. Wetgeving
 - **EU-wetgeving** — CELEX-nummer (bv. `32016R0679`, de AVG), een link, of een ELI-link (bv. `https://eur-lex.europa.eu/eli/reg/2016/679/oj`). Officiële tekst uit het Cellar-archief (met terugval op de EUR-Lex portal).
-- **Nederlandse wetgeving** — een wetten.overheid.nl-link of een BWB-nummer (bv. `BWBR0040940`, optioneel met versiedatum `/2021-07-01`).
+- **Nederlandse wetgeving** — een wetten.overheid.nl-link of een BWB-nummer (bv. `BWBR0040940`, optioneel met versiedatum `/2021-07-01`). Staat er een **hoofdstuk-anker** in de link (bv. `…/2026-07-01#Hoofdstuk16`), dan wordt alléén dat onderdeel opgehaald en omgezet.
 
 ### 3. Documentupload
 - Sleep een bestand in het venster (of klik om te bladeren), **of plak een link naar een bestand** (bv. een directe PDF-link).
@@ -31,13 +31,13 @@ Er zijn twee opmaak-profielen die automatisch worden gekozen:
 - **Uitspraak-opmaak** (voor rechtspraak, HUDOC en EU-rechtspraak): koppen vanaf `##`, genummerde rechtsoverwegingen blijven behouden, citaten als blockquotes (`>`), lijsten als markdownlijsten, voetnoten als markdownvoetnoten.
 - **Algemeen** (voor overige documenten, bv. PDF-rapporten): sectietitels als koppen, alinea's samenvoegen, kop-/voetteksten verwijderen.
 
-Hiervoor heb je een OpenRouter API-sleutel nodig:
+Hiervoor heb je een OpenRouter API-sleutel nodig. Maak een bestand `.env` naast de app met:
 
 ```bash
-cp .env.example .env      # en vul je sleutel in bij OPENROUTER_API_KEY
+OPENROUTER_API_KEY=sk-or-...
 ```
 
-Een ander model of endpoint kies je met `LLM_MODEL` / `OPENROUTER_BASE_URL` in `.env`. Zonder sleutel blijft het vinkje uitgeschakeld; de rest van de tool werkt gewoon.
+(sleutel aanmaken op <https://openrouter.ai/keys>). Een ander model of endpoint kies je optioneel met `LLM_MODEL` / `OPENROUTER_BASE_URL` in `.env`. Zonder sleutel blijft het vinkje uitgeschakeld; de rest van de tool werkt gewoon.
 
 ## Starten
 
@@ -90,8 +90,8 @@ templates/index.html   web-interface
 Er is een `Dockerfile` en `docker-compose.yml`. De container draait de app met **gunicorn**.
 
 ```bash
-# 1. (optioneel) API-sleutel voor de AI-opschoning
-cp .env.example .env        # vul OPENROUTER_API_KEY in
+# 1. (optioneel) API-sleutel voor de AI-opschoning: maak een .env met
+#    OPENROUTER_API_KEY=sk-or-...
 
 # 2. bouwen en starten
 docker compose up -d --build
@@ -124,5 +124,5 @@ git remote add origin git@github.com:<gebruiker>/markdown-converter.git
 git push -u origin main
 ```
 
-De AI-sleutel staat **niet** in de repo (`.env` is genegeerd). Op een nieuwe machine:
-`cp .env.example .env` en je sleutel invullen, of de env-variabelen zetten.
+De AI-sleutel staat **niet** in de repo (`.env` is genegeerd). Op een nieuwe machine
+maak je een `.env` met `OPENROUTER_API_KEY=...`, of je zet de env-variabele.
