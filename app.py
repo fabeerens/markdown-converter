@@ -6,11 +6,18 @@ Open dan:   http://127.0.0.1:5001
 
 from __future__ import annotations
 
+import hashlib
 import io
+import json
 import os
 import re
-import subprocess
+from datetime import datetime
 from urllib.parse import urlparse, unquote
+
+try:
+    import fcntl  # POSIX file locking (macOS/Linux); absent on Windows.
+except ImportError:  # pragma: no cover
+    fcntl = None
 
 import requests
 from flask import Flask, jsonify, render_template, request, send_file
@@ -30,6 +37,20 @@ app.config["MAX_CONTENT_LENGTH"] = 32 * 1024 * 1024  # 32 MB upload limit
 
 _BASE_DIR = os.path.dirname(__file__)
 
+# Persisted build counter + install date. Lives outside of git (see
+# .gitignore) so it survives across restarts without needing git or Docker
+# build-args. In Docker this path is bind-mounted (see docker-compose.yml) so
+# it also survives image rebuilds — otherwise every rebuild would reset to
+# build 1.
+_STATE_DIR = os.path.join(_BASE_DIR, ".deploy-state")
+_STATE_PATH = os.path.join(_STATE_DIR, "version.json")
+
+# Source files that define app behaviour. A change in any of these is what
+# "a new version" means here — used to detect whether to bump the build
+# counter, without depending on git being installed or present.
+_FINGERPRINT_GLOBS = ["app.py", "VERSION", "requirements.txt",
+                      "converters/*.py", "templates/*.html"]
+
 
 def _read_base_version() -> str:
     """Major.minor.patch — bumped by hand in VERSION for meaningful releases."""
@@ -41,33 +62,62 @@ def _read_base_version() -> str:
         return "0.0.0"
 
 
-def _git(*args: str) -> str | None:
-    try:
-        result = subprocess.run(
-            ["git", *args], cwd=_BASE_DIR, capture_output=True, text=True,
-            timeout=5, check=True,
-        )
-        return result.stdout.strip() or None
-    except (OSError, subprocess.SubprocessError):
-        return None
+def _source_fingerprint() -> str:
+    """Hash of the app's source files, used to detect a code change."""
+    import glob
+    paths = sorted(p for pattern in _FINGERPRINT_GLOBS
+                   for p in glob.glob(os.path.join(_BASE_DIR, pattern)))
+    digest = hashlib.sha256()
+    for path in paths:
+        try:
+            with open(path, "rb") as f:
+                digest.update(f.read())
+        except OSError:
+            continue
+    return digest.hexdigest()
 
 
-def _read_version() -> str:
-    """Base version + build metadata: commit count (auto-increments every
-    commit) and short commit hash. Resolved from `git` when the repo is
-    present (local dev); falls back to GIT_COMMIT/GIT_COMMIT_COUNT baked in
-    at Docker build time (see Dockerfile), since the running container
-    doesn't have `git` or the `.git` history.
+def _read_version() -> tuple[str, int, str]:
+    """Base version, auto-incrementing build number, and install date.
+
+    The build number goes up automatically whenever the app's source files
+    change compared to the last recorded state — no manual step, no git
+    dependency. The install date is recorded the moment that change is
+    detected (i.e. when this version started running).
     """
     base = _read_base_version()
-    count = _git("rev-list", "--count", "HEAD") or os.environ.get("GIT_COMMIT_COUNT")
-    commit = _git("rev-parse", "--short", "HEAD") or os.environ.get("GIT_COMMIT")
-    if count and commit and commit != "unknown":
-        return f"{base}+{count}.{commit}"
-    return base
+    fingerprint = _source_fingerprint()
+    os.makedirs(_STATE_DIR, exist_ok=True)
+
+    # A simple file lock avoids two gunicorn workers both detecting "new
+    # version" at the same time and double-bumping the counter.
+    with open(os.path.join(_STATE_DIR, ".lock"), "w") as lock_file:
+        if fcntl is not None:
+            fcntl.flock(lock_file, fcntl.LOCK_EX)
+        try:
+            state = {}
+            try:
+                with open(_STATE_PATH, encoding="utf-8") as f:
+                    state = json.load(f)
+            except (OSError, json.JSONDecodeError):
+                state = {}
+
+            if state.get("fingerprint") != fingerprint:
+                state = {
+                    "fingerprint": fingerprint,
+                    "build": int(state.get("build", 0)) + 1,
+                    "installed_at": datetime.now().strftime("%d-%m-%Y %H:%M"),
+                }
+                with open(_STATE_PATH, "w", encoding="utf-8") as f:
+                    json.dump(state, f)
+
+            return base, state["build"], state["installed_at"]
+        finally:
+            if fcntl is not None:
+                fcntl.flock(lock_file, fcntl.LOCK_UN)
 
 
-APP_VERSION = _read_version()
+APP_VERSION, APP_BUILD, APP_INSTALLED_AT = _read_version()
 
 
 def _llm_available() -> bool:
@@ -77,7 +127,9 @@ def _llm_available() -> bool:
 
 @app.route("/")
 def index():
-    return render_template("index.html", version=APP_VERSION)
+    return render_template(
+        "index.html", version=APP_VERSION, build=APP_BUILD, installed_at=APP_INSTALLED_AT,
+    )
 
 
 @app.get("/api/config")
