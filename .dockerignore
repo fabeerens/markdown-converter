@@ -1,0 +1,12 @@
+.venv/
+.git/
+.env
+__pycache__/
+*.pyc
+.DS_Store
+.claude/
+*.command
+run.sh
+serve.sh
+README.md
+CLAUDE.md

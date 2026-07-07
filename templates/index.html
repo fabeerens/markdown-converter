@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Markdown converter</title>
+  <style>
+    :root {
+      --bg: #0f172a; --panel: #1e293b; --panel2: #172032;
+      --border: #334155; --text: #e2e8f0; --muted: #94a3b8;
+      --accent: #3b82f6; --accent-h: #2563eb; --ok: #22c55e; --err: #f87171;
+      --radius: 10px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg); color: var(--text); min-height: 100vh;
+    }
+    header {
+      padding: 28px 24px 16px; text-align: center; border-bottom: 1px solid var(--border);
+    }
+    header h1 { margin: 0; font-size: 22px; font-weight: 650; }
+    header p { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 24px; }
+    .tabs { display: flex; gap: 4px; margin-bottom: 18px; }
+    .tab {
+      flex: 1; padding: 11px; text-align: center; cursor: pointer; border-radius: var(--radius);
+      background: var(--panel2); border: 1px solid var(--border); color: var(--muted); font-weight: 550;
+    }
+    .tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .pane { display: none; }
+    .pane.active { display: block; }
+    .drop {
+      border: 2px dashed var(--border); border-radius: var(--radius); padding: 44px 20px;
+      text-align: center; cursor: pointer; background: var(--panel2); transition: .15s;
+    }
+    .drop.over { border-color: var(--accent); background: #1c2740; }
+    .or-sep { text-align: center; color: var(--muted); font-size: 13px; margin: 14px 0; }
+    .drop strong { color: var(--text); }
+    .drop small { color: var(--muted); display: block; margin-top: 8px; }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; }
+    input[type=text], select {
+      background: var(--panel2); border: 1px solid var(--border); color: var(--text);
+      border-radius: var(--radius); padding: 12px 14px; font-size: 15px;
+    }
+    input[type=text] { flex: 1; min-width: 240px; }
+    select { min-width: 90px; }
+    button.go, button.action {
+      background: var(--accent); color: #fff; border: none; border-radius: var(--radius);
+      padding: 12px 20px; font-size: 15px; font-weight: 600; cursor: pointer;
+    }
+    button.go:hover, button.action:hover { background: var(--accent-h); }
+    button:disabled { opacity: .5; cursor: default; }
+    .hint { color: var(--muted); font-size: 13px; margin-top: 10px; }
+    .clean-panel {
+      display: none; align-items: center; gap: 14px; margin-bottom: 10px;
+      padding: 12px 14px; background: #1c2740; border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+    .clean-panel.show { display: flex; }
+    .clean-info { flex: 1; min-width: 0; }
+    .clean-info strong { display: block; font-size: 14px; }
+    .clean-info span { color: var(--muted); font-size: 12.5px; }
+    .clean-panel button { flex-shrink: 0; padding: 9px 16px; font-size: 14px; }
+    .clean-panel button:disabled { opacity: .6; }
+    .status { margin: 16px 0; min-height: 20px; font-size: 14px; }
+    .status.err { color: var(--err); }
+    .status.ok { color: var(--ok); }
+    .spinner {
+      display: inline-block; width: 14px; height: 14px; border: 2px solid var(--muted);
+      border-top-color: transparent; border-radius: 50%; animation: spin .7s linear infinite;
+      vertical-align: -2px; margin-right: 8px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .output { margin-top: 8px; display: none; }
+    .output.show { display: block; }
+    .out-bar {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
+    }
+    .out-bar .src { color: var(--muted); font-size: 13px; margin-right: auto; }
+    .out-bar button {
+      background: var(--panel); border: 1px solid var(--border); color: var(--text);
+      border-radius: 8px; padding: 7px 13px; font-size: 13px; cursor: pointer; font-weight: 550;
+    }
+    .out-bar button:hover { border-color: var(--accent); }
+    textarea {
+      width: 100%; height: 460px; background: var(--panel2); color: var(--text);
+      border: 1px solid var(--border); border-radius: var(--radius); padding: 16px;
+      font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; resize: vertical;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Markdown converter</h1>
+    <p>Zet jurisprudentie, wetgeving of een document om naar markdown.</p>
+  </header>
+
+  <div class="wrap">
+    <div class="tabs">
+      <div class="tab active" data-tab="jur">Jurisprudentie</div>
+      <div class="tab" data-tab="wet">Wetgeving</div>
+      <div class="tab" data-tab="doc">Documentupload</div>
+    </div>
+
+    <div class="pane active" id="pane-jur">
+      <div class="row">
+        <input type="text" id="q-jur" placeholder="ECLI of link — bv. ECLI:EU:C:2025:645 · ECLI:NL:HR:2012:BQ9251 · ECLI:CE:ECHR:… · HUDOC-link">
+        <select id="lang-jur">
+          <option>NL</option><option>EN</option><option>FR</option><option>DE</option>
+          <option>ES</option><option>IT</option><option>PT</option><option>PL</option>
+        </select>
+        <button class="go" data-link="q-jur" data-lang="lang-jur">Ophalen</button>
+      </div>
+      <div class="hint">Rechtspraak van het <strong>Hof van Justitie EU</strong> (<code>ECLI:EU:…</code>), het <strong>EHRM</strong> (HUDOC-link, item-id of <code>ECLI:CE:ECHR:…</code>) en de <strong>Nederlandse rechtspraak</strong> (<code>ECLI:NL:…</code> of rechtspraak.nl-link). De taalkeuze bepaalt de versie/vertaling.</div>
+    </div>
+
+    <div class="pane" id="pane-wet">
+      <div class="row">
+        <input type="text" id="q-wet" placeholder="link, CELEX of BWB — bv. 32016R0679 · eur-lex.europa.eu/eli/… · BWBR0040940 · wetten.overheid.nl-link">
+        <select id="lang-wet">
+          <option>NL</option><option>EN</option><option>FR</option><option>DE</option>
+          <option>ES</option><option>IT</option><option>PT</option><option>PL</option>
+        </select>
+        <button class="go" data-link="q-wet" data-lang="lang-wet">Ophalen</button>
+      </div>
+      <div class="hint"><strong>EU-wetgeving</strong> via EUR-Lex (CELEX-nummer, ELI- of andere link) en <strong>Nederlandse wetgeving</strong> via wetten.overheid.nl (link of BWB-nummer, evt. met versiedatum). De taalkeuze geldt voor EU-wetgeving.</div>
+    </div>
+
+    <div class="pane" id="pane-doc">
+      <div class="drop" id="drop">
+        <strong>Sleep een bestand hierheen</strong>
+        <small>of klik om te bladeren</small>
+        <small>Formex-XML, PDF, Word, Excel, PowerPoint, HTML, CSV…</small>
+        <input type="file" id="file"
+               accept=".xml,.pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.html,.htm,.csv,.json,.txt,.md,.epub,.rtf,.msg" hidden>
+      </div>
+      <div class="or-sep">of plak een link naar een bestand</div>
+      <div class="row">
+        <input type="text" id="q-url" placeholder="https://… (link naar een PDF, Word, Excel …)">
+        <button class="go" id="btn-url-file">Ophalen</button>
+      </div>
+      <div class="hint">Bijvoorbeeld een directe link naar een PDF-rapport. Het bestand wordt gedownload en omgezet.</div>
+    </div>
+
+    <div class="status" id="status"></div>
+
+    <div class="output" id="output">
+      <div class="clean-panel" id="clean-panel">
+        <div class="clean-info">
+          <strong id="clean-title">Opschonen met AI</strong>
+          <span id="clean-est">Koppen naar markdown, losse regels samenvoegen, kop-/voetteksten verwijderen.</span>
+        </div>
+        <button class="action" id="btn-clean">Opschonen</button>
+      </div>
+      <div class="out-bar">
+        <span class="src" id="src"></span>
+        <button id="copy">Kopiëren</button>
+        <button id="dl">Download .md</button>
+      </div>
+      <textarea id="md" spellcheck="false"></textarea>
+    </div>
+  </div>
+
+  <script>
+    const $ = s => document.querySelector(s);
+    let currentName = "eurlex";
+    let llmAvailable = false;
+    let cleaned = false;  // has the current output already been AI-cleaned?
+    let currentProfile = "generic";  // "caselaw" for judgments, else "generic"
+
+    // Reflect whether an OpenRouter API key is configured.
+    fetch("/api/config").then(r => r.json()).then(cfg => {
+      llmAvailable = !!cfg.llm_available;
+    }).catch(() => {});
+
+    // Tabs
+    document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
+      document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
+      document.querySelectorAll(".pane").forEach(x => x.classList.remove("active"));
+      t.classList.add("active");
+      $("#pane-" + t.dataset.tab).classList.add("active");
+    });
+
+    function setStatus(msg, cls = "") {
+      const el = $("#status");
+      el.className = "status " + cls;
+      el.innerHTML = msg;
+    }
+    function busy(msg) { setStatus('<span class="spinner"></span>' + msg); }
+
+    function showOutput(data) {
+      $("#md").value = data.markdown;
+      $("#src").textContent = data.source || "";
+      $("#output").classList.add("show");
+      setStatus("Klaar.", "ok");
+      cleaned = false;
+      currentProfile = data.kind === "caselaw" ? "caselaw" : "generic";
+      $("#clean-title").textContent = currentProfile === "caselaw"
+        ? "Opschonen met AI (uitspraak-opmaak)"
+        : "Opschonen met AI";
+      const btn = $("#btn-clean");
+      btn.disabled = false;
+      btn.textContent = "Opschonen";
+      if (llmAvailable) {
+        $("#clean-panel").classList.add("show");
+        loadEstimate();
+      } else {
+        $("#clean-panel").classList.remove("show");
+      }
+    }
+
+    function fmtNum(n) { return n.toLocaleString("nl-NL"); }
+
+    async function loadEstimate() {
+      $("#clean-est").textContent = "Kosten berekenen…";
+      try {
+        const est = await post("/api/estimate", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ markdown: $("#md").value, profile: currentProfile })
+        });
+        let parts = [];
+        parts.push(est.chunks + (est.chunks === 1 ? " deel" : " delen"));
+        parts.push("~" + fmtNum(est.input_tokens + est.output_tokens) + " tokens");
+        if (est.cost_usd != null) {
+          const c = est.cost_usd;
+          parts.push("≈ $" + (c < 0.01 ? c.toFixed(4) : c.toFixed(3)));
+        }
+        $("#clean-est").textContent = parts.join(" · ") + " — " + est.model;
+      } catch (e) {
+        $("#clean-est").textContent = "Koppen naar markdown, losse regels samenvoegen, kop-/voetteksten verwijderen.";
+      }
+    }
+
+    $("#btn-clean").onclick = async () => {
+      if (cleaned) return;
+      const btn = $("#btn-clean");
+      btn.disabled = true;
+      setStatus('<span class="spinner"></span>Opschonen met AI… (kan even duren)');
+      try {
+        const data = await post("/api/clean", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ markdown: $("#md").value, profile: currentProfile })
+        });
+        $("#md").value = data.markdown;
+        $("#src").textContent += " • AI-opgeschoond";
+        cleaned = true;
+        btn.textContent = "Opgeschoond ✓";
+        $("#clean-est").textContent = "Klaar met opschonen.";
+        setStatus("Opgeschoond.", "ok");
+      } catch (e) {
+        setStatus(e.message, "err");
+        btn.disabled = false;
+      }
+    };
+
+    async function post(url, opts) {
+      const r = await fetch(url, opts);
+      const data = await r.json().catch(() => ({ error: "Onverwacht antwoord van de server." }));
+      if (!r.ok) throw new Error(data.error || ("Fout " + r.status));
+      return data;
+    }
+
+    // Derive a download filename from the pasted identifier/link.
+    function deriveName(query) {
+      const ecli = query.match(/ECLI:[A-Z]{2}:[A-Za-z0-9.]+:\d{4}:[A-Za-z0-9.]+/i);
+      const bwb = query.match(/BWB[A-Z]\d+/i);
+      const hudoc = query.match(/\b00\d-\d{3,}\b/);
+      const celex = query.match(/([0-9][0-9]{4}[A-Z]{1,2}[0-9]{2,4})/i);
+      return ecli ? ecli[0].replace(/:/g, "-")
+        : bwb ? bwb[0].toUpperCase()
+        : hudoc ? "HUDOC-" + hudoc[0]
+        : celex ? celex[1].toUpperCase() : "document";
+    }
+
+    // Jurisprudentie + Wetgeving: both resolve via the auto-detecting link route.
+    async function fetchLink(queryId, langId, btn) {
+      const query = $("#" + queryId).value.trim();
+      if (!query) { setStatus("Voer een ECLI, CELEX of link in.", "err"); return; }
+      busy("Document ophalen…");
+      btn.disabled = true;
+      try {
+        const data = await post("/api/convert/link", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query, lang: $("#" + langId).value })
+        });
+        currentName = deriveName(query);
+        showOutput(data);
+      } catch (e) { setStatus(e.message, "err"); }
+      finally { btn.disabled = false; }
+    }
+
+    document.querySelectorAll("button.go[data-link]").forEach(btn => {
+      btn.onclick = () => fetchLink(btn.dataset.link, btn.dataset.lang, btn);
+      $("#" + btn.dataset.link).addEventListener("keydown",
+        e => { if (e.key === "Enter") btn.click(); });
+    });
+
+    // Documentupload via een geplakte link (bv. een PDF).
+    $("#btn-url-file").onclick = async () => {
+      const url = $("#q-url").value.trim();
+      if (!url) { setStatus("Plak een link naar een bestand.", "err"); return; }
+      busy("Bestand ophalen en converteren…");
+      const btn = $("#btn-url-file"); btn.disabled = true;
+      try {
+        const data = await post("/api/convert/file-url", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url })
+        });
+        const base = (url.split("?")[0].split("#")[0].split("/").pop() || "document");
+        currentName = base.replace(/\.[^.]+$/, "") || "document";
+        showOutput(data);
+      } catch (e) { setStatus(e.message, "err"); }
+      finally { btn.disabled = false; }
+    };
+    $("#q-url").addEventListener("keydown", e => { if (e.key === "Enter") $("#btn-url-file").click(); });
+
+    // File upload
+    const drop = $("#drop"), fileInput = $("#file");
+    drop.onclick = () => fileInput.click();
+    drop.ondragover = e => { e.preventDefault(); drop.classList.add("over"); };
+    drop.ondragleave = () => drop.classList.remove("over");
+    drop.ondrop = e => { e.preventDefault(); drop.classList.remove("over");
+      if (e.dataTransfer.files.length) uploadFile(e.dataTransfer.files[0]); };
+    fileInput.onchange = () => { if (fileInput.files.length) uploadFile(fileInput.files[0]); };
+
+    async function uploadFile(file) {
+      currentName = file.name.replace(/\.[^.]+$/, "") || "document";
+      busy("Bestand converteren: " + file.name + "…");
+      const fd = new FormData();
+      fd.append("file", file);
+      try {
+        const data = await post("/api/convert/file", { method: "POST", body: fd });
+        showOutput(data);
+      } catch (e) { setStatus(e.message, "err"); }
+    }
+
+    // Copy / download
+    $("#copy").onclick = async () => {
+      await navigator.clipboard.writeText($("#md").value);
+      const b = $("#copy"); b.textContent = "Gekopieerd!";
+      setTimeout(() => b.textContent = "Kopiëren", 1400);
+    };
+    $("#dl").onclick = async () => {
+      const r = await fetch("/api/download", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ markdown: $("#md").value, filename: currentName })
+      });
+      const blob = await r.blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = currentName + ".md";
+      a.click();
+      URL.revokeObjectURL(a.href);
+    };
+  </script>
+</body>
+</html>

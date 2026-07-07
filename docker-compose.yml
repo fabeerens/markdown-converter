@@ -1,0 +1,17 @@
+services:
+  markdown-converter:
+    build: .
+    container_name: markdown-converter
+    # Standaard alleen op localhost van de VPS bereikbaar. Zet er een reverse
+    # proxy (nginx/Caddy/Traefik) met HTTPS + authenticatie voor als je 'm
+    # publiek wilt ontsluiten. Wil je 'm direct op alle interfaces? Vervang
+    # door "5001:5001" (en beveilig met een firewall).
+    ports:
+      - "127.0.0.1:5001:5001"
+    environment:
+      # Optioneel: nodig voor de AI-opschoning. Zet deze in een .env-bestand
+      # naast dit compose-bestand (OPENROUTER_API_KEY=sk-or-...), of leeg laten.
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      OPENROUTER_BASE_URL: ${OPENROUTER_BASE_URL:-}
+    restart: unless-stopped
