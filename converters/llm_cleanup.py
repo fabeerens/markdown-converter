@@ -28,11 +28,12 @@ import requests
 DEFAULT_MODEL = "~anthropic/claude-haiku-latest"
 DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
 
-# Chunk target: ~50000 tokens per request (≈ 4 characters per token). Most
-# documents fit in a single call, and since cleanup output ≈ input length this
-# stays comfortably under Haiku's ~64000-token output cap (no truncation).
-_CHUNK_TOKENS = 50000
-_CHUNK_CHARS = _CHUNK_TOKENS * 4        # ≈ 200000 characters
+# Chunk target: ~60000 tokens per request (≈ 4 characters per token). Most
+# documents fit in a single call. Note: cleanup output ≈ input length, so a
+# chunk near this size sits close to Haiku's ~64000-token output cap — lower
+# _CHUNK_TOKENS if you see truncated output on very dense documents.
+_CHUNK_TOKENS = 60000
+_CHUNK_CHARS = _CHUNK_TOKENS * 4        # ≈ 240000 characters
 _MAX_OUTPUT_TOKENS = 64000              # Haiku's output ceiling
 
 _SYSTEM_GENERIC = """\
