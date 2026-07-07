@@ -27,6 +27,8 @@ _UA = (
 # BWB identifiers: BWBR (regelingen), BWBV (verdragen), BWBW, BWBS, …
 _BWB_RE = re.compile(r"BWB[A-Z]\d+", re.I)
 _DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
+# Portal-melding die per artikel wordt herhaald; geen onderdeel van de wettekst.
+_NOTICE_RE = re.compile(r"Wijziging\(en\) zonder datum inwerkingtreding aanwezig", re.I)
 
 
 def is_wetten(query: str) -> bool:
@@ -66,11 +68,23 @@ def _wetten_html_to_md(html: str) -> str:
     if container is None:
         return ""
 
-    # Strip scripts/styles and the portal's tool/nav noise inside the container.
+    # Strip scripts/styles, the portal's tool/nav noise, and the top status-notice
+    # block ("Geraadpleegd op…", "Geldend van…") — portal-meldingen, geen wettekst.
     for tag in container(["script", "style", "noscript"]):
         tag.decompose()
-    for el in container.select('[class*="action--"], .visually-hidden'):
+    for el in container.select(
+        '[class*="action--"], .visually-hidden, .regeling-toestand-meldingen'
+    ):
         el.decompose()
+
+    # Verwijder de per-artikel melding "[Wijziging(en) zonder datum
+    # inwerkingtreding aanwezig. Zie het wijzigingenoverzicht.]". Die staat als
+    # los tekst-blokje zonder eigen class; matchen op tekst, met een lengtegrens
+    # zodat alleen het melding-element sneuvelt en niet een heel artikel.
+    for el in container.find_all(["p", "div", "span"]):
+        txt = el.get_text(" ", strip=True)
+        if txt and _NOTICE_RE.search(txt) and len(txt) < 140:
+            el.decompose()
 
     markdown = md(str(container), heading_style="ATX", strip=["a"], bullets="-")
     return _tidy(markdown)
