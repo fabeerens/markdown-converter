@@ -41,8 +41,6 @@ templates/index.html   web-interface (één pagina, vanilla JS)
 - `POST /api/clean`         `{markdown, profile, model?}` → opgeschoonde markdown.
 - `POST /api/download`      `{markdown, filename}` → `.md`-bestand.
 - `GET  /api/config`        → `{llm_available, models}` (of er een sleutel is + de modelkeuzelijst).
-- `GET  /api/settings`      → huidige instellingen (modellen/deelgrootte/prompts) + `defaults`.
-- `POST /api/settings`      → instellingen bijwerken (zie "Instellingen" hieronder).
 
 ## Bronherkenning (`converters/caselaw.py` → `detect_source` + `eurlex.fetch_and_convert`)
 
@@ -108,7 +106,7 @@ templates/index.html   web-interface (één pagina, vanilla JS)
 - **Beide reformat-prompts** (`generic`/`caselaw`) maken alléén echte sectietitels koppen;
   genummerde overwegingen/randnummers blijven alinea's (uitdrukkelijke wens gebruiker —
   niet terugdraaien).
-- Lange documenten worden per ~55.000 tokens (`_CHUNK_TOKENS`, ≈220k tekens) in delen verwerkt;
+- Lange documenten worden per ~60.000 tokens (`_CHUNK_TOKENS`, ≈240k tekens) in delen verwerkt;
   `max_tokens` = 64.000 (Haiku's output-plafond, dus geen afkapping). Meeste teksten = één call.
   **Let op**: de UI toont `est.input_tokens` (documentgrootte), NIET `input+output` opgeteld —
   dat laatste oogt ~2x zo groot als het echte document (output ≈ input bij opschonen) en
@@ -138,34 +136,6 @@ templates/index.html   web-interface (één pagina, vanilla JS)
   `#editor` roept `syncGutterScroll()` opnieuw aan na zo'n resize.
 - **NL-wetgeving met een fragment** in de link (`…#Hoofdstuk16`) → `wetten.py` haalt alléén dat
   element op (`soup.find(id=anchor)`), niet de hele regeling.
-
-## Instellingen (⚙-knop rechtsboven)
-
-- `GET /api/settings` → huidige waarden + `defaults` (voor de reset-knoppen per veld,
-  géén apart reset-endpoint nodig). `POST /api/settings` → merget het payload over de
-  opgeslagen settings en persisteert; een leeg/ongeldig veld (lege modellenlijst, lege
-  prompt, deelgrootte buiten `_MIN_CHUNK_TOKENS`–`_MAX_CHUNK_TOKENS`) wist juist dat veld
-  terug naar "gebruik de standaardwaarde" in plaats van de ongeldige waarde op te slaan.
-- Opslag: `converters/llm_cleanup.py` → `_read_settings_raw`/`_write_settings_raw` lezen/
-  schrijven `.deploy-state/settings.json` (dezelfde gitignored, in Docker als volume
-  gemounte map als `version.json`; ook hier een `fcntl.flock` tegen gelijktijdige writes
-  door meerdere gunicorn-workers). Alleen daadwerkelijk gewijzigde sleutels staan erin —
-  ontbrekend/leeg = val terug op de `_DEFAULT_*`-constante.
-- De oorspronkelijke module-constanten zijn hernoemd naar `_DEFAULT_MODEL_CHOICES`,
-  `_DEFAULT_CHUNK_TOKENS`, `_DEFAULT_PROMPTS` (per-profiel: `generic`/`caselaw`/
-  `obsidian`) en blijven de ingebouwde standaardwaarden. `get_model_choices()`,
-  `get_chunk_tokens()` en `get_prompt(profile)` zijn de dynamische lookups die
-  `_system_for`, `_model` en `_split_chunks` nu gebruiken in plaats van de oude
-  statische module-attributen — dus een wijziging via de UI werkt met terugwerkende
-  kracht, zonder herstart.
-- UI (`templates/index.html`): `#btn-settings` (header, `position: absolute` in de
-  al `position: relative` header) opent `#settings-backdrop`, een modal met
-  herhaalbare model-rijen (`modelRow()`/`renderModelRows()`), een `<input type=number>`
-  voor de deelgrootte, en drie prompt-`<textarea>`'s. Elke sectie heeft een eigen
-  "Standaard"-knop die het bijbehorende veld terugzet naar `data.defaults.*` (uit de
-  laatste `GET /api/settings`-respons) — puur client-side, geen extra round-trip.
-  Opslaan roept `loadModelChoices()` opnieuw aan zodat de `#model-choice`-dropdown op
-  het hoofdscherm meteen de bijgewerkte lijst toont zonder page-reload.
 
 ## Deployment (Docker / VPS)
 - `Dockerfile` (python:3.13-slim) draait de app met **gunicorn** (`app:app`, `0.0.0.0:5001`,

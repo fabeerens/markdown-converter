@@ -21,29 +21,20 @@ and the caller falls back to the raw output.
 
 from __future__ import annotations
 
-import json
 import os
 import re
 
 import requests
 
-try:
-    import fcntl  # POSIX file locking (macOS/Linux); absent on Windows.
-except ImportError:  # pragma: no cover
-    fcntl = None
-
 DEFAULT_MODEL = "~anthropic/claude-haiku-latest"
 DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
 
-# Chunk target: ~55000 tokens per request (≈ 4 characters per token) — the
-# built-in default; the user can override this and everything else below via
-# the settings gear icon in the UI (see get_settings_payload/update_settings).
-# Most documents fit in a single call. Note: cleanup output ≈ input length, so
-# a chunk near this size sits comfortably under Haiku's ~64000-token output
-# cap — lower it further if you see truncated output on very dense documents.
-_DEFAULT_CHUNK_TOKENS = 55000
-_MIN_CHUNK_TOKENS = 5000
-_MAX_CHUNK_TOKENS = 190000              # leaves headroom under Haiku's 200k context
+# Chunk target: ~60000 tokens per request (≈ 4 characters per token). Most
+# documents fit in a single call. Note: cleanup output ≈ input length, so a
+# chunk near this size sits close to Haiku's ~64000-token output cap — lower
+# _CHUNK_TOKENS if you see truncated output on very dense documents.
+_CHUNK_TOKENS = 60000
+_CHUNK_CHARS = _CHUNK_TOKENS * 4        # ≈ 240000 characters
 _MAX_OUTPUT_TOKENS = 64000              # Haiku's output ceiling
 
 _SYSTEM_GENERIC = """\
@@ -289,9 +280,7 @@ Onder `## Volledige uitspraak` de integrale tekst, omgezet naar nette Markdown:
 - Output is **één** `markdown`-codeblok, verder niets.\
 """
 
-_DEFAULT_PROMPTS = {
-    "generic": _SYSTEM_GENERIC, "caselaw": _SYSTEM_CASELAW, "obsidian": _SYSTEM_OBSIDIAN,
-}
+_PROMPTS = {"generic": _SYSTEM_GENERIC, "caselaw": _SYSTEM_CASELAW, "obsidian": _SYSTEM_OBSIDIAN}
 
 # Profiles that must run as a single, unsplit request instead of the normal
 # chunked flow (see _SYSTEM_OBSIDIAN's docstring for why).
@@ -327,9 +316,7 @@ def _strip_markdown_fence(text: str) -> str:
 # Selectable models (all via the same OpenRouter key). ":nitro" routes to the
 # fastest provider for that model. Prices below are indicative — the UI
 # fetches live pricing via get_pricing() rather than trusting this comment.
-# This is the built-in default list; the user can add/edit/remove entries via
-# the settings gear icon (see get_model_choices/update_settings below).
-_DEFAULT_MODEL_CHOICES = [
+MODEL_CHOICES = [
     {"id": "~anthropic/claude-haiku-latest", "label": "Claude Haiku (latest) — standaard"},
     {"id": "z-ai/glm-5.2:nitro", "label": "GLM 5.2 (nitro) — $0,93 / $3 per 1M"},
     {"id": "openai/gpt-5.6-luna:nitro", "label": "GPT-5.6 Luna (nitro) — $1 / $6 per 1M"},
@@ -338,142 +325,11 @@ _DEFAULT_MODEL_CHOICES = [
     {"id": "anthropic/claude-sonnet-5:nitro", "label": "Claude Sonnet 5 (nitro) — $2 / $10 per 1M"},
     {"id": "openai/gpt-oss-120b:nitro", "label": "GPT-OSS 120B (nitro) — $0,036 / $0,18 per 1M"},
 ]
-
-# --- User-configurable settings (gear icon in the UI) -----------------------
-#
-# Persisted as JSON in .deploy-state/settings.json — the same gitignored,
-# Docker-volume-mounted state directory already used for the build counter
-# (see app.py:_STATE_DIR). Only keys the user actually changed are stored;
-# anything missing/empty falls back to the _DEFAULT_* constant above, which
-# is also how the UI's "reset to default" works without a separate endpoint.
-
-_STATE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".deploy-state")
-_SETTINGS_PATH = os.path.join(_STATE_DIR, "settings.json")
-_SETTINGS_LOCK_PATH = os.path.join(_STATE_DIR, ".settings.lock")
-
-
-def _read_settings_raw() -> dict:
-    try:
-        with open(_SETTINGS_PATH, encoding="utf-8") as f:
-            return json.load(f)
-    except (OSError, json.JSONDecodeError):
-        return {}
-
-
-def _write_settings_raw(data: dict) -> None:
-    os.makedirs(_STATE_DIR, exist_ok=True)
-    with open(_SETTINGS_LOCK_PATH, "w") as lock_file:
-        if fcntl is not None:
-            fcntl.flock(lock_file, fcntl.LOCK_EX)
-        try:
-            with open(_SETTINGS_PATH, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2)
-        finally:
-            if fcntl is not None:
-                fcntl.flock(lock_file, fcntl.LOCK_UN)
-
-
-def get_model_choices() -> list[dict]:
-    """The model dropdown's entries — user-configured list, or the default."""
-    models = _read_settings_raw().get("models")
-    if isinstance(models, list) and models:
-        cleaned = [
-            {"id": str(m.get("id", "")).strip(), "label": str(m.get("label", "")).strip()}
-            for m in models if isinstance(m, dict) and str(m.get("id", "")).strip()
-        ]
-        if cleaned:
-            return cleaned
-    return _DEFAULT_MODEL_CHOICES
-
-
-def get_chunk_tokens() -> int:
-    """Chunk size target in tokens — user-configured, or the default."""
-    value = _read_settings_raw().get("chunk_tokens")
-    try:
-        value = int(value)
-    except (TypeError, ValueError):
-        return _DEFAULT_CHUNK_TOKENS
-    return value if _MIN_CHUNK_TOKENS <= value <= _MAX_CHUNK_TOKENS else _DEFAULT_CHUNK_TOKENS
-
-
-def get_prompt(profile: str) -> str:
-    """System prompt for `profile` — user-configured override, or the default."""
-    prompts = _read_settings_raw().get("prompts")
-    if isinstance(prompts, dict):
-        override = prompts.get(profile)
-        if isinstance(override, str) and override.strip():
-            return override
-    return _DEFAULT_PROMPTS.get(profile, _SYSTEM_GENERIC)
-
-
-def get_settings_payload() -> dict:
-    """Everything the settings UI needs: current values + defaults to reset to."""
-    return {
-        "models": get_model_choices(),
-        "chunk_tokens": get_chunk_tokens(),
-        "prompts": {p: get_prompt(p) for p in _DEFAULT_PROMPTS},
-        "defaults": {
-            "models": _DEFAULT_MODEL_CHOICES,
-            "chunk_tokens": _DEFAULT_CHUNK_TOKENS,
-            "prompts": _DEFAULT_PROMPTS,
-            "min_chunk_tokens": _MIN_CHUNK_TOKENS,
-            "max_chunk_tokens": _MAX_CHUNK_TOKENS,
-        },
-    }
-
-
-def update_settings(payload: dict) -> dict:
-    """Merge `payload` over the stored settings and persist. Returns the new payload.
-
-    Any key omitted from `payload` keeps its current stored value. Passing an
-    empty/invalid value for a key (empty list, empty string, out-of-range
-    number) clears that key back to "use the default" rather than storing
-    the invalid value.
-    """
-    current = _read_settings_raw()
-
-    if "models" in payload:
-        models = payload["models"]
-        cleaned = [
-            {"id": str(m.get("id", "")).strip(), "label": str(m.get("label", "")).strip()}
-            for m in models if isinstance(m, dict) and str(m.get("id", "")).strip()
-        ] if isinstance(models, list) else []
-        if cleaned:
-            current["models"] = cleaned
-        else:
-            current.pop("models", None)
-
-    if "chunk_tokens" in payload:
-        try:
-            value = int(payload["chunk_tokens"])
-        except (TypeError, ValueError):
-            value = None
-        if value is not None and _MIN_CHUNK_TOKENS <= value <= _MAX_CHUNK_TOKENS:
-            current["chunk_tokens"] = value
-        else:
-            current.pop("chunk_tokens", None)
-
-    if "prompts" in payload and isinstance(payload["prompts"], dict):
-        prompts = dict(current.get("prompts") or {})
-        for profile in _DEFAULT_PROMPTS:
-            if profile not in payload["prompts"]:
-                continue
-            text = payload["prompts"][profile]
-            if isinstance(text, str) and text.strip():
-                prompts[profile] = text
-            else:
-                prompts.pop(profile, None)
-        if prompts:
-            current["prompts"] = prompts
-        else:
-            current.pop("prompts", None)
-
-    _write_settings_raw(current)
-    return get_settings_payload()
+_VALID_MODEL_IDS = {m["id"] for m in MODEL_CHOICES}
 
 
 def _system_for(profile: str) -> str:
-    return get_prompt(profile)
+    return _PROMPTS.get(profile, _SYSTEM_GENERIC)
 
 
 def _api_key() -> str | None:
@@ -488,8 +344,7 @@ def is_available() -> bool:
 def _model(override: str | None = None) -> str:
     # Explicit per-request choice (from the UI) wins; otherwise fall back to
     # the env var; `or DEFAULT` so an empty env var falls back to default.
-    valid_ids = {m["id"] for m in get_model_choices()}
-    if override and override in valid_ids:
+    if override and override in _VALID_MODEL_IDS:
         return override
     return os.environ.get("LLM_MODEL") or DEFAULT_MODEL
 
@@ -591,7 +446,7 @@ def _pack(pieces: list[str], sep: str, limit: int) -> list[str]:
     return chunks
 
 
-def _split_chunks(text: str, limit: int | None = None) -> list[str]:
+def _split_chunks(text: str, limit: int = _CHUNK_CHARS) -> list[str]:
     """Split text into chunks of at most `limit` characters.
 
     Prefers splitting on blank lines (paragraphs), then single newlines, then
@@ -601,8 +456,6 @@ def _split_chunks(text: str, limit: int | None = None) -> list[str]:
     a paragraph-only split would otherwise pass through as a single oversized
     chunk that never gets split.
     """
-    if limit is None:
-        limit = get_chunk_tokens() * 4  # ≈ 4 characters per token
     chunks: list[str] = []
     for chunk in _pack(text.split("\n\n"), "\n\n", limit) or [text]:
         if len(chunk) <= limit:
