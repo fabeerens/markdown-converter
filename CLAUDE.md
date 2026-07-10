@@ -84,12 +84,28 @@ templates/index.html   web-interface (één pagina, vanilla JS)
 - Standaardmodel: **`~anthropic/claude-haiku-latest`** — de **tilde `~` hoort erbij** (OpenRouter's
   auto-updating "latest"-alias). Niet "corrigeren" naar de versie zonder tilde.
 - `_base_url()` normaliseert (strip een eventuele `/chat/completions`), want de code plakt dat pad zelf.
-- **Twee profielen** (`_PROMPTS`): `generic` (documenten/PDF) en `caselaw` (uitspraken/arresten:
+- **Drie profielen** (`_PROMPTS`): `generic` (documenten/PDF), `caselaw` (uitspraken/arresten:
   koppen vanaf `##`, rechtsoverwegingen behouden, citaten→`>`, lijsten→markdownlijsten,
-  voetnoten→`[^n]`). De UI kiest automatisch via het `kind`-veld (`_kind_for_source` in `app.py`:
-  Rechtspraak/HUDOC/`ECLI:EU:`/`CELEX:6…` = caselaw).
-- **Beide prompts** maken alléén echte sectietitels koppen; genummerde overwegingen/randnummers
-  blijven alinea's (uitdrukkelijke wens gebruiker — niet terugdraaien).
+  voetnoten→`[^n]`) en `obsidian` (complete Obsidian-notitie). De UI kiest `generic`/`caselaw`
+  automatisch via het `kind`-veld (`_kind_for_source` in `app.py`: Rechtspraak/HUDOC/
+  `ECLI:EU:`/`CELEX:6…` = caselaw). `obsidian` is een **handmatige extra keuze**
+  (`#profile-choice`, alleen zichtbaar bij `currentKind === "caselaw"`, dus alleen op het
+  Jurisprudentie-tabblad) die het automatische profiel overschrijft.
+- **`obsidian`-profiel**: system-prompt is verbatim gekopieerd uit de skill
+  `~/Downloads/SKILL jurisprudentie.md` (zonder de skill-YAML-frontmatter — dat is
+  Claude Code-metadata, geen model-instructie). Levert YAML-frontmatter + inhoudsopgave-
+  callout + juridische analyse (feiten/rechtsvragen/argumenten/conclusie/impact) + de
+  volledige uitspraak verbatim, in één `` ```markdown ``` ``-codeblok (dat blok wordt eraf
+  gestript door `_strip_markdown_fence` vóórdat het in de textarea komt).
+  **Draait altijd ongesplitst** (`_NO_CHUNK_PROFILES = {"obsidian"}`): frontmatter/analyse
+  mag maar één keer voorkomen, dus chunking zou meerdere stukken met elk hun eigen
+  frontmatter opleveren. Bij zeer lange arresten kan de output daardoor tegen
+  `_MAX_OUTPUT_TOKENS` aanlopen. `_OUTPUT_RATIO["obsidian"] = 1.35` compenseert de
+  kostenraming voor de extra analyse-tekst bovenop de verbatim-tekst (output > input,
+  anders dan bij `generic`/`caselaw` waar output ≈ input).
+- **Beide reformat-prompts** (`generic`/`caselaw`) maken alléén echte sectietitels koppen;
+  genummerde overwegingen/randnummers blijven alinea's (uitdrukkelijke wens gebruiker —
+  niet terugdraaien).
 - Lange documenten worden per ~60.000 tokens (`_CHUNK_TOKENS`, ≈240k tekens) in delen verwerkt;
   `max_tokens` = 64.000 (Haiku's output-plafond, dus geen afkapping). Meeste teksten = één call.
   **Let op**: de UI toont `est.input_tokens` (documentgrootte), NIET `input+output` opgeteld —

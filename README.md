@@ -63,6 +63,14 @@ Er zijn twee opmaak-profielen die automatisch worden gekozen (los van het model)
 - **Uitspraak-opmaak** (voor rechtspraak, HUDOC en EU-rechtspraak): koppen vanaf `##`, genummerde rechtsoverwegingen blijven behouden, citaten als blockquotes (`>`), lijsten als markdownlijsten, voetnoten als markdownvoetnoten.
 - **Algemeen** (voor overige documenten, bv. PDF-rapporten): sectietitels als koppen, alinea's samenvoegen, kop-/voetteksten verwijderen.
 
+Bij **Jurisprudentie** verschijnt daarnaast een extra keuze: **"Opmaken voor Obsidian"**.
+Die levert één complete Obsidian-notitie op — YAML-frontmatter, een inhoudsopgave-callout,
+een gestructureerde juridische analyse (feiten, rechtsvragen, argumenten, conclusie, impact)
+én de volledige uitspraak verbatim — volgens een vast sjabloon. Dit profiel verwerkt de hele
+uitspraak in **één** verzoek (niet in delen, want frontmatter/analyse mag maar één keer
+voorkomen); bij een zeer lang arrest kan de output daardoor tegen het model-uitvoerplafond
+aanlopen en afgekapt worden.
+
 **Let op bij de kostenraming:** het getoonde aantal tokens is de **invoergrootte** van het
 document (niet invoer+uitvoer opgeteld). Het aantal delen (chunks) hangt af van die
 invoergrootte gedeeld door ~60.000 tokens per deel.

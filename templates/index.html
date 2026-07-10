@@ -63,7 +63,7 @@
     .clean-info span { color: var(--muted); font-size: 12.5px; }
     .clean-panel button { flex-shrink: 0; padding: 9px 16px; font-size: 14px; }
     .clean-panel button:disabled { opacity: .6; }
-    #model-choice {
+    #model-choice, #profile-choice {
       flex-shrink: 0; max-width: 260px; background: var(--panel); color: var(--text);
       border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 13px;
     }
@@ -187,6 +187,10 @@
           <strong id="clean-title">Opschonen met AI</strong>
           <span id="clean-est">Koppen naar markdown, losse regels samenvoegen, kop-/voetteksten verwijderen.</span>
         </div>
+        <select id="profile-choice" title="Opmaakprofiel" hidden>
+          <option value="">Standaard</option>
+          <option value="obsidian">Opmaken voor Obsidian</option>
+        </select>
         <select id="model-choice" title="Model voor AI-opschoning"></select>
         <button class="action" id="btn-clean">Opschonen</button>
       </div>
@@ -210,7 +214,8 @@
     let currentName = "eurlex";
     let llmAvailable = false;
     let cleaned = false;  // has the current output already been AI-cleaned?
-    let currentProfile = "generic";  // "caselaw" for judgments, else "generic"
+    let currentKind = "generic";     // "caselaw" for judgments, else "generic" (auto, from the source)
+    let currentProfile = "generic";  // currentKind, unless the user picked "Opmaken voor Obsidian"
 
     // Reflect whether an OpenRouter API key is configured, and populate the
     // model-choice dropdown.
@@ -228,6 +233,22 @@
     $("#model-choice").addEventListener("change", () => {
       localStorage.setItem("llmModel", $("#model-choice").value);
       // Herbereken de kostenraming voor het nieuw gekozen model.
+      if ($("#output").classList.contains("show") && llmAvailable) loadEstimate();
+    });
+
+    // Profielkeuze — "Opmaken voor Obsidian" is alleen zichtbaar bij
+    // jurisprudentie (currentKind === "caselaw") en overschrijft dan het
+    // automatisch gekozen profiel; op "Standaard" volgt het weer currentKind.
+    function updateProfileChoice() {
+      const chosen = $("#profile-choice").value;
+      currentProfile = chosen || currentKind;
+      $("#clean-title").textContent =
+        currentProfile === "obsidian" ? "Opmaken voor Obsidian"
+        : currentProfile === "caselaw" ? "Opschonen met AI (uitspraak-opmaak)"
+        : "Opschonen met AI";
+    }
+    $("#profile-choice").addEventListener("change", () => {
+      updateProfileChoice();
       if ($("#output").classList.contains("show") && llmAvailable) loadEstimate();
     });
 
@@ -253,10 +274,11 @@
       setStatus("Klaar.", "ok");
       updateLineNumbers();
       cleaned = false;
-      currentProfile = data.kind === "caselaw" ? "caselaw" : "generic";
-      $("#clean-title").textContent = currentProfile === "caselaw"
-        ? "Opschonen met AI (uitspraak-opmaak)"
-        : "Opschonen met AI";
+      currentKind = data.kind === "caselaw" ? "caselaw" : "generic";
+      const profileSel = $("#profile-choice");
+      profileSel.hidden = currentKind !== "caselaw";
+      profileSel.value = "";  // reset naar "Standaard" bij elk nieuw document
+      updateProfileChoice();
       const btn = $("#btn-clean");
       btn.disabled = false;
       btn.textContent = "Opschonen";
