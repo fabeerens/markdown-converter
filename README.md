@@ -75,6 +75,21 @@ aanlopen en afgekapt worden.
 document (niet invoer+uitvoer opgeteld). Het aantal delen (chunks) hangt af van die
 invoergrootte gedeeld door ~55.000 tokens per deel.
 
+### Instellingen (rechtsboven, ⚙)
+
+Rechtsboven in de header staat een instellingenknop. Daarin kun je zonder de code aan
+te passen configureren:
+- **AI-endpoints** — endpoints toevoegen, aanpassen of verwijderen (model-id + label
+  in de dropdown), of terug naar de standaardlijst.
+- **Deelgrootte** — het aantal tokens per deel bij chunking (standaard 55.000).
+- **Prompts** — de systeemprompt voor "algemeen" opschonen, voor "jurisprudentie"
+  opschonen, en voor "Opmaken voor Obsidian", elk met een eigen reset-naar-standaard.
+
+Wijzigingen gelden meteen voor alle volgende conversies en blijven bewaard in
+`.deploy-state/settings.json` (buiten git, overleeft herstarts en — in Docker — ook
+image-rebuilds dankzij dezelfde volume-mount als het versienummer). Een leeg
+gelaten veld valt terug op de ingebouwde standaardwaarde.
+
 Hiervoor heb je een OpenRouter API-sleutel nodig. Maak een bestand `.env` naast de app met:
 
 ```bash

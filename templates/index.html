@@ -17,10 +17,68 @@
       background: var(--bg); color: var(--text); min-height: 100vh;
     }
     header {
+      position: relative;
       padding: 28px 24px 16px; text-align: center; border-bottom: 1px solid var(--border);
     }
     header h1 { margin: 0; font-size: 22px; font-weight: 650; }
     header p { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
+    #btn-settings {
+      position: absolute; top: 18px; right: 20px; width: 36px; height: 36px;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--panel2); border: 1px solid var(--border); color: var(--muted);
+      border-radius: 8px; cursor: pointer; font-size: 18px;
+    }
+    #btn-settings:hover { color: var(--text); border-color: var(--accent); }
+    .modal-backdrop {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,.55);
+      align-items: flex-start; justify-content: center; padding: 40px 16px; overflow-y: auto; z-index: 100;
+    }
+    .modal-backdrop.show { display: flex; }
+    .modal {
+      background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+      width: 100%; max-width: 640px; padding: 22px 24px 24px;
+    }
+    .modal h2 { margin: 0 0 4px; font-size: 18px; }
+    .modal .sub { color: var(--muted); font-size: 13px; margin: 0 0 18px; }
+    .modal section { margin-bottom: 22px; }
+    .modal section h3 {
+      font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted);
+      margin: 0 0 10px; display: flex; align-items: center; justify-content: space-between;
+    }
+    .modal section h3 button {
+      text-transform: none; letter-spacing: 0; font-size: 12px; font-weight: 500;
+      background: none; border: none; color: var(--accent); cursor: pointer; padding: 0;
+    }
+    .model-row { display: flex; gap: 8px; margin-bottom: 8px; }
+    .model-row input { flex: 1; min-width: 0; }
+    .model-row input.mid { flex: 0 0 42%; }
+    .model-row button.rm {
+      flex-shrink: 0; background: var(--panel2); border: 1px solid var(--border); color: var(--err);
+      border-radius: 8px; width: 34px; cursor: pointer; font-size: 15px;
+    }
+    #settings-add-model {
+      background: var(--panel2); border: 1px dashed var(--border); color: var(--muted);
+      border-radius: 8px; padding: 8px 12px; font-size: 13px; cursor: pointer; width: 100%;
+    }
+    .modal input[type=number] {
+      background: var(--panel2); border: 1px solid var(--border); color: var(--text);
+      border-radius: 8px; padding: 9px 12px; font-size: 14px; width: 140px;
+    }
+    .modal textarea.prompt-edit {
+      width: 100%; min-height: 130px; background: var(--panel2); color: var(--text);
+      border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px;
+      font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; resize: vertical;
+    }
+    .prompt-block { margin-bottom: 14px; }
+    .prompt-block label { display: block; font-size: 13px; margin-bottom: 6px; color: var(--text); }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px; }
+    .modal-actions button.secondary {
+      background: var(--panel2); border: 1px solid var(--border); color: var(--text);
+      border-radius: var(--radius); padding: 10px 18px; font-size: 14px; cursor: pointer;
+    }
+    #settings-status { font-size: 13px; margin-top: 10px; min-height: 16px; }
+    #settings-status.err { color: var(--err); }
+    #settings-status.ok { color: var(--ok); }
     .wrap { max-width: 980px; margin: 0 auto; padding: 24px; }
     .tabs { display: flex; gap: 4px; margin-bottom: 18px; }
     .tab {
@@ -128,9 +186,50 @@
 </head>
 <body>
   <header>
+    <button id="btn-settings" title="Instellingen" aria-label="Instellingen">⚙</button>
     <h1>Markdown converter</h1>
     <p>Zet jurisprudentie, wetgeving of een document om naar markdown.</p>
   </header>
+
+  <div class="modal-backdrop" id="settings-backdrop">
+    <div class="modal">
+      <h2>Instellingen</h2>
+      <p class="sub">Wijzigingen gelden voor alle nieuwe conversies op deze installatie. Laat een veld leeg om terug te vallen op de standaardwaarde.</p>
+
+      <section>
+        <h3>AI-endpoints <button type="button" id="settings-reset-models">Standaardlijst</button></h3>
+        <div id="settings-models"></div>
+        <button type="button" id="settings-add-model">+ Endpoint toevoegen</button>
+      </section>
+
+      <section>
+        <h3>Deelgrootte <button type="button" id="settings-reset-chunk">Standaard</button></h3>
+        <input type="number" id="settings-chunk" step="1000">
+        <span class="sub" style="margin:0 0 0 10px; display:inline;">tokens per deel (<span id="settings-chunk-range"></span>)</span>
+      </section>
+
+      <section>
+        <h3>Prompt voor opschonen — algemeen <button type="button" id="settings-reset-generic">Standaard</button></h3>
+        <div class="prompt-block">
+          <textarea class="prompt-edit" id="settings-prompt-generic"></textarea>
+        </div>
+        <h3>Prompt voor opschonen — jurisprudentie <button type="button" id="settings-reset-caselaw">Standaard</button></h3>
+        <div class="prompt-block">
+          <textarea class="prompt-edit" id="settings-prompt-caselaw"></textarea>
+        </div>
+        <h3>Prompt voor "Opmaken voor Obsidian" <button type="button" id="settings-reset-obsidian">Standaard</button></h3>
+        <div class="prompt-block">
+          <textarea class="prompt-edit" id="settings-prompt-obsidian"></textarea>
+        </div>
+      </section>
+
+      <div id="settings-status"></div>
+      <div class="modal-actions">
+        <button type="button" class="secondary" id="settings-cancel">Annuleren</button>
+        <button type="button" class="action" id="settings-save">Opslaan</button>
+      </div>
+    </div>
+  </div>
 
   <div class="wrap">
     <div class="tabs">
@@ -219,17 +318,23 @@
 
     // Reflect whether an OpenRouter API key is configured, and populate the
     // model-choice dropdown.
-    fetch("/api/config").then(r => r.json()).then(cfg => {
-      llmAvailable = !!cfg.llm_available;
-      const sel = $("#model-choice");
-      (cfg.models || []).forEach(m => {
-        const opt = document.createElement("option");
-        opt.value = m.id; opt.textContent = m.label;
-        sel.appendChild(opt);
-      });
-      const saved = localStorage.getItem("llmModel");
-      if (saved && [...sel.options].some(o => o.value === saved)) sel.value = saved;
-    }).catch(() => {});
+    function loadModelChoices() {
+      return fetch("/api/config").then(r => r.json()).then(cfg => {
+        llmAvailable = !!cfg.llm_available;
+        const sel = $("#model-choice");
+        const prevValue = sel.value;
+        sel.innerHTML = "";
+        (cfg.models || []).forEach(m => {
+          const opt = document.createElement("option");
+          opt.value = m.id; opt.textContent = m.label;
+          sel.appendChild(opt);
+        });
+        const saved = localStorage.getItem("llmModel");
+        if (prevValue && [...sel.options].some(o => o.value === prevValue)) sel.value = prevValue;
+        else if (saved && [...sel.options].some(o => o.value === saved)) sel.value = saved;
+      }).catch(() => {});
+    }
+    loadModelChoices();
     $("#model-choice").addEventListener("change", () => {
       localStorage.setItem("llmModel", $("#model-choice").value);
       // Herbereken de kostenraming voor het nieuw gekozen model.
@@ -484,6 +589,96 @@
       a.download = currentName + ".md";
       a.click();
       URL.revokeObjectURL(a.href);
+    };
+
+    // --- Instellingen (gear icon) --------------------------------------
+    let settingsDefaults = null;
+
+    function modelRow(id, label) {
+      const row = document.createElement("div");
+      row.className = "model-row";
+      row.innerHTML =
+        '<input class="mid" type="text" placeholder="model-id (bv. anthropic/claude-haiku-4.5:nitro)">' +
+        '<input class="mlabel" type="text" placeholder="label in de dropdown">' +
+        '<button type="button" class="rm" title="Verwijderen">×</button>';
+      row.querySelector(".mid").value = id || "";
+      row.querySelector(".mlabel").value = label || "";
+      row.querySelector(".rm").onclick = () => row.remove();
+      return row;
+    }
+
+    function renderModelRows(models) {
+      const wrap = $("#settings-models");
+      wrap.innerHTML = "";
+      (models || []).forEach(m => wrap.appendChild(modelRow(m.id, m.label)));
+    }
+
+    $("#settings-add-model").onclick = () => $("#settings-models").appendChild(modelRow("", ""));
+
+    async function openSettings() {
+      $("#settings-status").textContent = "";
+      $("#settings-status").className = "";
+      try {
+        const data = await post("/api/settings", { method: "GET" });
+        settingsDefaults = data.defaults;
+        renderModelRows(data.models);
+        $("#settings-chunk").value = data.chunk_tokens;
+        $("#settings-chunk").min = data.defaults.min_chunk_tokens;
+        $("#settings-chunk").max = data.defaults.max_chunk_tokens;
+        $("#settings-chunk-range").textContent =
+          fmtNum(data.defaults.min_chunk_tokens) + "–" + fmtNum(data.defaults.max_chunk_tokens);
+        $("#settings-prompt-generic").value = data.prompts.generic;
+        $("#settings-prompt-caselaw").value = data.prompts.caselaw;
+        $("#settings-prompt-obsidian").value = data.prompts.obsidian;
+        $("#settings-backdrop").classList.add("show");
+      } catch (e) {
+        setStatus(e.message, "err");
+      }
+    }
+
+    $("#btn-settings").onclick = openSettings;
+    $("#settings-cancel").onclick = () => $("#settings-backdrop").classList.remove("show");
+    $("#settings-backdrop").addEventListener("click", e => {
+      if (e.target === $("#settings-backdrop")) $("#settings-backdrop").classList.remove("show");
+    });
+
+    $("#settings-reset-models").onclick = () => renderModelRows(settingsDefaults.models);
+    $("#settings-reset-chunk").onclick = () => { $("#settings-chunk").value = settingsDefaults.chunk_tokens; };
+    $("#settings-reset-generic").onclick = () => { $("#settings-prompt-generic").value = settingsDefaults.prompts.generic; };
+    $("#settings-reset-caselaw").onclick = () => { $("#settings-prompt-caselaw").value = settingsDefaults.prompts.caselaw; };
+    $("#settings-reset-obsidian").onclick = () => { $("#settings-prompt-obsidian").value = settingsDefaults.prompts.obsidian; };
+
+    $("#settings-save").onclick = async () => {
+      const models = [...$("#settings-models").querySelectorAll(".model-row")].map(row => ({
+        id: row.querySelector(".mid").value.trim(),
+        label: row.querySelector(".mlabel").value.trim(),
+      })).filter(m => m.id);
+      const payload = {
+        models,
+        chunk_tokens: parseInt($("#settings-chunk").value, 10) || null,
+        prompts: {
+          generic: $("#settings-prompt-generic").value,
+          caselaw: $("#settings-prompt-caselaw").value,
+          obsidian: $("#settings-prompt-obsidian").value,
+        },
+      };
+      const btn = $("#settings-save");
+      btn.disabled = true;
+      try {
+        await post("/api/settings", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        await loadModelChoices();
+        $("#settings-status").className = "ok";
+        $("#settings-status").textContent = "Opgeslagen.";
+        setTimeout(() => { $("#settings-backdrop").classList.remove("show"); }, 500);
+      } catch (e) {
+        $("#settings-status").className = "err";
+        $("#settings-status").textContent = e.message;
+      } finally {
+        btn.disabled = false;
+      }
     };
   </script>
 </body>

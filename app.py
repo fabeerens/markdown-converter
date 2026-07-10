@@ -26,10 +26,12 @@ from converters.caselaw import convert_link
 from converters.formex import convert_formex
 from converters.generic import convert_with_markitdown
 from converters.llm_cleanup import (
-    MODEL_CHOICES,
     clean_markdown,
     estimate as llm_estimate,
+    get_model_choices,
+    get_settings_payload,
     is_available as llm_is_available,
+    update_settings as llm_update_settings,
 )
 
 app = Flask(__name__)
@@ -136,7 +138,23 @@ def index():
 @app.get("/api/config")
 def config():
     """Report which optional features are available to the UI."""
-    return jsonify(llm_available=_llm_available(), models=MODEL_CHOICES)
+    return jsonify(llm_available=_llm_available(), models=get_model_choices())
+
+
+@app.get("/api/settings")
+def get_settings():
+    """Current AI-cleanup settings (models/chunk size/prompts) + their defaults."""
+    return jsonify(get_settings_payload())
+
+
+@app.post("/api/settings")
+def post_settings():
+    """Update AI-cleanup settings. Omitted/empty fields fall back to defaults."""
+    payload = request.get_json(silent=True) or {}
+    try:
+        return jsonify(llm_update_settings(payload))
+    except Exception as e:  # noqa: BLE001
+        return jsonify(error=str(e)), 400
 
 
 def _looks_like_formex(data: bytes) -> bool:
