@@ -67,11 +67,6 @@
       flex-shrink: 0; max-width: 260px; background: var(--panel); color: var(--text);
       border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 13px;
     }
-    .line-toggle {
-      display: flex; align-items: center; gap: 6px; color: var(--muted);
-      font-size: 13px; cursor: pointer; user-select: none;
-    }
-    .line-toggle input { cursor: pointer; }
     .status { margin: 16px 0; min-height: 20px; font-size: 14px; }
     .status.err { color: var(--err); }
     .status.ok { color: var(--ok); }
@@ -100,13 +95,23 @@
       color: var(--muted); font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
       user-select: none;
     }
-    .editor.numbered .gutter { display: block; }
-    .editor.numbered textarea { border-radius: 0 var(--radius) var(--radius) 0; }
+    .gutter div { height: 20.8px; overflow: hidden; }
     textarea {
-      width: 100%; height: 460px; background: var(--panel2); color: var(--text);
-      border: 1px solid var(--border); border-radius: var(--radius); padding: 16px;
+      flex: 1 1 auto; min-width: 0; height: 460px; background: var(--panel2); color: var(--text);
+      border: 1px solid var(--border); border-radius: 0 var(--radius) var(--radius) 0; padding: 16px;
       font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; resize: vertical;
+      white-space: pre-wrap; word-wrap: break-word;
     }
+    /* Off-screen clone of the textarea, used only to measure how each
+       logical line wraps, so gutter numbers line up with real (not visual)
+       lines even when a line wraps across multiple rows. */
+    #line-mirror {
+      position: absolute; visibility: hidden; left: -99999px; top: 0;
+      padding: 16px; border: none; box-sizing: border-box;
+      font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+      white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word;
+    }
+    #line-mirror div { margin: 0; }
     .app-footer {
       text-align: center; color: var(--muted); font-size: 12px;
       padding: 24px 16px 32px;
@@ -154,16 +159,19 @@
       <div class="drop" id="drop">
         <strong>Sleep een bestand hierheen</strong>
         <small>of klik om te bladeren</small>
-        <small>Formex-XML, PDF, Word, Excel, PowerPoint, HTML, CSV…</small>
+        <small>Formex-XML, PDF, foto/scan, Word, Excel, PowerPoint, HTML, CSV…</small>
         <input type="file" id="file"
-               accept=".xml,.pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.html,.htm,.csv,.json,.txt,.md,.epub,.rtf,.msg" hidden>
+               accept=".xml,.pdf,.jpg,.jpeg,.png,.gif,.webp,.bmp,.tif,.tiff,.heic,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.html,.htm,.csv,.json,.txt,.md,.epub,.rtf,.msg" hidden>
       </div>
       <div class="or-sep">of plak een link naar een bestand</div>
       <div class="row">
         <input type="text" id="q-url" placeholder="https://… (link naar een PDF, Word, Excel …)">
         <button class="go" id="btn-url-file">Ophalen</button>
       </div>
-      <div class="hint">Bijvoorbeeld een directe link naar een PDF-rapport. Het bestand wordt gedownload en omgezet.</div>
+      <div class="hint">Bijvoorbeeld een directe link naar een PDF-rapport. Het bestand wordt gedownload en omgezet.
+        PDF's en afbeeldingen (ook gescande/foto's) gaan via <a href="https://pypi.org/project/marker-pdf/" target="_blank" rel="noopener">marker</a> (layout-herkenning + OCR); alle overige formaten via
+        <a href="https://github.com/microsoft/markitdown" target="_blank" rel="noopener">MarkItDown</a>.
+        Na het (her)starten van de tool duurt de eerste PDF/afbeelding enkele minuten (modellen laden in het geheugen — eenmalig gedownload, maar bij elke herstart opnieuw geladen); daarna is het snel tot de volgende herstart.</div>
     </div>
 
     <div class="status" id="status"></div>
@@ -179,13 +187,13 @@
       </div>
       <div class="out-bar">
         <span class="src" id="src"></span>
-        <label class="line-toggle"><input type="checkbox" id="line-toggle"> Regelnummers</label>
         <button id="copy">Kopiëren</button>
         <button id="dl">Download .md</button>
       </div>
       <div class="editor" id="editor">
-        <div class="gutter" id="gutter" hidden></div>
+        <div class="gutter" id="gutter"></div>
         <textarea id="md" spellcheck="false"></textarea>
+        <div id="line-mirror" aria-hidden="true"></div>
       </div>
     </div>
   </div>
@@ -214,6 +222,8 @@
     }).catch(() => {});
     $("#model-choice").addEventListener("change", () => {
       localStorage.setItem("llmModel", $("#model-choice").value);
+      // Herbereken de kostenraming voor het nieuw gekozen model.
+      if ($("#output").classList.contains("show") && llmAvailable) loadEstimate();
     });
 
     // Tabs
@@ -348,7 +358,8 @@
     $("#btn-url-file").onclick = async () => {
       const url = $("#q-url").value.trim();
       if (!url) { setStatus("Plak een link naar een bestand.", "err"); return; }
-      busy("Bestand ophalen en converteren…");
+      busy("Bestand ophalen en converteren…"
+        + (isMarkerFile(url.split("?")[0].split("#")[0]) ? " (na een (her)start kan de eerste keer enkele minuten duren)" : ""));
       const btn = $("#btn-url-file"); btn.disabled = true;
       try {
         const data = await post("/api/convert/file-url", {
@@ -372,9 +383,16 @@
       if (e.dataTransfer.files.length) uploadFile(e.dataTransfer.files[0]); };
     fileInput.onchange = () => { if (fileInput.files.length) uploadFile(fileInput.files[0]); };
 
+    const MARKER_EXT = [".pdf",".jpg",".jpeg",".png",".gif",".webp",".bmp",".tif",".tiff",".heic"];
+    function isMarkerFile(name) {
+      const ext = "." + (name.split(".").pop() || "").toLowerCase();
+      return MARKER_EXT.includes(ext);
+    }
+
     async function uploadFile(file) {
       currentName = file.name.replace(/\.[^.]+$/, "") || "document";
-      busy("Bestand converteren: " + file.name + "…");
+      busy("Bestand converteren: " + file.name + "…"
+        + (isMarkerFile(file.name) ? " (na een (her)start kan de eerste keer enkele minuten duren)" : ""));
       const fd = new FormData();
       fd.append("file", file);
       try {
@@ -383,23 +401,44 @@
       } catch (e) { setStatus(e.message, "err"); }
     }
 
-    // Regelnummers
-    const mdEl = $("#md"), gutterEl = $("#gutter"), editorEl = $("#editor");
+    // Regelnummers — altijd aan. Eén nummer per echte regel (enter), niet per
+    // visueel omgebogen regel: een lange zin die over meerdere visuele regels
+    // wrapt, heeft dus toch maar één regelnummer. Om de gutter exact uit te
+    // lijnen met hoe de textarea zelf wrapt, meten we elke regel in een
+    // onzichtbare "spiegel" met identieke breedte/lettertype, en geven we elk
+    // regelnummer in de gutter precies die gemeten hoogte.
+    const mdEl = $("#md"), gutterEl = $("#gutter"), mirrorEl = $("#line-mirror");
+
     function updateLineNumbers() {
-      if (!editorEl.classList.contains("numbered")) return;
-      const n = mdEl.value.split("\n").length;
+      const lines = mdEl.value.split("\n");
+      mirrorEl.style.width = mdEl.clientWidth + "px";
+
+      const frag = document.createDocumentFragment();
+      const divs = [];
+      for (const line of lines) {
+        const div = document.createElement("div");
+        div.textContent = line.length ? line : " ";
+        frag.appendChild(div);
+        divs.push(div);
+      }
+      mirrorEl.replaceChildren(frag);
+
       let html = "";
-      for (let i = 1; i <= n; i++) html += i + "\n";
-      gutterEl.textContent = html;
+      for (let i = 0; i < divs.length; i++) {
+        const h = divs[i].getBoundingClientRect().height;
+        html += '<div style="height:' + h + 'px">' + (i + 1) + "</div>";
+      }
+      gutterEl.innerHTML = html;
       gutterEl.scrollTop = mdEl.scrollTop;
     }
-    $("#line-toggle").addEventListener("change", e => {
-      editorEl.classList.toggle("numbered", e.target.checked);
-      gutterEl.hidden = !e.target.checked;
-      updateLineNumbers();
-    });
+
     mdEl.addEventListener("input", updateLineNumbers);
     mdEl.addEventListener("scroll", () => { gutterEl.scrollTop = mdEl.scrollTop; });
+    let resizeTimer;
+    window.addEventListener("resize", () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(updateLineNumbers, 150);
+    });
 
     // Copy / download
     $("#copy").onclick = async () => {

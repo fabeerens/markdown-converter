@@ -101,8 +101,14 @@ templates/index.html   web-interface (één pagina, vanilla JS)
   (snelste provider) bestaat NIET als los item in OpenRouter's `/models`-catalogus — `get_pricing()`
   matcht daarom ook op het model-id vóór de `:`, anders krijgt elk `:nitro`-model `cost=None`.
   UI: dropdown in `#model-choice`, gevuld vanuit `/api/config`, keuze onthouden in `localStorage`.
-- **Regelnummers**: vinkje `#line-toggle` toont een gutter (`#gutter`) naast de textarea,
-  gesynchroniseerd op scroll/input. Puur front-end, geen backend-wijziging.
+  Een `change`-listener op `#model-choice` roept `loadEstimate()` opnieuw aan zodat de
+  kostenraming meteen het nieuw gekozen model reflecteert (was eerder een gemiste update).
+- **Regelnummers**: altijd aan (`#gutter`), geen toggle. Eén nummer per brontekst-regel
+  (niet per visueel omgebogen regel) — `#line-mirror` is een onzichtbare kloon van de
+  textarea (zelfde font/breedte/padding) waarin elke regel als eigen `<div>` wordt gemeten
+  (`getBoundingClientRect().height`); de gutter geeft elk nummer precies die hoogte, zodat
+  een lange gewrapte zin één nummer krijgt met witruimte eronder. Herberekend bij
+  input/resize en na elke nieuwe/opgeschoonde tekst; scroll wordt 1-op-1 gesynchroniseerd.
 - **NL-wetgeving met een fragment** in de link (`…#Hoofdstuk16`) → `wetten.py` haalt alléén dat
   element op (`soup.find(id=anchor)`), niet de hele regeling.
 

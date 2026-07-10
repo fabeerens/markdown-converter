@@ -21,9 +21,10 @@ Plak een ECLI of link; de tool herkent de bron automatisch:
 - **Formex-XML** (`.xml`) van EUR-Lex → eigen structuur-parser (nette koppen, recitals, artikelen, lijsten, voetnoten).
 - **Alle andere formaten** (PDF, Word, Excel, PowerPoint, HTML, CSV, JSON, EPUB…) → via [Microsoft MarkItDown](https://github.com/microsoft/markitdown). Bij PDF's worden de "zachte" regeleindes binnen een alinea automatisch samengevoegd.
 
-Uitvoer kun je kopiëren of downloaden als `.md`. Boven de tekst kun je **regelnummers**
-tonen (vinkje "Regelnummers" naast de kopieer-/downloadknoppen) — handig om een bepaalde
-regel terug te vinden of te verwijzen naar een specifiek stuk tekst.
+Uitvoer kun je kopiëren of downloaden als `.md`. Links naast de tekst staan **regelnummers**
+(altijd zichtbaar) — handig om een bepaalde regel terug te vinden of ernaar te verwijzen.
+Eén nummer staat voor één "enter" in de brontekst: een lange zin die over meerdere
+schermregels wordt afgebroken (word-wrap), telt dus toch als één regel.
 
 Onderaan de pagina staat een footer,
 bv. `v1.0.0 (build 3) · geïnstalleerd op 07-07-2026 17:37`:
