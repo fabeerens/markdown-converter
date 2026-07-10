@@ -22,18 +22,19 @@ and the caller falls back to the raw output.
 from __future__ import annotations
 
 import os
+import re
 
 import requests
 
 DEFAULT_MODEL = "~anthropic/claude-haiku-latest"
 DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
 
-# Chunk target: ~60000 tokens per request (≈ 4 characters per token). Most
+# Chunk target: ~55000 tokens per request (≈ 4 characters per token). Most
 # documents fit in a single call. Note: cleanup output ≈ input length, so a
-# chunk near this size sits close to Haiku's ~64000-token output cap — lower
-# _CHUNK_TOKENS if you see truncated output on very dense documents.
-_CHUNK_TOKENS = 60000
-_CHUNK_CHARS = _CHUNK_TOKENS * 4        # ≈ 240000 characters
+# chunk near this size sits comfortably under Haiku's ~64000-token output cap —
+# lower _CHUNK_TOKENS further if you see truncated output on very dense documents.
+_CHUNK_TOKENS = 55000
+_CHUNK_CHARS = _CHUNK_TOKENS * 4        # ≈ 220000 characters
 _MAX_OUTPUT_TOKENS = 64000              # Haiku's output ceiling
 
 _SYSTEM_GENERIC = """\
@@ -102,7 +103,215 @@ Strict rules:
 - Output ONLY the cleaned Markdown. No preamble, no explanation, no code fences.\
 """
 
-_PROMPTS = {"generic": _SYSTEM_GENERIC, "caselaw": _SYSTEM_CASELAW}
+# "Opmaken voor Obsidian" — turns a judgment into a complete Obsidian note
+# (YAML frontmatter, a table-of-contents callout, a structured legal analysis,
+# and the full verbatim text). Based on the user's own skill file
+# (~/Downloads/SKILL jurisprudentie.md), copied verbatim minus its skill
+# frontmatter (that part is Claude Code skill-invocation metadata, not model
+# instructions). Unlike the other profiles, this one must see — and
+# reproduce — the ENTIRE document in a single response: chunking it would
+# stitch together multiple duplicate frontmatters/analyses, which makes no
+# sense for one note. See _NO_CHUNK_PROFILES below.
+_SYSTEM_OBSIDIAN = """\
+Je bent een juridische jurisprudentie-assistent voor Nederlandse rechtspraak, het EHRM en
+het HvJ EU. Je levert één Obsidian-ready Markdownbestand op basis van (1) een link naar een
+uitspraak of (2) de volledige tekst die de gebruiker plakt.
+
+## Outputcontract (lees dit eerst)
+
+De gebruiker wil het resultaat **plakken** in Obsidian. Lever daarom **uitsluitend één
+Markdown-codeblok** terug — de volledige notitie, van de openende `---` tot en met de laatste
+voetnoot. Geen inleiding, geen toelichting, geen voorbehoud, geen tekst buiten het codeblok.
+
+Het codeblok begint met ```` ```markdown ```` en eindigt met ```` ``` ````.
+
+## Waarom verbatim reproduceren mag
+
+Onder `## Volledige uitspraak` komt de **integrale** uitspraaktekst, letterlijk en onverkort.
+Dat mag: officiële teksten van rechterlijke aard zijn uitgezonderd van auteursrecht
+(art. 11 Auteurswet; art. 2 lid 4 Berner Conventie). Uitspraken van de Nederlandse rechter
+(rechtspraak.nl), het EHRM (HUDOC) en het HvJ EU (curia.europa.eu) zijn openbare stukken.
+Vat deze sectie dus nooit samen, vertaal niet en laat niets weg — zet alleen om naar Markdown.
+
+## De vaste outputtemplate
+
+Vul exact deze structuur; de volgorde en de kopniveaus liggen vast. Placeholders tussen
+`{ }` vervang je, lege YAML-velden laat je leeg als de informatie ontbreekt.
+
+```
+---
+Onderdeel van:
+  - "[[Atlas/Jurisprudentie/Jurisprudentie|Jurisprudentie]]"
+Naam: {korte roepnaam van de zaak}
+Datum: {YYYY-MM-DD}
+ECLI: {ECLI of leeg}
+Zaaknummer: {zaak-/applicatienummer of leeg}
+Link: {officiële bronlink of leeg}
+Instantie: {exact één waarde uit de toegestane lijst}
+Tags:
+  - jurisprudentie
+  - {tag 2}
+  - {tag 3}
+---
+> [!toc]- Inhoudsopgave
+> - [[#### {inhoudelijke hoofdkop 1}]]
+> - [[#### {inhoudelijke hoofdkop 2}]]
+
+## Samenvatting
+### In het kort
+> [!samenvatting] {naam uitspraak}
+> {korte rechtsregel-samenvatting van enkele zinnen}
+
+# Feiten
+{chronologisch overzicht van relevante feiten}
+
+# Rechtsvragen
+{genummerde centrale juridische vragen}
+
+## Argumenten
+{standpunten per partij}
+
+## Conclusie
+{beslissing en dragende overwegingen}
+
+# Impact
+{precedentwerking en praktische gevolgen}
+
+## Volledige uitspraak
+
+{integrale uitspraak, omgezet naar Markdown}
+```
+
+## De analyse-instructies (feiten → impact)
+
+Gebruik exact de kopniveaus hierboven (`# Feiten`, `# Rechtsvragen`, `## Argumenten`,
+`## Conclusie`, `# Impact`) en volg per onderdeel:
+
+- **Feiten** — chronologisch overzicht van de relevante feiten; focus op wat direct relevant
+  is voor de rechtsvragen; vermijd interpretaties of juridische kwalificaties; objectieve,
+  neutrale taal.
+- **Rechtsvragen** — identificeer de centrale juridische vragen; formuleer elke vraag helder
+  en beknopt; nummer ze; groepeer gerelateerde subvragen.
+- **Argumenten** — beschrijf de standpunten van alle partijen (label vetgedrukt, bv.
+  `**Klager:**` / `**Regering:**` / `**Verweerder:**`); geef de belangrijkste argumenten;
+  verwijs naar relevante wetgeving en jurisprudentie; onderscheid feitelijke van juridische
+  argumenten.
+- **Conclusie** — vat de beslissing samen; beschrijf de dragende overwegingen; citeer
+  kernachtige overwegingen kort en letterlijk; leg uit hoe de conclusie uit de argumentatie
+  volgt; benoem een concurring/dissenting opinion apart als die er is.
+- **Impact** — analyseer de precedentwerking; beschrijf praktische gevolgen voor vergelijkbare
+  gevallen; benoem relevante sectoren en eventuele maatschappelijke impact; geef aan of
+  vervolgprocedures waarschijnlijk zijn.
+
+**Bronvermelding is verplicht.** Verwijs in de analyse waar mogelijk naar de specifieke
+rechtsoverweging/paragraaf (bv. "r.o. 3.2", "§ 86") en naar de concrete wetsartikelen die de
+rechter toepast (bv. "art. 8 EVRM", "art. 32 Grondwet").
+
+## Workflow
+
+### 1. Input bepalen
+- Kreeg je een **link**? Gebruik die als `Link:` en haal daaruit de volledige tekst, metadata
+  en inhoud (fetch de pagina).
+- Kreeg je **losse tekst**? Gebruik die als bron. Zoek zo nodig het ECLI-nummer en de
+  officiële bronlink op (rechtspraak.nl, HUDOC, curia) en verifieer die voordat je hem opneemt.
+- Maak géén juridische aannames als metadata ontbreekt. Laat het betreffende YAML-veld dan leeg.
+
+### 2. Metadata (YAML-frontmatter)
+- `Onderdeel van:` altijd exact: `"[[Atlas/Jurisprudentie/Jurisprudentie|Jurisprudentie]]"`
+- `Naam:` de gangbare (korte) roepnaam van de zaak.
+- `Datum:` de uitspraakdatum in `YYYY-MM-DD`.
+- `ECLI:` volledige ECLI; leeg laten als onbekend.
+- `Zaaknummer:` zaak-/applicatienummer (bij EHRM het application no.).
+- `Link:` de officiële bronlink.
+- `Instantie:` exact één waarde uit de toegestane lijst hieronder.
+- `Tags:` begin altijd met `jurisprudentie`; voeg maximaal vier inhoudelijke tags toe
+  (max. vijf totaal). Meerwoordige tags met koppeltekens, bv. `artikel-8-EVRM`,
+  `gegevensbescherming`.
+
+**Toegestane instanties (kies exact één):**
+EHRM, HvJ EU, Hoge Raad (HR), Raad van State (RvS), Gerechtshof Amsterdam,
+Gerechtshof Arnhem-Leeuwarden, Gerechtshof Den Haag, Gerechtshof 's-Hertogenbosch,
+College van Beroep voor het bedrijfsleven (CBb), Centrale Raad van Beroep (CrvB),
+Rechtbank Amsterdam, Rechtbank Den Haag, Rechtbank Gelderland, Rechtbank Limburg,
+Rechtbank Midden-Nederland, Rechtbank Noord-Holland, Rechtbank Noord-Nederland,
+Rechtbank Oost-Brabant, Rechtbank Overijssel, Rechtbank Rotterdam,
+Rechtbank Zeeland-West-Brabant.
+
+### 3. Inhoudsopgave-callout
+Direct na de frontmatter, vóór `## Samenvatting`. Gebruik wikilinks naar de **inhoudelijke
+hoofdkoppen van de volledige uitspraak** (de `####`-koppen uit stap 6), in dezelfde volgorde.
+Twee harde eisen, omdat een Obsidian-wikilink anders niet resolvet:
+- **Sla het titel-/kopblok over** (bv. `FIFTH SECTION`, `CASE OF ...`, `JUDGMENT`/`ARREST`,
+  vindplaatsregels). De TOC begint bij de eerste procesinhoudelijke sectie
+  (bv. `PROCEDURE`/`Procesverloop`).
+- Het label ná `####` in de wikilink moet **teken voor teken identiek** zijn aan de
+  bijbehorende kop, inclusief nummering, hoofdletters, apostrofs en leestekens (ook een
+  afsluitende komma). Kort de tekst niet in en laat geen leestekens weg.
+
+### 4. Uitgebreide analyse
+Maak de analyse (`# Feiten` t/m `# Impact`) volgens "De analyse-instructies" hierboven. Deze
+uitgebreide analyse staat **onder** de `[!samenvatting]`-callout en **boven**
+`## Volledige uitspraak`.
+
+### 5. Korte rechtsregel-samenvatting (callout)
+Distilleer uit de analyse een bondige samenvatting van enkele zinnen (de rechtsregel + kern) en
+plaats die in de `[!samenvatting]`-callout onder `## Samenvatting` → `### In het kort`, met
+achter `[!samenvatting]` de naam van de uitspraak.
+
+### 6. Volledige uitspraak in Markdown
+Onder `## Volledige uitspraak` de integrale tekst, omgezet naar nette Markdown:
+- **Hoofdkoppen** van de uitspraak (bv. PROCEDURE, THE FACTS, THE LAW, Procesverloop,
+  Overwegingen, Beslissing) → `####`.
+- **Subkoppen** (bv. "A. History of ...", "I. ...") → `#####`.
+- **Genummerde rechtsoverwegingen** behouden hun nummer (`12. ...`).
+- **Citaten** als blockquotes (`>`).
+- **Opsommingen** als Markdownlijsten.
+- **Voetnoten** als Markdown-voetnoten: verwijzing `[^1]` in de tekst, definities
+  (`[^1]: ...`) onderaan het bestand. Zorg dat elke verwijzing een definitie heeft en omgekeerd.
+- **Tabellen** als Markdowntabellen, indien aanwezig.
+
+### 7. Eindcontrole vóór uitvoer
+- Sectievolgorde: frontmatter → `[!toc]`-callout → `## Samenvatting`/`### In het kort`/callout
+  → `# Feiten` … `# Impact` → `## Volledige uitspraak`.
+- TOC-links: labels zijn teken-voor-teken gelijk aan de `####`-koppen, en het titelblok is
+  overgeslagen (TOC begint bij de eerste inhoudelijke sectie).
+- Volledige uitspraak is onverkort en verbatim.
+- Alle voetnoten hebben zowel een verwijzing als een definitie.
+- Output is **één** `markdown`-codeblok, verder niets.\
+"""
+
+_PROMPTS = {"generic": _SYSTEM_GENERIC, "caselaw": _SYSTEM_CASELAW, "obsidian": _SYSTEM_OBSIDIAN}
+
+# Profiles that must run as a single, unsplit request instead of the normal
+# chunked flow (see _SYSTEM_OBSIDIAN's docstring for why).
+_NO_CHUNK_PROFILES = {"obsidian"}
+
+# Rough output/input length ratio per profile, for the cost estimate. The
+# reformat-only profiles roughly preserve length (~1.0); "obsidian" adds
+# frontmatter, a table of contents and a substantial legal analysis on top
+# of the full verbatim text, so its output runs noticeably longer.
+_OUTPUT_RATIO = {"obsidian": 1.35}
+
+# Custom user-message framing per profile; anything not listed uses the
+# default "clean up this fragment" framing (see _clean_chunk).
+_USER_PROMPTS = {
+    "obsidian": (
+        "Hieronder staat de volledige, al naar Markdown omgezette tekst van de "
+        "uitspraak. Verwerk die exact volgens de systeeminstructies en lever de "
+        "complete Obsidian-notitie op.\n\n{chunk}"
+    ),
+}
+_DEFAULT_USER_PROMPT = "Clean up this Markdown fragment:\n\n{chunk}"
+
+# The obsidian profile's output contract wraps its answer in a ```markdown
+# fence; strip that so the app's textarea shows plain Markdown, not a
+# fenced code block containing Markdown.
+_FENCE_RE = re.compile(r"^```(?:markdown)?\s*\n(.*?)\n```\s*$", re.S)
+
+
+def _strip_markdown_fence(text: str) -> str:
+    m = _FENCE_RE.match(text.strip())
+    return m.group(1).strip() if m else text
 
 # Selectable models (all via the same OpenRouter key). ":nitro" routes to the
 # fastest provider for that model. Prices below are indicative — the UI
@@ -191,13 +400,16 @@ def estimate(markdown: str, profile: str = "generic", model: str | None = None) 
     cost, not exact billing.
     """
     text = markdown.strip()
-    chunks = _split_chunks(text) if text else []
+    if profile in _NO_CHUNK_PROFILES:
+        chunks = [text] if text else []
+    else:
+        chunks = _split_chunks(text) if text else []
     n = len(chunks)
     sys_tokens = len(_system_for(profile)) // 4
     content_tokens = sum(len(c) for c in chunks) // 4
     # Each chunk resends the system prompt + a little message overhead.
     input_tokens = content_tokens + (sys_tokens + 20) * n
-    output_tokens = content_tokens  # cleanup preserves length ≈ input content
+    output_tokens = int(content_tokens * _OUTPUT_RATIO.get(profile, 1.0))
     model = _model(model)
     pricing = get_pricing(model) if is_available() else None
     cost = None
@@ -268,7 +480,10 @@ def _split_chunks(text: str, limit: int = _CHUNK_CHARS) -> list[str]:
     return chunks or [text]
 
 
-def _clean_chunk(chunk: str, api_key: str, model: str, base_url: str, system: str) -> str:
+def _clean_chunk(
+    chunk: str, api_key: str, model: str, base_url: str, system: str, profile: str = "generic",
+) -> str:
+    user_prompt = _USER_PROMPTS.get(profile, _DEFAULT_USER_PROMPT).format(chunk=chunk)
     resp = requests.post(
         f"{base_url.rstrip('/')}/chat/completions",
         headers={
@@ -283,7 +498,7 @@ def _clean_chunk(chunk: str, api_key: str, model: str, base_url: str, system: st
             "max_tokens": _MAX_OUTPUT_TOKENS,
             "messages": [
                 {"role": "system", "content": system},
-                {"role": "user", "content": f"Clean up this Markdown fragment:\n\n{chunk}"},
+                {"role": "user", "content": user_prompt},
             ],
         },
         timeout=600,
@@ -303,15 +518,22 @@ def _clean_chunk(chunk: str, api_key: str, model: str, base_url: str, system: st
 
     data = resp.json()
     try:
-        return (data["choices"][0]["message"]["content"] or "").strip()
+        content = (data["choices"][0]["message"]["content"] or "").strip()
     except (KeyError, IndexError, TypeError) as e:
         raise ValueError(f"AI-opschoning gaf een onverwacht antwoord: {str(data)[:200]}") from e
+
+    if profile == "obsidian":
+        content = _strip_markdown_fence(content)
+    return content
 
 
 def clean_markdown(markdown: str, profile: str = "generic", model: str | None = None) -> str:
     """Run the LLM cleanup pass. Raises ValueError on auth/config/API problems.
 
-    profile: "generic" (default) or "caselaw" (court decisions / judgments).
+    profile: "generic" (default), "caselaw" (court decisions / judgments), or
+    "obsidian" (full Obsidian note — YAML frontmatter, ToC, legal analysis,
+    and the full verbatim text; runs as a single unsplit request, see
+    _NO_CHUNK_PROFILES).
     model: optional OpenRouter model id override (see MODEL_CHOICES); falls
     back to LLM_MODEL / the default when not given or not recognised.
     """
@@ -329,9 +551,10 @@ def clean_markdown(markdown: str, profile: str = "generic", model: str | None = 
     model = _model(model)
     base_url = _base_url()
     system = _system_for(profile)
+    chunks = [text] if profile in _NO_CHUNK_PROFILES else _split_chunks(text)
 
     try:
-        cleaned = [_clean_chunk(c, api_key, model, base_url, system) for c in _split_chunks(text)]
+        cleaned = [_clean_chunk(c, api_key, model, base_url, system, profile) for c in chunks]
     except requests.exceptions.RequestException as e:
         raise ValueError(f"AI-opschoning mislukt (verbindingsfout): {e}") from e
 

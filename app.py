@@ -240,7 +240,7 @@ def _kind_for_source(source: str) -> str:
     return "document"
 
 
-_VALID_PROFILES = {"generic", "caselaw"}
+_VALID_PROFILES = {"generic", "caselaw", "obsidian"}
 
 
 @app.post("/api/convert/link")
