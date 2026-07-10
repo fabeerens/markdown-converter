@@ -63,6 +63,15 @@
     .clean-info span { color: var(--muted); font-size: 12.5px; }
     .clean-panel button { flex-shrink: 0; padding: 9px 16px; font-size: 14px; }
     .clean-panel button:disabled { opacity: .6; }
+    #model-choice {
+      flex-shrink: 0; max-width: 260px; background: var(--panel); color: var(--text);
+      border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 13px;
+    }
+    .line-toggle {
+      display: flex; align-items: center; gap: 6px; color: var(--muted);
+      font-size: 13px; cursor: pointer; user-select: none;
+    }
+    .line-toggle input { cursor: pointer; }
     .status { margin: 16px 0; min-height: 20px; font-size: 14px; }
     .status.err { color: var(--err); }
     .status.ok { color: var(--ok); }
@@ -83,6 +92,16 @@
       border-radius: 8px; padding: 7px 13px; font-size: 13px; cursor: pointer; font-weight: 550;
     }
     .out-bar button:hover { border-color: var(--accent); }
+    .editor { position: relative; display: flex; }
+    .gutter {
+      flex-shrink: 0; width: 48px; overflow: hidden; text-align: right;
+      background: var(--panel); border: 1px solid var(--border); border-right: none;
+      border-radius: var(--radius) 0 0 var(--radius); padding: 16px 8px 16px 0;
+      color: var(--muted); font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+      user-select: none;
+    }
+    .editor.numbered .gutter { display: block; }
+    .editor.numbered textarea { border-radius: 0 var(--radius) var(--radius) 0; }
     textarea {
       width: 100%; height: 460px; background: var(--panel2); color: var(--text);
       border: 1px solid var(--border); border-radius: var(--radius); padding: 16px;
@@ -155,14 +174,19 @@
           <strong id="clean-title">Opschonen met AI</strong>
           <span id="clean-est">Koppen naar markdown, losse regels samenvoegen, kop-/voetteksten verwijderen.</span>
         </div>
+        <select id="model-choice" title="Model voor AI-opschoning"></select>
         <button class="action" id="btn-clean">Opschonen</button>
       </div>
       <div class="out-bar">
         <span class="src" id="src"></span>
+        <label class="line-toggle"><input type="checkbox" id="line-toggle"> Regelnummers</label>
         <button id="copy">Kopiëren</button>
         <button id="dl">Download .md</button>
       </div>
-      <textarea id="md" spellcheck="false"></textarea>
+      <div class="editor" id="editor">
+        <div class="gutter" id="gutter" hidden></div>
+        <textarea id="md" spellcheck="false"></textarea>
+      </div>
     </div>
   </div>
 
@@ -175,10 +199,22 @@
     let cleaned = false;  // has the current output already been AI-cleaned?
     let currentProfile = "generic";  // "caselaw" for judgments, else "generic"
 
-    // Reflect whether an OpenRouter API key is configured.
+    // Reflect whether an OpenRouter API key is configured, and populate the
+    // model-choice dropdown.
     fetch("/api/config").then(r => r.json()).then(cfg => {
       llmAvailable = !!cfg.llm_available;
+      const sel = $("#model-choice");
+      (cfg.models || []).forEach(m => {
+        const opt = document.createElement("option");
+        opt.value = m.id; opt.textContent = m.label;
+        sel.appendChild(opt);
+      });
+      const saved = localStorage.getItem("llmModel");
+      if (saved && [...sel.options].some(o => o.value === saved)) sel.value = saved;
     }).catch(() => {});
+    $("#model-choice").addEventListener("change", () => {
+      localStorage.setItem("llmModel", $("#model-choice").value);
+    });
 
     // Tabs
     document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
@@ -200,6 +236,7 @@
       $("#src").textContent = data.source || "";
       $("#output").classList.add("show");
       setStatus("Klaar.", "ok");
+      updateLineNumbers();
       cleaned = false;
       currentProfile = data.kind === "caselaw" ? "caselaw" : "generic";
       $("#clean-title").textContent = currentProfile === "caselaw"
@@ -223,11 +260,14 @@
       try {
         const est = await post("/api/estimate", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ markdown: $("#md").value, profile: currentProfile })
+          body: JSON.stringify({ markdown: $("#md").value, profile: currentProfile, model: $("#model-choice").value })
         });
         let parts = [];
         parts.push(est.chunks + (est.chunks === 1 ? " deel" : " delen"));
-        parts.push("~" + fmtNum(est.input_tokens + est.output_tokens) + " tokens");
+        // Documentgrootte (niet input+output opgeteld — dat oogt dubbel zo groot
+        // als het document werkelijk is, omdat opschonen ongeveer evenveel
+        // output als input produceert).
+        parts.push("~" + fmtNum(est.input_tokens) + " tokens invoer");
         if (est.cost_usd != null) {
           const c = est.cost_usd;
           parts.push("≈ $" + (c < 0.01 ? c.toFixed(4) : c.toFixed(3)));
@@ -246,9 +286,10 @@
       try {
         const data = await post("/api/clean", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ markdown: $("#md").value, profile: currentProfile })
+          body: JSON.stringify({ markdown: $("#md").value, profile: currentProfile, model: $("#model-choice").value })
         });
         $("#md").value = data.markdown;
+        updateLineNumbers();
         $("#src").textContent += " • AI-opgeschoond";
         cleaned = true;
         btn.textContent = "Opgeschoond ✓";
@@ -341,6 +382,24 @@
         showOutput(data);
       } catch (e) { setStatus(e.message, "err"); }
     }
+
+    // Regelnummers
+    const mdEl = $("#md"), gutterEl = $("#gutter"), editorEl = $("#editor");
+    function updateLineNumbers() {
+      if (!editorEl.classList.contains("numbered")) return;
+      const n = mdEl.value.split("\n").length;
+      let html = "";
+      for (let i = 1; i <= n; i++) html += i + "\n";
+      gutterEl.textContent = html;
+      gutterEl.scrollTop = mdEl.scrollTop;
+    }
+    $("#line-toggle").addEventListener("change", e => {
+      editorEl.classList.toggle("numbered", e.target.checked);
+      gutterEl.hidden = !e.target.checked;
+      updateLineNumbers();
+    });
+    mdEl.addEventListener("input", updateLineNumbers);
+    mdEl.addEventListener("scroll", () => { gutterEl.scrollTop = mdEl.scrollTop; });
 
     // Copy / download
     $("#copy").onclick = async () => {

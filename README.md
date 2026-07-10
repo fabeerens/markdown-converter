@@ -21,7 +21,11 @@ Plak een ECLI of link; de tool herkent de bron automatisch:
 - **Formex-XML** (`.xml`) van EUR-Lex → eigen structuur-parser (nette koppen, recitals, artikelen, lijsten, voetnoten).
 - **Alle andere formaten** (PDF, Word, Excel, PowerPoint, HTML, CSV, JSON, EPUB…) → via [Microsoft MarkItDown](https://github.com/microsoft/markitdown). Bij PDF's worden de "zachte" regeleindes binnen een alinea automatisch samengevoegd.
 
-Uitvoer kun je kopiëren of downloaden als `.md`. Onderaan de pagina staat een footer,
+Uitvoer kun je kopiëren of downloaden als `.md`. Boven de tekst kun je **regelnummers**
+tonen (vinkje "Regelnummers" naast de kopieer-/downloadknoppen) — handig om een bepaalde
+regel terug te vinden of te verwijzen naar een specifiek stuk tekst.
+
+Onderaan de pagina staat een footer,
 bv. `v1.0.0 (build 3) · geïnstalleerd op 07-07-2026 17:37`:
 - `1.0.0` komt uit het `VERSION`-bestand (major.minor.patch; handmatig aanpassen bij een echte release).
 - **Build-nummer en installatiedatum lopen automatisch op.** De app herkent zelf wanneer
@@ -30,13 +34,37 @@ bv. `v1.0.0 (build 3) · geïnstalleerd op 07-07-2026 17:37`:
   git nodig, geen handmatige stap. De staat wordt bijgehouden in `.deploy-state/`
   (genegeerd door git; in Docker gemount als volume zodat 'ie een rebuild overleeft).
 
-### Optioneel: opschonen met AI (Haiku)
+### Optioneel: opschonen met AI
 
-Na elke conversie verschijnt een knop **"Opschonen met AI"** met een **kostenraming** (aantal delen, geschatte tokens en prijs, opgehaald bij OpenRouter). Klik erop om de markdown door een klein taalmodel te halen (standaard `~anthropic/claude-haiku-latest` via [OpenRouter](https://openrouter.ai/)). Dat zet koppen om naar echte markdown-koppen, voegt losse regeleindes binnen alinea's samen en verwijdert herhalende kop-/voetteksten en paginanummers — zonder de tekst inhoudelijk te wijzigen.
+Na elke conversie verschijnt een knop **"Opschonen met AI"** met een **model-keuze** en
+een **kostenraming** (aantal delen, tokens en prijs — de prijs wordt live bij OpenRouter
+opgehaald). Klik op **Opschonen** om de markdown door het gekozen taalmodel te halen (via
+[OpenRouter](https://openrouter.ai/)). Dat zet koppen om naar echte markdown-koppen, voegt
+losse regeleindes binnen alinea's samen en verwijdert herhalende kop-/voetteksten en
+paginanummers — zonder de tekst inhoudelijk te wijzigen.
 
-Er zijn twee opmaak-profielen die automatisch worden gekozen:
+**Model kiezen** — de dropdown biedt (allemaal via dezelfde OpenRouter-sleutel):
+
+| Model | Prijs in/uit per 1M tokens |
+|---|---|
+| Claude Haiku (latest) — standaard | zie OpenRouter |
+| GLM 5.2 (nitro) | $0,93 / $3 |
+| GPT-5.6 Luna (nitro) | $1 / $6 |
+| DeepSeek V4 Flash (nitro) | $0,09 / $0,18 |
+| Claude Haiku 4.5 (nitro) | $1 / $5 |
+| Claude Sonnet 5 (nitro) | $2 / $10 |
+| GPT-OSS 120B (nitro) | $0,036 / $0,18 |
+
+Je keuze wordt onthouden (browser-lokaal) voor de volgende keer. `:nitro` kiest automatisch
+de snelste provider voor dat model.
+
+Er zijn twee opmaak-profielen die automatisch worden gekozen (los van het model):
 - **Uitspraak-opmaak** (voor rechtspraak, HUDOC en EU-rechtspraak): koppen vanaf `##`, genummerde rechtsoverwegingen blijven behouden, citaten als blockquotes (`>`), lijsten als markdownlijsten, voetnoten als markdownvoetnoten.
 - **Algemeen** (voor overige documenten, bv. PDF-rapporten): sectietitels als koppen, alinea's samenvoegen, kop-/voetteksten verwijderen.
+
+**Let op bij de kostenraming:** het getoonde aantal tokens is de **invoergrootte** van het
+document (niet invoer+uitvoer opgeteld). Het aantal delen (chunks) hangt af van die
+invoergrootte gedeeld door ~60.000 tokens per deel.
 
 Hiervoor heb je een OpenRouter API-sleutel nodig. Maak een bestand `.env` naast de app met:
 
@@ -44,7 +72,7 @@ Hiervoor heb je een OpenRouter API-sleutel nodig. Maak een bestand `.env` naast 
 OPENROUTER_API_KEY=sk-or-...
 ```
 
-(sleutel aanmaken op <https://openrouter.ai/keys>). Een ander model of endpoint kies je optioneel met `LLM_MODEL` / `OPENROUTER_BASE_URL` in `.env`. Zonder sleutel blijft het vinkje uitgeschakeld; de rest van de tool werkt gewoon.
+(sleutel aanmaken op <https://openrouter.ai/keys>). Een ander standaardmodel of endpoint kies je optioneel met `LLM_MODEL` / `OPENROUTER_BASE_URL` in `.env` (de dropdown in de UI overschrijft dit per keer). Zonder sleutel blijft het opschoon-paneel uitgeschakeld; de rest van de tool werkt gewoon.
 
 ## Starten
 

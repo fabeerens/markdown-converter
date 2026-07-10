@@ -37,10 +37,10 @@ templates/index.html   web-interface (één pagina, vanilla JS)
 - `POST /api/convert/link`  `{query, lang}` → `{markdown, source, kind}` — dispatcht op bron.
 - `POST /api/convert/file`  multipart bestand → `{markdown, source, kind}`.
 - `POST /api/convert/file-url`  `{url}` → downloadt het bestand en zet het om via MarkItDown.
-- `POST /api/estimate`      `{markdown, profile}` → chunks/tokens/kosten voor opschoning.
-- `POST /api/clean`         `{markdown, profile}` → opgeschoonde markdown.
+- `POST /api/estimate`      `{markdown, profile, model?}` → chunks/tokens/kosten voor opschoning.
+- `POST /api/clean`         `{markdown, profile, model?}` → opgeschoonde markdown.
 - `POST /api/download`      `{markdown, filename}` → `.md`-bestand.
-- `GET  /api/config`        → `{llm_available}` (of er een OpenRouter-sleutel is).
+- `GET  /api/config`        → `{llm_available, models}` (of er een sleutel is + de modelkeuzelijst).
 
 ## Bronherkenning (`converters/caselaw.py` → `detect_source` + `eurlex.fetch_and_convert`)
 
@@ -92,6 +92,17 @@ templates/index.html   web-interface (één pagina, vanilla JS)
   blijven alinea's (uitdrukkelijke wens gebruiker — niet terugdraaien).
 - Lange documenten worden per ~60.000 tokens (`_CHUNK_TOKENS`, ≈240k tekens) in delen verwerkt;
   `max_tokens` = 64.000 (Haiku's output-plafond, dus geen afkapping). Meeste teksten = één call.
+  **Let op**: de UI toont `est.input_tokens` (documentgrootte), NIET `input+output` opgeteld —
+  dat laatste oogt ~2x zo groot als het echte document (output ≈ input bij opschonen) en
+  deed gebruikers denken dat het chunk-aantal niet klopte terwijl het wél correct was.
+- **Modelkeuze** (`MODEL_CHOICES` in `llm_cleanup.py`): 7 opties, allemaal via dezelfde
+  OpenRouter-sleutel. `_model(override)` accepteert een expliciete keuze uit de UI (moet in
+  `_VALID_MODEL_IDS` zitten), anders terugval op `LLM_MODEL`/default. De `:nitro`-suffix
+  (snelste provider) bestaat NIET als los item in OpenRouter's `/models`-catalogus — `get_pricing()`
+  matcht daarom ook op het model-id vóór de `:`, anders krijgt elk `:nitro`-model `cost=None`.
+  UI: dropdown in `#model-choice`, gevuld vanuit `/api/config`, keuze onthouden in `localStorage`.
+- **Regelnummers**: vinkje `#line-toggle` toont een gutter (`#gutter`) naast de textarea,
+  gesynchroniseerd op scroll/input. Puur front-end, geen backend-wijziging.
 - **NL-wetgeving met een fragment** in de link (`…#Hoofdstuk16`) → `wetten.py` haalt alléén dat
   element op (`soup.find(id=anchor)`), niet de hele regeling.
 

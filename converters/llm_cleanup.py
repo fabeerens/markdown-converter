@@ -104,6 +104,20 @@ Strict rules:
 
 _PROMPTS = {"generic": _SYSTEM_GENERIC, "caselaw": _SYSTEM_CASELAW}
 
+# Selectable models (all via the same OpenRouter key). ":nitro" routes to the
+# fastest provider for that model. Prices below are indicative — the UI
+# fetches live pricing via get_pricing() rather than trusting this comment.
+MODEL_CHOICES = [
+    {"id": "~anthropic/claude-haiku-latest", "label": "Claude Haiku (latest) — standaard"},
+    {"id": "z-ai/glm-5.2:nitro", "label": "GLM 5.2 (nitro) — $0,93 / $3 per 1M"},
+    {"id": "openai/gpt-5.6-luna:nitro", "label": "GPT-5.6 Luna (nitro) — $1 / $6 per 1M"},
+    {"id": "deepseek/deepseek-v4-flash:nitro", "label": "DeepSeek V4 Flash (nitro) — $0,09 / $0,18 per 1M"},
+    {"id": "anthropic/claude-haiku-4.5:nitro", "label": "Claude Haiku 4.5 (nitro) — $1 / $5 per 1M"},
+    {"id": "anthropic/claude-sonnet-5:nitro", "label": "Claude Sonnet 5 (nitro) — $2 / $10 per 1M"},
+    {"id": "openai/gpt-oss-120b:nitro", "label": "GPT-OSS 120B (nitro) — $0,036 / $0,18 per 1M"},
+]
+_VALID_MODEL_IDS = {m["id"] for m in MODEL_CHOICES}
+
 
 def _system_for(profile: str) -> str:
     return _PROMPTS.get(profile, _SYSTEM_GENERIC)
@@ -118,8 +132,11 @@ def is_available() -> bool:
     return bool(_api_key())
 
 
-def _model() -> str:
-    # `or DEFAULT` so an empty env var falls back to the default model.
+def _model(override: str | None = None) -> str:
+    # Explicit per-request choice (from the UI) wins; otherwise fall back to
+    # the env var; `or DEFAULT` so an empty env var falls back to default.
+    if override and override in _VALID_MODEL_IDS:
+        return override
     return os.environ.get("LLM_MODEL") or DEFAULT_MODEL
 
 
@@ -138,16 +155,23 @@ _pricing_cache: dict[str, dict | None] = {}
 
 
 def get_pricing(model: str) -> dict | None:
-    """Return {'prompt': $/token, 'completion': $/token} for a model, or None."""
+    """Return {'prompt': $/token, 'completion': $/token} for a model, or None.
+
+    OpenRouter's /models catalogue lists bare model ids only — a routing
+    suffix like ":nitro" or ":floor" doesn't appear as a separate entry (it
+    picks a provider, not a differently-priced model), so we also match on
+    the id with any such suffix stripped.
+    """
     if model in _pricing_cache:
         return _pricing_cache[model]
+    base_id = model.split(":", 1)[0]
     result = None
     try:
         base = _base_url().rstrip("/")
         resp = requests.get(f"{base}/models", timeout=20)
         if resp.status_code == 200:
             for m in resp.json().get("data", []):
-                if m.get("id") == model:
+                if m.get("id") in (model, base_id):
                     p = m.get("pricing") or {}
                     result = {
                         "prompt": float(p.get("prompt", 0) or 0),
@@ -160,7 +184,7 @@ def get_pricing(model: str) -> dict | None:
     return result
 
 
-def estimate(markdown: str, profile: str = "generic") -> dict:
+def estimate(markdown: str, profile: str = "generic", model: str | None = None) -> dict:
     """Estimate chunks, tokens and cost for cleaning `markdown`.
 
     Token counts are approximate (≈ 4 characters per token) — enough to gauge
@@ -174,7 +198,7 @@ def estimate(markdown: str, profile: str = "generic") -> dict:
     # Each chunk resends the system prompt + a little message overhead.
     input_tokens = content_tokens + (sys_tokens + 20) * n
     output_tokens = content_tokens  # cleanup preserves length ≈ input content
-    model = _model()
+    model = _model(model)
     pricing = get_pricing(model) if is_available() else None
     cost = None
     if pricing:
@@ -284,10 +308,12 @@ def _clean_chunk(chunk: str, api_key: str, model: str, base_url: str, system: st
         raise ValueError(f"AI-opschoning gaf een onverwacht antwoord: {str(data)[:200]}") from e
 
 
-def clean_markdown(markdown: str, profile: str = "generic") -> str:
+def clean_markdown(markdown: str, profile: str = "generic", model: str | None = None) -> str:
     """Run the LLM cleanup pass. Raises ValueError on auth/config/API problems.
 
     profile: "generic" (default) or "caselaw" (court decisions / judgments).
+    model: optional OpenRouter model id override (see MODEL_CHOICES); falls
+    back to LLM_MODEL / the default when not given or not recognised.
     """
     text = markdown.strip()
     if not text:
@@ -300,7 +326,7 @@ def clean_markdown(markdown: str, profile: str = "generic") -> str:
             "Zet de omgevingsvariabele OPENROUTER_API_KEY en herstart de tool."
         )
 
-    model = _model()
+    model = _model(model)
     base_url = _base_url()
     system = _system_for(profile)
 

@@ -26,6 +26,7 @@ from converters.caselaw import convert_link
 from converters.formex import convert_formex
 from converters.generic import convert_with_markitdown
 from converters.llm_cleanup import (
+    MODEL_CHOICES,
     clean_markdown,
     estimate as llm_estimate,
     is_available as llm_is_available,
@@ -135,7 +136,7 @@ def index():
 @app.get("/api/config")
 def config():
     """Report which optional features are available to the UI."""
-    return jsonify(llm_available=_llm_available())
+    return jsonify(llm_available=_llm_available(), models=MODEL_CHOICES)
 
 
 def _looks_like_formex(data: bytes) -> bool:
@@ -263,7 +264,8 @@ def estimate_cleanup():
     payload = request.get_json(silent=True) or {}
     markdown = payload.get("markdown", "")
     profile = payload.get("profile") if payload.get("profile") in _VALID_PROFILES else "generic"
-    return jsonify(llm_estimate(markdown, profile))
+    model = payload.get("model") or None
+    return jsonify(llm_estimate(markdown, profile, model))
 
 
 @app.post("/api/clean")
@@ -272,10 +274,11 @@ def clean():
     payload = request.get_json(silent=True) or {}
     markdown = payload.get("markdown", "")
     profile = payload.get("profile") if payload.get("profile") in _VALID_PROFILES else "generic"
+    model = payload.get("model") or None
     if not markdown.strip():
         return jsonify(error="Niets om op te schonen."), 400
     try:
-        cleaned = clean_markdown(markdown, profile)
+        cleaned = clean_markdown(markdown, profile, model)
     except Exception as e:  # noqa: BLE001
         return jsonify(error=str(e)), 400
     return jsonify(markdown=cleaned)
