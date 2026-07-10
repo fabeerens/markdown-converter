@@ -108,7 +108,16 @@ templates/index.html   web-interface (één pagina, vanilla JS)
   textarea (zelfde font/breedte/padding) waarin elke regel als eigen `<div>` wordt gemeten
   (`getBoundingClientRect().height`); de gutter geeft elk nummer precies die hoogte, zodat
   een lange gewrapte zin één nummer krijgt met witruimte eronder. Herberekend bij
-  input/resize en na elke nieuwe/opgeschoonde tekst; scroll wordt 1-op-1 gesynchroniseerd.
+  input/resize en na elke nieuwe/opgeschoonde tekst.
+  **Scroll-sync**: `#gutter` heeft géén eigen `scrollTop` — de nummers staan in
+  `#gutter-inner`, dat met een CSS-`transform: translateY(-textarea.scrollTop)` exact
+  evenveel verschuift als de textarea scrolt (`syncGutterScroll()`), pixel-precies en
+  zonder aparte scroll-container-eigenaardigheden.
+  **Gelijke hoogte**: `#editor` (flex-row) heeft een expliciete `height: 460px` +
+  `resize: vertical` — gutter en textarea vullen dat samen met `height:100%`, zodat ze
+  nooit uit elkaar kunnen lopen. De textarea's eigen `resize` staat uit (`resize:none`);
+  de gebruiker resized het hele blok via de rand van `#editor`. Een `ResizeObserver` op
+  `#editor` roept `syncGutterScroll()` opnieuw aan na zo'n resize.
 - **NL-wetgeving met een fragment** in de link (`…#Hoofdstuk16`) → `wetten.py` haalt alléén dat
   element op (`soup.find(id=anchor)`), niet de hele regeling.
 
