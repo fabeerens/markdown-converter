@@ -6,8 +6,9 @@ De projectmap heet nog "EUR-lex naar md" (historisch); de tool zelf heet "Markdo
 
 De UI heeft drie tabbladen: **Jurisprudentie** (HvJ EU / EHRM / NL via ECLI of link),
 **Wetgeving** (EU via CELEX/ELI/link, NL via wetten.overheid.nl/BWB) en **Documentupload**
-(bestand slepen óf een link naar een bestand plakken). Tabs 1 en 2 posten beide naar
+(bestand(en) slepen óf link(s) naar een bestand plakken). Tabs 1 en 2 posten beide naar
 `/api/convert/link` (auto-detectie); tab 3 naar `/api/convert/file` of `/api/convert/file-url`.
+Elk tabblad ondersteunt **meerdere documenten tegelijk** (zie "Meerdere documenten" hieronder).
 
 ## Starten
 
@@ -166,6 +167,35 @@ templates/index.html   web-interface (één pagina, vanilla JS)
   laatste `GET /api/settings`-respons) — puur client-side, geen extra round-trip.
   Opslaan roept `loadModelChoices()` opnieuw aan zodat de `#model-choice`-dropdown op
   het hoofdscherm meteen de bijgewerkte lijst toont zonder page-reload.
+
+## Meerdere documenten tegelijk (`templates/index.html`)
+
+- **Invoer**: elk tabblad (Jurisprudentie/Wetgeving/Documentupload) heeft herhaalbare
+  invoerrijen (`.query-rows` + `initRows()`/`makeQueryRow()`), met een "+ toevoegen"-knop
+  en per rij een ×-knop om te verwijderen (minstens 1 rij blijft altijd staan). Eén
+  "Ophalen"-knop per tabblad (`fetchAllLinks()` voor Jurisprudentie/Wetgeving,
+  `fetchAllFileUrls()`/`uploadFiles()` voor Documentupload) haalt/converteert alle
+  ingevulde rijen **parallel** op via `Promise.allSettled` — een mislukte rij blokkeert
+  de andere niet; de statusregel toont hoeveel er gelukt zijn en welke specifiek faalden.
+  Bestandsupload (`#file`) heeft het `multiple`-attribuut; drag&drop en de bestandskiezer
+  itereren over alle geselecteerde bestanden.
+- **State**: elk succesvol opgehaald/geconverteerd document wordt een `doc`-object
+  (`{id, title, filenameBase, source, kind, profile, model, markdown, cleaned}`) in de
+  globale `docs`-array (`addDoc()`). `profile`/`model` zijn per document, zodat je
+  bv. het ene document met "Opmaken voor Obsidian" opschoont en het andere met het
+  standaardprofiel, elk eventueel met een ander model.
+- **Editor is één singleton-DOM-blok** (regelnummer-gutter, textarea, opschoon-paneel)
+  dat telkens de inhoud van het **actieve** document toont — geen aparte editor-instantie
+  per tabblad. `switchToDoc()` slaat eerst de live-bewerkte tekst van het vorige document
+  op (`saveActiveDocEdits()`, leest `#md`'s waarde terug in `doc.markdown`) voordat het
+  nieuwe document wordt geladen (`loadActiveDocIntoEditor()`). Dit hergebruikt de bestaande
+  regelnummer-/scroll-sync-logica volledig, zonder die te moeten dupliceren per document.
+- **Documenttabs** (`#doc-tabs`, `renderDocTabs()`) staan boven het opschoon-paneel, alleen
+  zichtbaar zodra er ≥1 document is. Elk tabje heeft een label (klikken = `switchToDoc()`)
+  en een ×-knop (`closeDoc()` — verwijdert het document en schakelt naar de buur-tab, of
+  toont niets meer als het de laatste was).
+- Kopiëren/downloaden werken op het **actieve** document (`activeDoc()`); de bestandsnaam
+  bij download komt uit `doc.filenameBase` (voorheen het losse `currentName`).
 
 ## Deployment (Docker / VPS)
 - `Dockerfile` (python:3.13-slim) draait de app met **gunicorn** (`app:app`, `0.0.0.0:5001`,

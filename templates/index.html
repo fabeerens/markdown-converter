@@ -103,6 +103,33 @@
     }
     input[type=text] { flex: 1; min-width: 240px; }
     select { min-width: 90px; }
+    .query-rows { display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px; }
+    .query-row { display: flex; gap: 10px; }
+    .query-row .q-input { flex: 1; min-width: 0; }
+    .query-row .rm-row {
+      flex-shrink: 0; background: var(--panel2); border: 1px solid var(--border); color: var(--err);
+      border-radius: var(--radius); width: 46px; cursor: pointer; font-size: 16px;
+    }
+    .add-row-btn {
+      background: var(--panel2); border: 1px dashed var(--border); color: var(--muted);
+      border-radius: var(--radius); padding: 10px 16px; font-size: 13.5px; cursor: pointer;
+    }
+    .add-row-btn:hover { color: var(--text); border-color: var(--accent); }
+    .doc-tabs {
+      display: none; gap: 6px; margin-bottom: 10px; overflow-x: auto; padding-bottom: 2px;
+    }
+    .doc-tab {
+      display: flex; align-items: center; gap: 6px; flex-shrink: 0; max-width: 220px;
+      background: var(--panel2); border: 1px solid var(--border); border-radius: 8px;
+      padding: 7px 6px 7px 12px; font-size: 13px; cursor: pointer;
+    }
+    .doc-tab.active { border-color: var(--accent); background: #1c2740; }
+    .doc-tab-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .doc-tab-close {
+      flex-shrink: 0; background: none; border: none; color: var(--muted); cursor: pointer;
+      font-size: 15px; line-height: 1; padding: 3px 5px; border-radius: 4px;
+    }
+    .doc-tab-close:hover { color: var(--err); }
     button.go, button.action {
       background: var(--accent); color: #fff; border: none; border-radius: var(--radius);
       padding: 12px 20px; font-size: 15px; font-weight: 600; cursor: pointer;
@@ -239,48 +266,44 @@
     </div>
 
     <div class="pane active" id="pane-jur">
-      <div class="row">
-        <input type="text" id="q-jur" placeholder="ECLI of link — bv. ECLI:EU:C:2025:645 · ECLI:NL:HR:2012:BQ9251 · ECLI:CE:ECHR:… · HUDOC-link">
-        <select id="lang-jur">
-          <option>NL</option><option>EN</option><option>FR</option><option>DE</option>
-          <option>ES</option><option>IT</option><option>PT</option><option>PL</option>
-        </select>
-        <button class="go" data-link="q-jur" data-lang="lang-jur">Ophalen</button>
+      <div class="query-rows" id="rows-jur"></div>
+      <button type="button" class="add-row-btn" id="add-row-jur">+ Document toevoegen</button>
+      <div class="row" style="margin-top:10px;">
+        <button class="go" id="btn-fetch-jur">Ophalen</button>
       </div>
-      <div class="hint">Rechtspraak van het <strong>Hof van Justitie EU</strong> (<code>ECLI:EU:…</code>), het <strong>EHRM</strong> (HUDOC-link, item-id of <code>ECLI:CE:ECHR:…</code>) en de <strong>Nederlandse rechtspraak</strong> (<code>ECLI:NL:…</code> of rechtspraak.nl-link). De taalkeuze bepaalt de versie/vertaling.</div>
+      <div class="hint">Rechtspraak van het <strong>Hof van Justitie EU</strong> (<code>ECLI:EU:…</code>), het <strong>EHRM</strong> (HUDOC-link, item-id of <code>ECLI:CE:ECHR:…</code>) en de <strong>Nederlandse rechtspraak</strong> (<code>ECLI:NL:…</code> of rechtspraak.nl-link). De taalkeuze bepaalt de versie/vertaling. Voeg meerdere documenten toe om ze tegelijk op te halen — elk komt in een eigen tabblad.</div>
     </div>
 
     <div class="pane" id="pane-wet">
-      <div class="row">
-        <input type="text" id="q-wet" placeholder="link, CELEX of BWB — bv. 32016R0679 · eur-lex.europa.eu/eli/… · BWBR0040940 · wetten.overheid.nl-link">
-        <select id="lang-wet">
-          <option>NL</option><option>EN</option><option>FR</option><option>DE</option>
-          <option>ES</option><option>IT</option><option>PT</option><option>PL</option>
-        </select>
-        <button class="go" data-link="q-wet" data-lang="lang-wet">Ophalen</button>
+      <div class="query-rows" id="rows-wet"></div>
+      <button type="button" class="add-row-btn" id="add-row-wet">+ Document toevoegen</button>
+      <div class="row" style="margin-top:10px;">
+        <button class="go" id="btn-fetch-wet">Ophalen</button>
       </div>
-      <div class="hint"><strong>EU-wetgeving</strong> via EUR-Lex (CELEX-nummer, ELI- of andere link) en <strong>Nederlandse wetgeving</strong> via wetten.overheid.nl (link of BWB-nummer, evt. met versiedatum). De taalkeuze geldt voor EU-wetgeving.</div>
+      <div class="hint"><strong>EU-wetgeving</strong> via EUR-Lex (CELEX-nummer, ELI- of andere link) en <strong>Nederlandse wetgeving</strong> via wetten.overheid.nl (link of BWB-nummer, evt. met versiedatum). De taalkeuze geldt voor EU-wetgeving. Voeg meerdere documenten toe om ze tegelijk op te halen.</div>
     </div>
 
     <div class="pane" id="pane-doc">
       <div class="drop" id="drop">
-        <strong>Sleep een bestand hierheen</strong>
-        <small>of klik om te bladeren</small>
+        <strong>Sleep bestanden hierheen</strong>
+        <small>of klik om te bladeren — meerdere tegelijk kan</small>
         <small>Formex-XML, PDF, Word, Excel, PowerPoint, HTML, CSV…</small>
-        <input type="file" id="file"
+        <input type="file" id="file" multiple
                accept=".xml,.pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.html,.htm,.csv,.json,.txt,.md,.epub,.rtf,.msg" hidden>
       </div>
-      <div class="or-sep">of plak een link naar een bestand</div>
-      <div class="row">
-        <input type="text" id="q-url" placeholder="https://… (link naar een PDF, Word, Excel …)">
-        <button class="go" id="btn-url-file">Ophalen</button>
+      <div class="or-sep">of plak een of meer links naar bestanden</div>
+      <div class="query-rows" id="rows-doc"></div>
+      <button type="button" class="add-row-btn" id="add-row-doc">+ Link toevoegen</button>
+      <div class="row" style="margin-top:10px;">
+        <button class="go" id="btn-fetch-doc">Ophalen</button>
       </div>
-      <div class="hint">Bijvoorbeeld een directe link naar een PDF-rapport. Het bestand wordt gedownload en omgezet.</div>
+      <div class="hint">Bijvoorbeeld directe links naar PDF-rapporten. Bestanden worden gedownload en omgezet.</div>
     </div>
 
     <div class="status" id="status"></div>
 
     <div class="output" id="output">
+      <div class="doc-tabs" id="doc-tabs"></div>
       <div class="clean-panel" id="clean-panel">
         <div class="clean-info">
           <strong id="clean-title">Opschonen met AI</strong>
@@ -310,11 +333,115 @@
 
   <script>
     const $ = s => document.querySelector(s);
-    let currentName = "eurlex";
     let llmAvailable = false;
-    let cleaned = false;  // has the current output already been AI-cleaned?
-    let currentKind = "generic";     // "caselaw" for judgments, else "generic" (auto, from the source)
-    let currentProfile = "generic";  // currentKind, unless the user picked "Opmaken voor Obsidian"
+
+    // --- Meerdere documenten naast elkaar --------------------------------
+    // Elk opgehaald/geüpload document is een eigen "doc" met zijn eigen markdown,
+    // opmaakprofiel, model en opschoon-status. De editor/regelnummers/opschoon-
+    // paneel zijn singleton-DOM-elementen die telkens de inhoud van het actieve
+    // document tonen (switchToDoc slaat eerst de live-bewerkte tekst van het
+    // vorige document op, laadt daarna het nieuwe in).
+    let docs = [];
+    let activeDocId = null;
+    let nextDocId = 1;
+
+    function activeDoc() { return docs.find(d => d.id === activeDocId) || null; }
+
+    function addDoc({ title, filenameBase, source, kind, markdown }) {
+      const doc = {
+        id: nextDocId++,
+        title: title || "document",
+        filenameBase: filenameBase || title || "document",
+        source: source || "",
+        kind: kind === "caselaw" ? "caselaw" : "generic",
+        profile: null,   // null = volg kind; "obsidian" = expliciete override
+        model: $("#model-choice").value || null,
+        markdown: markdown || "",
+        cleaned: false,
+      };
+      docs.push(doc);
+      switchToDoc(doc.id);
+      return doc;
+    }
+
+    function saveActiveDocEdits() {
+      const doc = activeDoc();
+      if (doc) doc.markdown = $("#md").value;
+    }
+
+    function switchToDoc(id) {
+      saveActiveDocEdits();
+      activeDocId = id;
+      renderDocTabs();
+      loadActiveDocIntoEditor();
+    }
+
+    function closeDoc(id) {
+      const idx = docs.findIndex(d => d.id === id);
+      if (idx === -1) return;
+      docs.splice(idx, 1);
+      if (activeDocId === id) {
+        const next = docs[idx] || docs[idx - 1];
+        activeDocId = next ? next.id : null;
+      }
+      renderDocTabs();
+      loadActiveDocIntoEditor();
+    }
+
+    function renderDocTabs() {
+      const wrap = $("#doc-tabs");
+      wrap.innerHTML = "";
+      wrap.style.display = docs.length ? "flex" : "none";
+      docs.forEach(doc => {
+        const tab = document.createElement("div");
+        tab.className = "doc-tab" + (doc.id === activeDocId ? " active" : "");
+        const label = document.createElement("span");
+        label.className = "doc-tab-label";
+        label.textContent = doc.title;
+        label.title = doc.title;
+        label.onclick = () => switchToDoc(doc.id);
+        const close = document.createElement("button");
+        close.type = "button"; close.className = "doc-tab-close"; close.title = "Sluiten";
+        close.textContent = "×";
+        close.onclick = e => { e.stopPropagation(); closeDoc(doc.id); };
+        tab.appendChild(label); tab.appendChild(close);
+        wrap.appendChild(tab);
+      });
+    }
+
+    function updateProfileChoiceLabel(profile) {
+      $("#clean-title").textContent =
+        profile === "obsidian" ? "Opmaken voor Obsidian"
+        : profile === "caselaw" ? "Opschonen met AI (uitspraak-opmaak)"
+        : "Opschonen met AI";
+    }
+
+    function loadActiveDocIntoEditor() {
+      const doc = activeDoc();
+      if (!doc) {
+        $("#output").classList.remove("show");
+        return;
+      }
+      $("#output").classList.add("show");
+      $("#md").value = doc.markdown;
+      $("#src").textContent = doc.source;
+      updateLineNumbers();
+      const profileSel = $("#profile-choice");
+      profileSel.hidden = doc.kind !== "caselaw";
+      profileSel.value = doc.profile || "";
+      updateProfileChoiceLabel(doc.profile || doc.kind);
+      const modelSel = $("#model-choice");
+      if (doc.model && [...modelSel.options].some(o => o.value === doc.model)) modelSel.value = doc.model;
+      const btn = $("#btn-clean");
+      btn.disabled = false;
+      btn.textContent = doc.cleaned ? "Opgeschoond ✓" : "Opschonen";
+      if (llmAvailable) {
+        $("#clean-panel").classList.add("show");
+        loadEstimate();
+      } else {
+        $("#clean-panel").classList.remove("show");
+      }
+    }
 
     // Reflect whether an OpenRouter API key is configured, and populate the
     // model-choice dropdown.
@@ -337,23 +464,21 @@
     loadModelChoices();
     $("#model-choice").addEventListener("change", () => {
       localStorage.setItem("llmModel", $("#model-choice").value);
+      const doc = activeDoc();
+      if (doc) doc.model = $("#model-choice").value;
       // Herbereken de kostenraming voor het nieuw gekozen model.
       if ($("#output").classList.contains("show") && llmAvailable) loadEstimate();
     });
 
     // Profielkeuze — "Opmaken voor Obsidian" is alleen zichtbaar bij
-    // jurisprudentie (currentKind === "caselaw") en overschrijft dan het
-    // automatisch gekozen profiel; op "Standaard" volgt het weer currentKind.
-    function updateProfileChoice() {
-      const chosen = $("#profile-choice").value;
-      currentProfile = chosen || currentKind;
-      $("#clean-title").textContent =
-        currentProfile === "obsidian" ? "Opmaken voor Obsidian"
-        : currentProfile === "caselaw" ? "Opschonen met AI (uitspraak-opmaak)"
-        : "Opschonen met AI";
-    }
+    // jurisprudentie (doc.kind === "caselaw") en overschrijft dan het
+    // automatisch gekozen profiel voor dít document; op "Standaard" volgt
+    // het weer doc.kind.
     $("#profile-choice").addEventListener("change", () => {
-      updateProfileChoice();
+      const chosen = $("#profile-choice").value;
+      const doc = activeDoc();
+      if (doc) doc.profile = chosen || null;
+      updateProfileChoiceLabel(chosen || (doc ? doc.kind : "generic"));
       if ($("#output").classList.contains("show") && llmAvailable) loadEstimate();
     });
 
@@ -372,37 +497,17 @@
     }
     function busy(msg) { setStatus('<span class="spinner"></span>' + msg); }
 
-    function showOutput(data) {
-      $("#md").value = data.markdown;
-      $("#src").textContent = data.source || "";
-      $("#output").classList.add("show");
-      setStatus("Klaar.", "ok");
-      updateLineNumbers();
-      cleaned = false;
-      currentKind = data.kind === "caselaw" ? "caselaw" : "generic";
-      const profileSel = $("#profile-choice");
-      profileSel.hidden = currentKind !== "caselaw";
-      profileSel.value = "";  // reset naar "Standaard" bij elk nieuw document
-      updateProfileChoice();
-      const btn = $("#btn-clean");
-      btn.disabled = false;
-      btn.textContent = "Opschonen";
-      if (llmAvailable) {
-        $("#clean-panel").classList.add("show");
-        loadEstimate();
-      } else {
-        $("#clean-panel").classList.remove("show");
-      }
-    }
-
     function fmtNum(n) { return n.toLocaleString("nl-NL"); }
 
     async function loadEstimate() {
+      const doc = activeDoc();
+      if (!doc) return;
+      const profile = doc.profile || doc.kind;
       $("#clean-est").textContent = "Kosten berekenen…";
       try {
         const est = await post("/api/estimate", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ markdown: $("#md").value, profile: currentProfile, model: $("#model-choice").value })
+          body: JSON.stringify({ markdown: $("#md").value, profile, model: $("#model-choice").value })
         });
         let parts = [];
         parts.push(est.chunks + (est.chunks === 1 ? " deel" : " delen"));
@@ -421,19 +526,23 @@
     }
 
     $("#btn-clean").onclick = async () => {
-      if (cleaned) return;
+      const doc = activeDoc();
+      if (!doc || doc.cleaned) return;
+      const profile = doc.profile || doc.kind;
       const btn = $("#btn-clean");
       btn.disabled = true;
       setStatus('<span class="spinner"></span>Opschonen met AI… (kan even duren)');
       try {
         const data = await post("/api/clean", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ markdown: $("#md").value, profile: currentProfile, model: $("#model-choice").value })
+          body: JSON.stringify({ markdown: $("#md").value, profile, model: $("#model-choice").value })
         });
+        doc.markdown = data.markdown;
+        doc.source = doc.source + " • AI-opgeschoond";
+        doc.cleaned = true;
         $("#md").value = data.markdown;
         updateLineNumbers();
-        $("#src").textContent += " • AI-opgeschoond";
-        cleaned = true;
+        $("#src").textContent = doc.source;
         btn.textContent = "Opgeschoond ✓";
         $("#clean-est").textContent = "Klaar met opschonen.";
         setStatus("Opgeschoond.", "ok");
@@ -462,67 +571,154 @@
         : celex ? celex[1].toUpperCase() : "document";
     }
 
-    // Jurisprudentie + Wetgeving: both resolve via the auto-detecting link route.
-    async function fetchLink(queryId, langId, btn) {
-      const query = $("#" + queryId).value.trim();
-      if (!query) { setStatus("Voer een ECLI, CELEX of link in.", "err"); return; }
-      busy("Document ophalen…");
-      btn.disabled = true;
-      try {
-        const data = await post("/api/convert/link", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query, lang: $("#" + langId).value })
-        });
-        currentName = deriveName(query);
-        showOutput(data);
-      } catch (e) { setStatus(e.message, "err"); }
-      finally { btn.disabled = false; }
+    // --- Herhaalbare invoerrijen (Jurisprudentie/Wetgeving/link-uploads) ---
+    const LANGS = ["NL", "EN", "FR", "DE", "ES", "IT", "PT", "PL"];
+
+    function makeQueryRow(placeholder, withLang) {
+      const row = document.createElement("div");
+      row.className = "query-row";
+      const input = document.createElement("input");
+      input.type = "text"; input.className = "q-input"; input.placeholder = placeholder;
+      row.appendChild(input);
+      if (withLang) {
+        const sel = document.createElement("select");
+        sel.className = "q-lang";
+        LANGS.forEach(l => { const o = document.createElement("option"); o.textContent = l; sel.appendChild(o); });
+        row.appendChild(sel);
+      }
+      const rm = document.createElement("button");
+      rm.type = "button"; rm.className = "rm-row"; rm.title = "Verwijderen"; rm.textContent = "×";
+      rm.onclick = () => { if (row.parentElement.children.length > 1) row.remove(); };
+      row.appendChild(rm);
+      input.addEventListener("keydown", e => { if (e.key === "Enter") row.dispatchEvent(new CustomEvent("submit-rows")); });
+      return row;
     }
 
-    document.querySelectorAll("button.go[data-link]").forEach(btn => {
-      btn.onclick = () => fetchLink(btn.dataset.link, btn.dataset.lang, btn);
-      $("#" + btn.dataset.link).addEventListener("keydown",
-        e => { if (e.key === "Enter") btn.click(); });
-    });
+    function initRows(rowsId, addBtnId, placeholder, withLang, submitFn) {
+      const wrap = $("#" + rowsId);
+      const addRow = () => {
+        const row = makeQueryRow(placeholder, withLang);
+        row.addEventListener("submit-rows", submitFn);
+        wrap.appendChild(row);
+      };
+      addRow();
+      $("#" + addBtnId).onclick = addRow;
+    }
 
-    // Documentupload via een geplakte link (bv. een PDF).
-    $("#btn-url-file").onclick = async () => {
-      const url = $("#q-url").value.trim();
-      if (!url) { setStatus("Plak een link naar een bestand.", "err"); return; }
-      busy("Bestand ophalen en converteren…");
-      const btn = $("#btn-url-file"); btn.disabled = true;
-      try {
-        const data = await post("/api/convert/file-url", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url })
-        });
-        const base = (url.split("?")[0].split("#")[0].split("/").pop() || "document");
-        currentName = base.replace(/\.[^.]+$/, "") || "document";
-        showOutput(data);
-      } catch (e) { setStatus(e.message, "err"); }
-      finally { btn.disabled = false; }
-    };
-    $("#q-url").addEventListener("keydown", e => { if (e.key === "Enter") $("#btn-url-file").click(); });
+    // Jurisprudentie + Wetgeving: both resolve via the auto-detecting link route.
+    async function fetchAllLinks(rowsId, btnId) {
+      const rows = [...document.querySelectorAll("#" + rowsId + " .query-row")];
+      const queries = rows.map(r => ({
+        query: r.querySelector(".q-input").value.trim(),
+        lang: r.querySelector(".q-lang").value,
+      })).filter(q => q.query);
+      if (!queries.length) { setStatus("Voer minstens één ECLI, CELEX of link in.", "err"); return; }
+      const btn = $("#" + btnId);
+      btn.disabled = true;
+      let done = 0, failed = [];
+      busy(`Bezig: 0/${queries.length} opgehaald…`);
+      await Promise.allSettled(queries.map(async q => {
+        try {
+          const data = await post("/api/convert/link", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(q),
+          });
+          const name = deriveName(q.query);
+          addDoc({ title: name, filenameBase: name, source: data.source, kind: data.kind, markdown: data.markdown });
+        } catch (e) {
+          failed.push(q.query + ": " + e.message);
+        } finally {
+          done++;
+          busy(`Bezig: ${done}/${queries.length} opgehaald…`);
+        }
+      }));
+      btn.disabled = false;
+      if (failed.length) {
+        setStatus(`${queries.length - failed.length} van ${queries.length} opgehaald. Mislukt — ` + failed.join(" · "),
+          failed.length === queries.length ? "err" : "");
+      } else {
+        setStatus("Klaar.", "ok");
+      }
+    }
 
-    // File upload
+    initRows("rows-jur", "add-row-jur",
+      "ECLI of link — bv. ECLI:EU:C:2025:645 · ECLI:NL:HR:2012:BQ9251 · ECLI:CE:ECHR:… · HUDOC-link",
+      true, () => fetchAllLinks("rows-jur", "btn-fetch-jur"));
+    initRows("rows-wet", "add-row-wet",
+      "link, CELEX of BWB — bv. 32016R0679 · eur-lex.europa.eu/eli/… · BWBR0040940 · wetten.overheid.nl-link",
+      true, () => fetchAllLinks("rows-wet", "btn-fetch-wet"));
+    $("#btn-fetch-jur").onclick = () => fetchAllLinks("rows-jur", "btn-fetch-jur");
+    $("#btn-fetch-wet").onclick = () => fetchAllLinks("rows-wet", "btn-fetch-wet");
+
+    // Documentupload via geplakte links (bv. PDF's).
+    async function fetchAllFileUrls() {
+      const rows = [...document.querySelectorAll("#rows-doc .query-row")];
+      const urls = rows.map(r => r.querySelector(".q-input").value.trim()).filter(Boolean);
+      if (!urls.length) { setStatus("Plak minstens één link naar een bestand.", "err"); return; }
+      const btn = $("#btn-fetch-doc");
+      btn.disabled = true;
+      let done = 0, failed = [];
+      busy(`Bezig: 0/${urls.length} opgehaald…`);
+      await Promise.allSettled(urls.map(async url => {
+        try {
+          const data = await post("/api/convert/file-url", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url }),
+          });
+          const base = (url.split("?")[0].split("#")[0].split("/").pop() || "document").replace(/\.[^.]+$/, "") || "document";
+          addDoc({ title: base, filenameBase: base, source: data.source, kind: data.kind, markdown: data.markdown });
+        } catch (e) {
+          failed.push(url + ": " + e.message);
+        } finally {
+          done++;
+          busy(`Bezig: ${done}/${urls.length} opgehaald…`);
+        }
+      }));
+      btn.disabled = false;
+      if (failed.length) {
+        setStatus(`${urls.length - failed.length} van ${urls.length} opgehaald. Mislukt — ` + failed.join(" · "),
+          failed.length === urls.length ? "err" : "");
+      } else {
+        setStatus("Klaar.", "ok");
+      }
+    }
+    initRows("rows-doc", "add-row-doc",
+      "https://… (link naar een PDF, Word, Excel …)", false, fetchAllFileUrls);
+    $("#btn-fetch-doc").onclick = fetchAllFileUrls;
+
+    // File upload — meerdere bestanden tegelijk (drag of kiezen).
     const drop = $("#drop"), fileInput = $("#file");
     drop.onclick = () => fileInput.click();
     drop.ondragover = e => { e.preventDefault(); drop.classList.add("over"); };
     drop.ondragleave = () => drop.classList.remove("over");
     drop.ondrop = e => { e.preventDefault(); drop.classList.remove("over");
-      if (e.dataTransfer.files.length) uploadFile(e.dataTransfer.files[0]); };
-    fileInput.onchange = () => { if (fileInput.files.length) uploadFile(fileInput.files[0]); };
+      if (e.dataTransfer.files.length) uploadFiles(e.dataTransfer.files); };
+    fileInput.onchange = () => { if (fileInput.files.length) uploadFiles(fileInput.files); };
 
-    async function uploadFile(file) {
-      currentName = file.name.replace(/\.[^.]+$/, "") || "document";
-      busy("Bestand converteren: " + file.name + "…");
-      const fd = new FormData();
-      fd.append("file", file);
-      try {
-        const data = await post("/api/convert/file", { method: "POST", body: fd });
-        showOutput(data);
-      } catch (e) { setStatus(e.message, "err"); }
+    async function uploadFiles(fileList) {
+      const files = [...fileList];
+      let done = 0, failed = [];
+      busy(`Bezig: 0/${files.length} bestand(en) converteren…`);
+      await Promise.allSettled(files.map(async file => {
+        const base = file.name.replace(/\.[^.]+$/, "") || "document";
+        try {
+          const fd = new FormData();
+          fd.append("file", file);
+          const data = await post("/api/convert/file", { method: "POST", body: fd });
+          addDoc({ title: base, filenameBase: base, source: data.source, kind: data.kind, markdown: data.markdown });
+        } catch (e) {
+          failed.push(file.name + ": " + e.message);
+        } finally {
+          done++;
+          busy(`Bezig: ${done}/${files.length} bestand(en) geconverteerd…`);
+        }
+      }));
+      if (failed.length) {
+        setStatus(`${files.length - failed.length} van ${files.length} geconverteerd. Mislukt — ` + failed.join(" · "),
+          failed.length === files.length ? "err" : "");
+      } else {
+        setStatus("Klaar.", "ok");
+      }
     }
 
     // Regelnummers — altijd aan. Eén nummer per echte regel (enter), niet per
@@ -579,14 +775,16 @@
       setTimeout(() => b.textContent = "Kopiëren", 1400);
     };
     $("#dl").onclick = async () => {
+      const doc = activeDoc();
+      const filename = doc ? doc.filenameBase : "document";
       const r = await fetch("/api/download", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ markdown: $("#md").value, filename: currentName })
+        body: JSON.stringify({ markdown: $("#md").value, filename })
       });
       const blob = await r.blob();
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
-      a.download = currentName + ".md";
+      a.download = filename + ".md";
       a.click();
       URL.revokeObjectURL(a.href);
     };

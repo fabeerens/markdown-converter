@@ -17,9 +17,19 @@ Plak een ECLI of link; de tool herkent de bron automatisch:
 - **Nederlandse wetgeving** — een wetten.overheid.nl-link of een BWB-nummer (bv. `BWBR0040940`, optioneel met versiedatum `/2021-07-01`). Staat er een **hoofdstuk-anker** in de link (bv. `…/2026-07-01#Hoofdstuk16`), dan wordt alléén dat onderdeel opgehaald en omgezet.
 
 ### 3. Documentupload
-- Sleep een bestand in het venster (of klik om te bladeren), **of plak een link naar een bestand** (bv. een directe PDF-link).
+- Sleep een of meer bestanden in het venster (of klik om te bladeren), **of plak een of meer links naar bestanden** (bv. directe PDF-links).
 - **Formex-XML** (`.xml`) van EUR-Lex → eigen structuur-parser (nette koppen, recitals, artikelen, lijsten, voetnoten).
 - **Alle andere formaten** (PDF, Word, Excel, PowerPoint, HTML, CSV, JSON, EPUB…) → via [Microsoft MarkItDown](https://github.com/microsoft/markitdown). Bij PDF's worden de "zachte" regeleindes binnen een alinea automatisch samengevoegd.
+
+### Meerdere documenten tegelijk
+
+Bij Jurisprudentie en Wetgeving kun je met **"+ Document toevoegen"** meerdere ECLI's/CELEX-
+nummers/links tegelijk invoeren; **Ophalen** haalt ze allemaal parallel op. Bij Documentupload
+kun je meerdere bestanden tegelijk slepen/kiezen en/of meerdere links toevoegen. Elk opgehaald
+document krijgt een eigen **tabblad** boven de uitvoer — je schakelt ertussen om te bekijken,
+bewerken, opschonen met AI (elk document met zijn eigen profiel/model) en los te downloaden.
+Mislukt een van de documenten (bv. een ongeldige ECLI), dan blijft de rest gewoon beschikbaar;
+de status onder de knop toont wat wel en niet is gelukt.
 
 Uitvoer kun je kopiëren of downloaden als `.md`. Links naast de tekst staan **regelnummers**
 (altijd zichtbaar) — handig om een bepaalde regel terug te vinden of ernaar te verwijzen.
