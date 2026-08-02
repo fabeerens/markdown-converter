@@ -32,6 +32,9 @@ bewerken, opschonen met AI (elk document met zijn eigen profiel/model) en los te
 Mislukt een van de documenten (bv. een ongeldige ECLI), dan blijft de rest gewoon beschikbaar;
 de status onder de knop toont wat wel en niet is gelukt.
 
+De tool volgt automatisch de **licht/donker-instelling van je systeem** — er is geen knop,
+je hoeft niets te kiezen.
+
 Uitvoer kun je kopiëren of downloaden als `.md`. Links naast de tekst staan **regelnummers**
 (altijd zichtbaar) — handig om een bepaalde regel terug te vinden of ernaar te verwijzen.
 Eén nummer staat voor één "enter" in de brontekst: een lange zin die over meerdere
@@ -41,7 +44,7 @@ Onderaan de pagina staat een footer,
 bv. `v1.0.0 (build 3) · geïnstalleerd op 07-07-2026 17:37`:
 - `1.0.0` komt uit het `VERSION`-bestand (major.minor.patch; handmatig aanpassen bij een echte release).
 - **Build-nummer en installatiedatum lopen automatisch op.** De app herkent zelf wanneer
-  de broncode is gewijzigd (een checksum van `app.py`, `converters/`, `templates/` en
+  de broncode is gewijzigd (een checksum van `app.py`, `mdconv/`, `templates/`, `static/` en
   `VERSION`) en hoogt dan het build-nummer op met de datum/tijd van dat moment. Geen
   git nodig, geen handmatige stap. De staat wordt bijgehouden in `.deploy-state/`
   (genegeerd door git; in Docker gemount als volume zodat 'ie een rebuild overleeft).
@@ -74,7 +77,7 @@ Er zijn twee opmaak-profielen die automatisch worden gekozen (los van het model)
 - **Uitspraak-opmaak** (voor rechtspraak, HUDOC en EU-rechtspraak): koppen vanaf `##`, genummerde rechtsoverwegingen blijven behouden, citaten als blockquotes (`>`), lijsten als markdownlijsten, voetnoten als markdownvoetnoten.
 - **Algemeen** (voor overige documenten, bv. PDF-rapporten): sectietitels als koppen, alinea's samenvoegen, kop-/voetteksten verwijderen.
 
-Bij **Jurisprudentie** verschijnt daarnaast een extra keuze: **"Opmaken voor Obsidian"**.
+Bij **Jurisprudentie** verschijnt daarnaast een vinkje **"Opmaken voor Obsidian"**.
 Die levert één complete Obsidian-notitie op — YAML-frontmatter, een inhoudsopgave-callout,
 een gestructureerde juridische analyse (feiten, rechtsvragen, argumenten, conclusie, impact)
 én de volledige uitspraak verbatim — volgens een vast sjabloon. Dit profiel verwerkt de hele
@@ -144,15 +147,18 @@ Kies rechtsboven de taal (standaard NL).
 ## Structuur
 
 ```
-app.py                 Flask-server + API
-converters/
-  formex.py            Formex-XML → markdown (eigen parser)
-  eurlex.py            ophalen bij EUR-Lex (CELEX/ELI/URL) + HTML → markdown
-  caselaw.py           link-dispatcher: rechtspraak.nl (ECLI), HUDOC (EHRM), wetten.overheid.nl
-  wetten.py            Nederlandse wetgeving (wetten.overheid.nl / BWB) → markdown
-  generic.py           PDF → markdown via pdf-inspector (val. MarkItDown); overige formaten → MarkItDown
-  llm_cleanup.py       optionele AI-opschoning + kostenraming (OpenRouter)
-templates/index.html   web-interface
+app.py                 startpunt (ook het gunicorn-doel)
+mdconv/                de applicatie
+  api.py               alle API-routes
+  net.py               gedeelde HTTP-client met connection pooling
+  state.py             instellingen/versie op schijf, met cache
+  render.py            HTML → markdown
+  sources/             per bron: eurlex, rechtspraak, hudoc, wetten, formex, files
+  cleanup/             AI-opschoning: prompts, chunking, OpenRouter, instellingen
+templates/index.html   de pagina
+static/app.css         opmaak (Radix-stijl, dark/light)
+static/app.js          front-end
+tests/                 tests (pytest)
 ```
 
 ## Draaien met Docker (bv. op een VPS)

@@ -4,880 +4,183 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Markdown converter</title>
-  <style>
-    :root {
-      --bg: #0f172a; --panel: #1e293b; --panel2: #172032;
-      --border: #334155; --text: #e2e8f0; --muted: #94a3b8;
-      --accent: #3b82f6; --accent-h: #2563eb; --ok: #22c55e; --err: #f87171;
-      --radius: 10px;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0; font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: var(--bg); color: var(--text); min-height: 100vh;
-    }
-    header {
-      position: relative;
-      padding: 28px 24px 16px; text-align: center; border-bottom: 1px solid var(--border);
-    }
-    header h1 { margin: 0; font-size: 22px; font-weight: 650; }
-    header p { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
-    #btn-settings {
-      position: absolute; top: 18px; right: 20px; width: 36px; height: 36px;
-      display: flex; align-items: center; justify-content: center;
-      background: var(--panel2); border: 1px solid var(--border); color: var(--muted);
-      border-radius: 8px; cursor: pointer; font-size: 18px;
-    }
-    #btn-settings:hover { color: var(--text); border-color: var(--accent); }
-    .modal-backdrop {
-      display: none; position: fixed; inset: 0; background: rgba(0,0,0,.55);
-      align-items: flex-start; justify-content: center; padding: 40px 16px; overflow-y: auto; z-index: 100;
-    }
-    .modal-backdrop.show { display: flex; }
-    .modal {
-      background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
-      width: 100%; max-width: 640px; padding: 22px 24px 24px;
-    }
-    .modal h2 { margin: 0 0 4px; font-size: 18px; }
-    .modal .sub { color: var(--muted); font-size: 13px; margin: 0 0 18px; }
-    .modal section { margin-bottom: 22px; }
-    .modal section h3 {
-      font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted);
-      margin: 0 0 10px; display: flex; align-items: center; justify-content: space-between;
-    }
-    .modal section h3 button {
-      text-transform: none; letter-spacing: 0; font-size: 12px; font-weight: 500;
-      background: none; border: none; color: var(--accent); cursor: pointer; padding: 0;
-    }
-    .model-row { display: flex; gap: 8px; margin-bottom: 8px; }
-    .model-row input { flex: 1; min-width: 0; }
-    .model-row input.mid { flex: 0 0 42%; }
-    .model-row button.rm {
-      flex-shrink: 0; background: var(--panel2); border: 1px solid var(--border); color: var(--err);
-      border-radius: 8px; width: 34px; cursor: pointer; font-size: 15px;
-    }
-    #settings-add-model {
-      background: var(--panel2); border: 1px dashed var(--border); color: var(--muted);
-      border-radius: 8px; padding: 8px 12px; font-size: 13px; cursor: pointer; width: 100%;
-    }
-    .modal input[type=number] {
-      background: var(--panel2); border: 1px solid var(--border); color: var(--text);
-      border-radius: 8px; padding: 9px 12px; font-size: 14px; width: 140px;
-    }
-    .modal textarea.prompt-edit {
-      width: 100%; min-height: 130px; background: var(--panel2); color: var(--text);
-      border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px;
-      font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; resize: vertical;
-    }
-    .prompt-block { margin-bottom: 14px; }
-    .prompt-block label { display: block; font-size: 13px; margin-bottom: 6px; color: var(--text); }
-    .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px; }
-    .modal-actions button.secondary {
-      background: var(--panel2); border: 1px solid var(--border); color: var(--text);
-      border-radius: var(--radius); padding: 10px 18px; font-size: 14px; cursor: pointer;
-    }
-    #settings-status { font-size: 13px; margin-top: 10px; min-height: 16px; }
-    #settings-status.err { color: var(--err); }
-    #settings-status.ok { color: var(--ok); }
-    .wrap { max-width: 980px; margin: 0 auto; padding: 24px; }
-    .tabs { display: flex; gap: 4px; margin-bottom: 18px; }
-    .tab {
-      flex: 1; padding: 11px; text-align: center; cursor: pointer; border-radius: var(--radius);
-      background: var(--panel2); border: 1px solid var(--border); color: var(--muted); font-weight: 550;
-    }
-    .tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
-    .pane { display: none; }
-    .pane.active { display: block; }
-    .drop {
-      border: 2px dashed var(--border); border-radius: var(--radius); padding: 44px 20px;
-      text-align: center; cursor: pointer; background: var(--panel2); transition: .15s;
-    }
-    .drop.over { border-color: var(--accent); background: #1c2740; }
-    .or-sep { text-align: center; color: var(--muted); font-size: 13px; margin: 14px 0; }
-    .drop strong { color: var(--text); }
-    .drop small { color: var(--muted); display: block; margin-top: 8px; }
-    .row { display: flex; gap: 10px; flex-wrap: wrap; }
-    input[type=text], select {
-      background: var(--panel2); border: 1px solid var(--border); color: var(--text);
-      border-radius: var(--radius); padding: 12px 14px; font-size: 15px;
-    }
-    input[type=text] { flex: 1; min-width: 240px; }
-    select { min-width: 90px; }
-    .query-rows { display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px; }
-    .query-row { display: flex; gap: 10px; }
-    .query-row .q-input { flex: 1; min-width: 0; }
-    .query-row .rm-row {
-      flex-shrink: 0; background: var(--panel2); border: 1px solid var(--border); color: var(--err);
-      border-radius: var(--radius); width: 46px; cursor: pointer; font-size: 16px;
-    }
-    .add-row-btn {
-      background: var(--panel2); border: 1px dashed var(--border); color: var(--muted);
-      border-radius: var(--radius); padding: 10px 16px; font-size: 13.5px; cursor: pointer;
-    }
-    .add-row-btn:hover { color: var(--text); border-color: var(--accent); }
-    .doc-tabs {
-      display: none; gap: 6px; margin-bottom: 10px; overflow-x: auto; padding-bottom: 2px;
-    }
-    .doc-tab {
-      display: flex; align-items: center; gap: 6px; flex-shrink: 0; max-width: 220px;
-      background: var(--panel2); border: 1px solid var(--border); border-radius: 8px;
-      padding: 7px 6px 7px 12px; font-size: 13px; cursor: pointer;
-    }
-    .doc-tab.active { border-color: var(--accent); background: #1c2740; }
-    .doc-tab-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .doc-tab-close {
-      flex-shrink: 0; background: none; border: none; color: var(--muted); cursor: pointer;
-      font-size: 15px; line-height: 1; padding: 3px 5px; border-radius: 4px;
-    }
-    .doc-tab-close:hover { color: var(--err); }
-    button.go, button.action {
-      background: var(--accent); color: #fff; border: none; border-radius: var(--radius);
-      padding: 12px 20px; font-size: 15px; font-weight: 600; cursor: pointer;
-    }
-    button.go:hover, button.action:hover { background: var(--accent-h); }
-    button:disabled { opacity: .5; cursor: default; }
-    .hint { color: var(--muted); font-size: 13px; margin-top: 10px; }
-    .clean-panel {
-      display: none; align-items: center; gap: 14px; margin-bottom: 10px;
-      padding: 12px 14px; background: #1c2740; border: 1px solid var(--border);
-      border-radius: var(--radius);
-    }
-    .clean-panel.show { display: flex; }
-    .clean-info { flex: 1; min-width: 0; }
-    .clean-info strong { display: block; font-size: 14px; }
-    .clean-info span { color: var(--muted); font-size: 12.5px; }
-    .clean-panel button { flex-shrink: 0; padding: 9px 16px; font-size: 14px; }
-    .clean-panel button:disabled { opacity: .6; }
-    #model-choice, #profile-choice {
-      flex-shrink: 0; max-width: 260px; background: var(--panel); color: var(--text);
-      border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 13px;
-    }
-    .status { margin: 16px 0; min-height: 20px; font-size: 14px; }
-    .status.err { color: var(--err); }
-    .status.ok { color: var(--ok); }
-    .spinner {
-      display: inline-block; width: 14px; height: 14px; border: 2px solid var(--muted);
-      border-top-color: transparent; border-radius: 50%; animation: spin .7s linear infinite;
-      vertical-align: -2px; margin-right: 8px;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .output { margin-top: 8px; display: none; }
-    .output.show { display: block; }
-    .out-bar {
-      display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
-    }
-    .out-bar .src { color: var(--muted); font-size: 13px; margin-right: auto; }
-    .out-bar button {
-      background: var(--panel); border: 1px solid var(--border); color: var(--text);
-      border-radius: 8px; padding: 7px 13px; font-size: 13px; cursor: pointer; font-weight: 550;
-    }
-    .out-bar button:hover { border-color: var(--accent); }
-    /* Eén vaste, samen-resizebare hoogte voor gutter + textarea — zo kunnen ze
-       nooit uit elkaar lopen zoals bij losse flex-stretch/resize op de
-       textarea alleen. De gebruiker resized het hele blok via deze rand. */
-    .editor {
-      position: relative; display: flex; height: 460px;
-      resize: vertical; overflow: hidden;
-    }
-    .gutter {
-      flex-shrink: 0; width: 48px; height: 100%; overflow: hidden; text-align: right;
-      background: var(--panel); border: 1px solid var(--border); border-right: none;
-      border-radius: var(--radius) 0 0 var(--radius);
-      color: var(--muted); font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
-      user-select: none;
-    }
-    /* Verschoven met een CSS-transform i.p.v. z'n eigen scrollTop — dat blijft
-       exact gelijk aan de textarea, ongeacht overflow/scroll-eigenaardigheden. */
-    #gutter-inner { padding: 16px 8px 16px 0; }
-    textarea {
-      flex: 1 1 auto; min-width: 0; height: 100%; background: var(--panel2); color: var(--text);
-      border: 1px solid var(--border); border-radius: 0 var(--radius) var(--radius) 0; padding: 16px;
-      font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; resize: none;
-      white-space: pre-wrap; word-wrap: break-word;
-    }
-    /* Off-screen clone of the textarea, used only to measure how each
-       logical line wraps, so gutter numbers line up with real (not visual)
-       lines even when a line wraps across multiple rows. */
-    #line-mirror {
-      position: absolute; visibility: hidden; left: -99999px; top: 0;
-      padding: 16px; border: none; box-sizing: border-box;
-      font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
-      white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word;
-    }
-    #line-mirror div { margin: 0; }
-    .app-footer {
-      text-align: center; color: var(--muted); font-size: 12px;
-      padding: 24px 16px 32px;
-    }
-  </style>
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
 </head>
 <body>
-  <header>
-    <button id="btn-settings" title="Instellingen" aria-label="Instellingen">⚙</button>
-    <h1>Markdown converter</h1>
-    <p>Zet jurisprudentie, wetgeving of een document om naar markdown.</p>
+  <header class="app-header">
+    <div class="titles">
+      <h1>Markdown converter</h1>
+      <p>Zet jurisprudentie, wetgeving of documenten om naar markdown.</p>
+    </div>
+    <button type="button" class="btn btn-ghost btn-icon" id="open-settings"
+            title="Instellingen" aria-label="Instellingen">⚙</button>
   </header>
 
-  <div class="modal-backdrop" id="settings-backdrop">
-    <div class="modal">
-      <h2>Instellingen</h2>
-      <p class="sub">Wijzigingen gelden voor alle nieuwe conversies op deze installatie. Laat een veld leeg om terug te vallen op de standaardwaarde.</p>
+  <main class="wrap">
+    <div class="tabs" role="tablist" aria-label="Bron kiezen">
+      <button type="button" class="tab" role="tab" data-tab="jur"
+              aria-selected="true" aria-controls="pane-jur">Jurisprudentie</button>
+      <button type="button" class="tab" role="tab" data-tab="wet"
+              aria-selected="false" aria-controls="pane-wet">Wetgeving</button>
+      <button type="button" class="tab" role="tab" data-tab="doc"
+              aria-selected="false" aria-controls="pane-doc">Documentupload</button>
+    </div>
 
-      <section>
-        <h3>AI-endpoints <button type="button" id="settings-reset-models">Standaardlijst</button></h3>
-        <div id="settings-models"></div>
-        <button type="button" id="settings-add-model">+ Endpoint toevoegen</button>
-      </section>
-
-      <section>
-        <h3>Deelgrootte <button type="button" id="settings-reset-chunk">Standaard</button></h3>
-        <input type="number" id="settings-chunk" step="1000">
-        <span class="sub" style="margin:0 0 0 10px; display:inline;">tokens per deel (<span id="settings-chunk-range"></span>)</span>
-      </section>
-
-      <section>
-        <h3>Prompt voor opschonen — algemeen <button type="button" id="settings-reset-generic">Standaard</button></h3>
-        <div class="prompt-block">
-          <textarea class="prompt-edit" id="settings-prompt-generic"></textarea>
+    <!-- Jurisprudentie -->
+    <section class="pane" data-pane="jur" id="pane-jur" role="tabpanel" aria-label="Jurisprudentie">
+      <div class="card">
+        <div class="rows" id="rows-jur"></div>
+        <div class="row-actions">
+          <button type="button" class="btn btn-dashed" id="add-jur">+ Document toevoegen</button>
+          <button type="button" class="btn btn-solid btn-lg" id="fetch-jur">Ophalen</button>
         </div>
-        <h3>Prompt voor opschonen — jurisprudentie <button type="button" id="settings-reset-caselaw">Standaard</button></h3>
-        <div class="prompt-block">
-          <textarea class="prompt-edit" id="settings-prompt-caselaw"></textarea>
+      </div>
+      <p class="hint">
+        Rechtspraak van het <strong>Hof van Justitie EU</strong> (<code>ECLI:EU:…</code>),
+        het <strong>EHRM</strong> (HUDOC-link, item-id of <code>ECLI:CE:ECHR:…</code>) en de
+        <strong>Nederlandse rechtspraak</strong> (<code>ECLI:NL:…</code> of rechtspraak.nl-link).
+        De taalkeuze bepaalt de versie of vertaling. Voeg meerdere documenten toe om ze in
+        één keer op te halen — elk komt in een eigen tabblad.
+      </p>
+    </section>
+
+    <!-- Wetgeving -->
+    <section class="pane" data-pane="wet" id="pane-wet" role="tabpanel" aria-label="Wetgeving" hidden>
+      <div class="card">
+        <div class="rows" id="rows-wet"></div>
+        <div class="row-actions">
+          <button type="button" class="btn btn-dashed" id="add-wet">+ Regeling toevoegen</button>
+          <button type="button" class="btn btn-solid btn-lg" id="fetch-wet">Ophalen</button>
         </div>
-        <h3>Prompt voor "Opmaken voor Obsidian" <button type="button" id="settings-reset-obsidian">Standaard</button></h3>
-        <div class="prompt-block">
-          <textarea class="prompt-edit" id="settings-prompt-obsidian"></textarea>
+      </div>
+      <p class="hint">
+        <strong>EU-wetgeving</strong> via EUR-Lex (CELEX-nummer, ELI- of andere link) en
+        <strong>Nederlandse wetgeving</strong> via wetten.overheid.nl (link of BWB-nummer,
+        eventueel met versiedatum). Staat er een anker in de link
+        (<code>…#Hoofdstuk16</code>), dan wordt alléén dat onderdeel opgehaald.
+      </p>
+    </section>
+
+    <!-- Documentupload -->
+    <section class="pane" data-pane="doc" id="pane-doc" role="tabpanel" aria-label="Documentupload" hidden>
+      <div class="card">
+        <div class="drop" id="drop" role="button" tabindex="0"
+             aria-label="Bestanden kiezen of hierheen slepen">
+          <strong>Sleep bestanden hierheen</strong>
+          <span>of klik om te bladeren — meerdere tegelijk kan</span>
+          <span>Formex-XML, PDF, Word, Excel, PowerPoint, HTML, CSV…</span>
+          <input type="file" id="file" multiple hidden
+                 accept=".xml,.pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.html,.htm,.csv,.json,.txt,.md,.epub,.rtf,.msg">
         </div>
-      </section>
-
-      <div id="settings-status"></div>
-      <div class="modal-actions">
-        <button type="button" class="secondary" id="settings-cancel">Annuleren</button>
-        <button type="button" class="action" id="settings-save">Opslaan</button>
+        <div class="or">of plak een of meer links naar bestanden</div>
+        <div class="rows" id="rows-doc"></div>
+        <div class="row-actions">
+          <button type="button" class="btn btn-dashed" id="add-doc">+ Link toevoegen</button>
+          <button type="button" class="btn btn-solid btn-lg" id="fetch-doc">Ophalen</button>
+        </div>
       </div>
-    </div>
-  </div>
+      <p class="hint">
+        PDF's gaan via <strong>pdf-inspector</strong> (layout-bewust: koppen, lijsten en
+        tabellen). Heeft een PDF geen tekstlaag, bijvoorbeeld een scan, dan valt de conversie
+        terug op MarkItDown. Alle overige formaten gaan altijd via MarkItDown.
+      </p>
+    </section>
 
-  <div class="wrap">
-    <div class="tabs">
-      <div class="tab active" data-tab="jur">Jurisprudentie</div>
-      <div class="tab" data-tab="wet">Wetgeving</div>
-      <div class="tab" data-tab="doc">Documentupload</div>
-    </div>
+    <div class="status" id="status" role="status" aria-live="polite"></div>
 
-    <div class="pane active" id="pane-jur">
-      <div class="query-rows" id="rows-jur"></div>
-      <button type="button" class="add-row-btn" id="add-row-jur">+ Document toevoegen</button>
-      <div class="row" style="margin-top:10px;">
-        <button class="go" id="btn-fetch-jur">Ophalen</button>
-      </div>
-      <div class="hint">Rechtspraak van het <strong>Hof van Justitie EU</strong> (<code>ECLI:EU:…</code>), het <strong>EHRM</strong> (HUDOC-link, item-id of <code>ECLI:CE:ECHR:…</code>) en de <strong>Nederlandse rechtspraak</strong> (<code>ECLI:NL:…</code> of rechtspraak.nl-link). De taalkeuze bepaalt de versie/vertaling. Voeg meerdere documenten toe om ze tegelijk op te halen — elk komt in een eigen tabblad.</div>
-    </div>
+    <!-- Uitvoer -->
+    <section id="output" aria-label="Resultaat" hidden>
+      <div class="doc-tabs" id="doc-tabs" aria-label="Opgehaalde documenten" hidden></div>
 
-    <div class="pane" id="pane-wet">
-      <div class="query-rows" id="rows-wet"></div>
-      <button type="button" class="add-row-btn" id="add-row-wet">+ Document toevoegen</button>
-      <div class="row" style="margin-top:10px;">
-        <button class="go" id="btn-fetch-wet">Ophalen</button>
-      </div>
-      <div class="hint"><strong>EU-wetgeving</strong> via EUR-Lex (CELEX-nummer, ELI- of andere link) en <strong>Nederlandse wetgeving</strong> via wetten.overheid.nl (link of BWB-nummer, evt. met versiedatum). De taalkeuze geldt voor EU-wetgeving. Voeg meerdere documenten toe om ze tegelijk op te halen.</div>
-    </div>
-
-    <div class="pane" id="pane-doc">
-      <div class="drop" id="drop">
-        <strong>Sleep bestanden hierheen</strong>
-        <small>of klik om te bladeren — meerdere tegelijk kan</small>
-        <small>Formex-XML, PDF, Word, Excel, PowerPoint, HTML, CSV…</small>
-        <input type="file" id="file" multiple
-               accept=".xml,.pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.html,.htm,.csv,.json,.txt,.md,.epub,.rtf,.msg" hidden>
-      </div>
-      <div class="or-sep">of plak een of meer links naar bestanden</div>
-      <div class="query-rows" id="rows-doc"></div>
-      <button type="button" class="add-row-btn" id="add-row-doc">+ Link toevoegen</button>
-      <div class="row" style="margin-top:10px;">
-        <button class="go" id="btn-fetch-doc">Ophalen</button>
-      </div>
-      <div class="hint">Bijvoorbeeld directe links naar PDF-rapporten. Bestanden worden gedownload en omgezet.</div>
-    </div>
-
-    <div class="status" id="status"></div>
-
-    <div class="output" id="output">
-      <div class="doc-tabs" id="doc-tabs"></div>
       <div class="clean-panel" id="clean-panel">
         <div class="clean-info">
           <strong id="clean-title">Opschonen met AI</strong>
-          <span id="clean-est">Koppen naar markdown, losse regels samenvoegen, kop-/voetteksten verwijderen.</span>
+          <span class="est" id="estimate">Koppen naar markdown, losse regels samenvoegen, kop-/voetteksten verwijderen.</span>
         </div>
-        <select id="profile-choice" title="Opmaakprofiel" hidden>
-          <option value="">Standaard</option>
-          <option value="obsidian">Opmaken voor Obsidian</option>
-        </select>
-        <select id="model-choice" title="Model voor AI-opschoning"></select>
-        <button class="action" id="btn-clean">Opschonen</button>
+        <div class="clean-controls">
+          <label class="checkbox" id="obsidian-wrap" hidden>
+            <input type="checkbox" id="obsidian">
+            <span>Opmaken voor Obsidian</span>
+          </label>
+          <select class="select" id="model" aria-label="Model voor de AI-opschoning"></select>
+          <button type="button" class="btn btn-solid" id="clean">Opschonen</button>
+        </div>
       </div>
+
       <div class="out-bar">
         <span class="src" id="src"></span>
-        <button id="copy">Kopiëren</button>
-        <button id="dl">Download .md</button>
+        <button type="button" class="btn btn-outline" id="copy">Kopiëren</button>
+        <button type="button" class="btn btn-outline" id="download">Download .md</button>
       </div>
+
       <div class="editor" id="editor">
-        <div class="gutter" id="gutter"><div id="gutter-inner"></div></div>
+        <div class="gutter" aria-hidden="true"><div class="gutter-inner" id="gutter-inner"></div></div>
+        <label class="visually-hidden" for="md">Markdown</label>
         <textarea id="md" spellcheck="false"></textarea>
-        <div id="line-mirror" aria-hidden="true"></div>
+        <div class="line-mirror" id="line-mirror" aria-hidden="true"></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Instellingen -->
+  <div class="overlay" id="settings" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+    <div class="dialog">
+      <div style="display:flex;align-items:flex-start;gap:12px">
+        <div style="flex:1">
+          <h2 id="settings-title">Instellingen</h2>
+          <p class="sub">
+            Geldt voor alle volgende conversies op deze installatie. Laat een veld leeg
+            om terug te vallen op de standaardwaarde.
+          </p>
+        </div>
+        <button type="button" class="btn btn-ghost btn-icon" id="settings-close"
+                aria-label="Sluiten">✕</button>
+      </div>
+
+      <section>
+        <h3>AI-endpoints <button type="button" class="reset" id="reset-models">Standaardlijst</button></h3>
+        <div class="rows" id="settings-models"></div>
+        <div class="row-actions">
+          <button type="button" class="btn btn-dashed" id="settings-add-model">+ Endpoint toevoegen</button>
+        </div>
+      </section>
+
+      <section>
+        <h3>Deelgrootte <button type="button" class="reset" id="reset-chunk">Standaard</button></h3>
+        <div style="display:flex;align-items:center;gap:12px">
+          <div class="field" style="width:140px">
+            <input type="number" id="settings-chunk" step="1000" aria-label="Tokens per deel">
+          </div>
+          <span class="unit" id="settings-range"></span>
+        </div>
+      </section>
+
+      <section>
+        <h3>Prompt — algemeen <button type="button" class="reset" id="reset-generic">Standaard</button></h3>
+        <label class="visually-hidden" for="prompt-generic">Prompt voor algemene documenten</label>
+        <textarea id="prompt-generic"></textarea>
+
+        <h3 style="margin-top:16px">Prompt — jurisprudentie <button type="button" class="reset" id="reset-caselaw">Standaard</button></h3>
+        <label class="visually-hidden" for="prompt-caselaw">Prompt voor uitspraken</label>
+        <textarea id="prompt-caselaw"></textarea>
+
+        <h3 style="margin-top:16px">Prompt — Opmaken voor Obsidian <button type="button" class="reset" id="reset-obsidian">Standaard</button></h3>
+        <label class="visually-hidden" for="prompt-obsidian">Prompt voor de Obsidian-notitie</label>
+        <textarea id="prompt-obsidian"></textarea>
+      </section>
+
+      <div class="dialog-actions">
+        <span class="msg" id="settings-msg"></span>
+        <button type="button" class="btn btn-outline" id="settings-cancel">Annuleren</button>
+        <button type="button" class="btn btn-solid" id="settings-save">Opslaan</button>
       </div>
     </div>
   </div>
 
-  <footer class="app-footer">Markdown converter · v{{ version }} (build {{ build }}) · geïnstalleerd op {{ installed_at }}</footer>
+  <footer class="app-footer">
+    Markdown converter · v{{ version }} (build {{ build }}) · geïnstalleerd op {{ installed_at }}
+  </footer>
 
-  <script>
-    const $ = s => document.querySelector(s);
-    let llmAvailable = false;
-
-    // --- Meerdere documenten naast elkaar --------------------------------
-    // Elk opgehaald/geüpload document is een eigen "doc" met zijn eigen markdown,
-    // opmaakprofiel, model en opschoon-status. De editor/regelnummers/opschoon-
-    // paneel zijn singleton-DOM-elementen die telkens de inhoud van het actieve
-    // document tonen (switchToDoc slaat eerst de live-bewerkte tekst van het
-    // vorige document op, laadt daarna het nieuwe in).
-    let docs = [];
-    let activeDocId = null;
-    let nextDocId = 1;
-
-    function activeDoc() { return docs.find(d => d.id === activeDocId) || null; }
-
-    function addDoc({ title, filenameBase, source, kind, markdown }) {
-      const doc = {
-        id: nextDocId++,
-        title: title || "document",
-        filenameBase: filenameBase || title || "document",
-        source: source || "",
-        kind: kind === "caselaw" ? "caselaw" : "generic",
-        profile: null,   // null = volg kind; "obsidian" = expliciete override
-        model: $("#model-choice").value || null,
-        markdown: markdown || "",
-        cleaned: false,
-      };
-      docs.push(doc);
-      switchToDoc(doc.id);
-      return doc;
-    }
-
-    function saveActiveDocEdits() {
-      const doc = activeDoc();
-      if (doc) doc.markdown = $("#md").value;
-    }
-
-    function switchToDoc(id) {
-      saveActiveDocEdits();
-      activeDocId = id;
-      renderDocTabs();
-      loadActiveDocIntoEditor();
-    }
-
-    function closeDoc(id) {
-      const idx = docs.findIndex(d => d.id === id);
-      if (idx === -1) return;
-      docs.splice(idx, 1);
-      if (activeDocId === id) {
-        const next = docs[idx] || docs[idx - 1];
-        activeDocId = next ? next.id : null;
-      }
-      renderDocTabs();
-      loadActiveDocIntoEditor();
-    }
-
-    function renderDocTabs() {
-      const wrap = $("#doc-tabs");
-      wrap.innerHTML = "";
-      wrap.style.display = docs.length ? "flex" : "none";
-      docs.forEach(doc => {
-        const tab = document.createElement("div");
-        tab.className = "doc-tab" + (doc.id === activeDocId ? " active" : "");
-        const label = document.createElement("span");
-        label.className = "doc-tab-label";
-        label.textContent = doc.title;
-        label.title = doc.title;
-        label.onclick = () => switchToDoc(doc.id);
-        const close = document.createElement("button");
-        close.type = "button"; close.className = "doc-tab-close"; close.title = "Sluiten";
-        close.textContent = "×";
-        close.onclick = e => { e.stopPropagation(); closeDoc(doc.id); };
-        tab.appendChild(label); tab.appendChild(close);
-        wrap.appendChild(tab);
-      });
-    }
-
-    function updateProfileChoiceLabel(profile) {
-      $("#clean-title").textContent =
-        profile === "obsidian" ? "Opmaken voor Obsidian"
-        : profile === "caselaw" ? "Opschonen met AI (uitspraak-opmaak)"
-        : "Opschonen met AI";
-    }
-
-    function loadActiveDocIntoEditor() {
-      const doc = activeDoc();
-      if (!doc) {
-        $("#output").classList.remove("show");
-        return;
-      }
-      $("#output").classList.add("show");
-      $("#md").value = doc.markdown;
-      $("#src").textContent = doc.source;
-      updateLineNumbers();
-      const profileSel = $("#profile-choice");
-      profileSel.hidden = doc.kind !== "caselaw";
-      profileSel.value = doc.profile || "";
-      updateProfileChoiceLabel(doc.profile || doc.kind);
-      const modelSel = $("#model-choice");
-      if (doc.model && [...modelSel.options].some(o => o.value === doc.model)) modelSel.value = doc.model;
-      const btn = $("#btn-clean");
-      btn.disabled = false;
-      btn.textContent = doc.cleaned ? "Opgeschoond ✓" : "Opschonen";
-      if (llmAvailable) {
-        $("#clean-panel").classList.add("show");
-        loadEstimate();
-      } else {
-        $("#clean-panel").classList.remove("show");
-      }
-    }
-
-    // Reflect whether an OpenRouter API key is configured, and populate the
-    // model-choice dropdown.
-    function loadModelChoices() {
-      return fetch("/api/config").then(r => r.json()).then(cfg => {
-        llmAvailable = !!cfg.llm_available;
-        const sel = $("#model-choice");
-        const prevValue = sel.value;
-        sel.innerHTML = "";
-        (cfg.models || []).forEach(m => {
-          const opt = document.createElement("option");
-          opt.value = m.id; opt.textContent = m.label;
-          sel.appendChild(opt);
-        });
-        const saved = localStorage.getItem("llmModel");
-        if (prevValue && [...sel.options].some(o => o.value === prevValue)) sel.value = prevValue;
-        else if (saved && [...sel.options].some(o => o.value === saved)) sel.value = saved;
-      }).catch(() => {});
-    }
-    loadModelChoices();
-    $("#model-choice").addEventListener("change", () => {
-      localStorage.setItem("llmModel", $("#model-choice").value);
-      const doc = activeDoc();
-      if (doc) doc.model = $("#model-choice").value;
-      // Herbereken de kostenraming voor het nieuw gekozen model.
-      if ($("#output").classList.contains("show") && llmAvailable) loadEstimate();
-    });
-
-    // Profielkeuze — "Opmaken voor Obsidian" is alleen zichtbaar bij
-    // jurisprudentie (doc.kind === "caselaw") en overschrijft dan het
-    // automatisch gekozen profiel voor dít document; op "Standaard" volgt
-    // het weer doc.kind.
-    $("#profile-choice").addEventListener("change", () => {
-      const chosen = $("#profile-choice").value;
-      const doc = activeDoc();
-      if (doc) doc.profile = chosen || null;
-      updateProfileChoiceLabel(chosen || (doc ? doc.kind : "generic"));
-      if ($("#output").classList.contains("show") && llmAvailable) loadEstimate();
-    });
-
-    // Tabs
-    document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
-      document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
-      document.querySelectorAll(".pane").forEach(x => x.classList.remove("active"));
-      t.classList.add("active");
-      $("#pane-" + t.dataset.tab).classList.add("active");
-    });
-
-    function setStatus(msg, cls = "") {
-      const el = $("#status");
-      el.className = "status " + cls;
-      el.innerHTML = msg;
-    }
-    function busy(msg) { setStatus('<span class="spinner"></span>' + msg); }
-
-    function fmtNum(n) { return n.toLocaleString("nl-NL"); }
-
-    async function loadEstimate() {
-      const doc = activeDoc();
-      if (!doc) return;
-      const profile = doc.profile || doc.kind;
-      $("#clean-est").textContent = "Kosten berekenen…";
-      try {
-        const est = await post("/api/estimate", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ markdown: $("#md").value, profile, model: $("#model-choice").value })
-        });
-        let parts = [];
-        parts.push(est.chunks + (est.chunks === 1 ? " deel" : " delen"));
-        // Documentgrootte (niet input+output opgeteld — dat oogt dubbel zo groot
-        // als het document werkelijk is, omdat opschonen ongeveer evenveel
-        // output als input produceert).
-        parts.push("~" + fmtNum(est.input_tokens) + " tokens invoer");
-        if (est.cost_usd != null) {
-          const c = est.cost_usd;
-          parts.push("≈ $" + (c < 0.01 ? c.toFixed(4) : c.toFixed(3)));
-        }
-        $("#clean-est").textContent = parts.join(" · ") + " — " + est.model;
-      } catch (e) {
-        $("#clean-est").textContent = "Koppen naar markdown, losse regels samenvoegen, kop-/voetteksten verwijderen.";
-      }
-    }
-
-    $("#btn-clean").onclick = async () => {
-      const doc = activeDoc();
-      if (!doc || doc.cleaned) return;
-      const profile = doc.profile || doc.kind;
-      const btn = $("#btn-clean");
-      btn.disabled = true;
-      setStatus('<span class="spinner"></span>Opschonen met AI… (kan even duren)');
-      try {
-        const data = await post("/api/clean", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ markdown: $("#md").value, profile, model: $("#model-choice").value })
-        });
-        doc.markdown = data.markdown;
-        doc.source = doc.source + " • AI-opgeschoond";
-        doc.cleaned = true;
-        $("#md").value = data.markdown;
-        updateLineNumbers();
-        $("#src").textContent = doc.source;
-        btn.textContent = "Opgeschoond ✓";
-        $("#clean-est").textContent = "Klaar met opschonen.";
-        setStatus("Opgeschoond.", "ok");
-      } catch (e) {
-        setStatus(e.message, "err");
-        btn.disabled = false;
-      }
-    };
-
-    async function post(url, opts) {
-      const r = await fetch(url, opts);
-      const data = await r.json().catch(() => ({ error: "Onverwacht antwoord van de server." }));
-      if (!r.ok) throw new Error(data.error || ("Fout " + r.status));
-      return data;
-    }
-
-    // Derive a download filename from the pasted identifier/link.
-    function deriveName(query) {
-      const ecli = query.match(/ECLI:[A-Z]{2}:[A-Za-z0-9.]+:\d{4}:[A-Za-z0-9.]+/i);
-      const bwb = query.match(/BWB[A-Z]\d+/i);
-      const hudoc = query.match(/\b00\d-\d{3,}\b/);
-      const celex = query.match(/([0-9][0-9]{4}[A-Z]{1,2}[0-9]{2,4})/i);
-      return ecli ? ecli[0].replace(/:/g, "-")
-        : bwb ? bwb[0].toUpperCase()
-        : hudoc ? "HUDOC-" + hudoc[0]
-        : celex ? celex[1].toUpperCase() : "document";
-    }
-
-    // --- Herhaalbare invoerrijen (Jurisprudentie/Wetgeving/link-uploads) ---
-    const LANGS = ["NL", "EN", "FR", "DE", "ES", "IT", "PT", "PL"];
-
-    function makeQueryRow(placeholder, withLang) {
-      const row = document.createElement("div");
-      row.className = "query-row";
-      const input = document.createElement("input");
-      input.type = "text"; input.className = "q-input"; input.placeholder = placeholder;
-      row.appendChild(input);
-      if (withLang) {
-        const sel = document.createElement("select");
-        sel.className = "q-lang";
-        LANGS.forEach(l => { const o = document.createElement("option"); o.textContent = l; sel.appendChild(o); });
-        row.appendChild(sel);
-      }
-      const rm = document.createElement("button");
-      rm.type = "button"; rm.className = "rm-row"; rm.title = "Verwijderen"; rm.textContent = "×";
-      rm.onclick = () => { if (row.parentElement.children.length > 1) row.remove(); };
-      row.appendChild(rm);
-      input.addEventListener("keydown", e => { if (e.key === "Enter") row.dispatchEvent(new CustomEvent("submit-rows")); });
-      return row;
-    }
-
-    function initRows(rowsId, addBtnId, placeholder, withLang, submitFn) {
-      const wrap = $("#" + rowsId);
-      const addRow = () => {
-        const row = makeQueryRow(placeholder, withLang);
-        row.addEventListener("submit-rows", submitFn);
-        wrap.appendChild(row);
-      };
-      addRow();
-      $("#" + addBtnId).onclick = addRow;
-    }
-
-    // Jurisprudentie + Wetgeving: both resolve via the auto-detecting link route.
-    async function fetchAllLinks(rowsId, btnId) {
-      const rows = [...document.querySelectorAll("#" + rowsId + " .query-row")];
-      const queries = rows.map(r => ({
-        query: r.querySelector(".q-input").value.trim(),
-        lang: r.querySelector(".q-lang").value,
-      })).filter(q => q.query);
-      if (!queries.length) { setStatus("Voer minstens één ECLI, CELEX of link in.", "err"); return; }
-      const btn = $("#" + btnId);
-      btn.disabled = true;
-      let done = 0, failed = [];
-      busy(`Bezig: 0/${queries.length} opgehaald…`);
-      await Promise.allSettled(queries.map(async q => {
-        try {
-          const data = await post("/api/convert/link", {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(q),
-          });
-          const name = deriveName(q.query);
-          addDoc({ title: name, filenameBase: name, source: data.source, kind: data.kind, markdown: data.markdown });
-        } catch (e) {
-          failed.push(q.query + ": " + e.message);
-        } finally {
-          done++;
-          busy(`Bezig: ${done}/${queries.length} opgehaald…`);
-        }
-      }));
-      btn.disabled = false;
-      if (failed.length) {
-        setStatus(`${queries.length - failed.length} van ${queries.length} opgehaald. Mislukt — ` + failed.join(" · "),
-          failed.length === queries.length ? "err" : "");
-      } else {
-        setStatus("Klaar.", "ok");
-      }
-    }
-
-    initRows("rows-jur", "add-row-jur",
-      "ECLI of link — bv. ECLI:EU:C:2025:645 · ECLI:NL:HR:2012:BQ9251 · ECLI:CE:ECHR:… · HUDOC-link",
-      true, () => fetchAllLinks("rows-jur", "btn-fetch-jur"));
-    initRows("rows-wet", "add-row-wet",
-      "link, CELEX of BWB — bv. 32016R0679 · eur-lex.europa.eu/eli/… · BWBR0040940 · wetten.overheid.nl-link",
-      true, () => fetchAllLinks("rows-wet", "btn-fetch-wet"));
-    $("#btn-fetch-jur").onclick = () => fetchAllLinks("rows-jur", "btn-fetch-jur");
-    $("#btn-fetch-wet").onclick = () => fetchAllLinks("rows-wet", "btn-fetch-wet");
-
-    // Documentupload via geplakte links (bv. PDF's).
-    async function fetchAllFileUrls() {
-      const rows = [...document.querySelectorAll("#rows-doc .query-row")];
-      const urls = rows.map(r => r.querySelector(".q-input").value.trim()).filter(Boolean);
-      if (!urls.length) { setStatus("Plak minstens één link naar een bestand.", "err"); return; }
-      const btn = $("#btn-fetch-doc");
-      btn.disabled = true;
-      let done = 0, failed = [];
-      busy(`Bezig: 0/${urls.length} opgehaald…`);
-      await Promise.allSettled(urls.map(async url => {
-        try {
-          const data = await post("/api/convert/file-url", {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ url }),
-          });
-          const base = (url.split("?")[0].split("#")[0].split("/").pop() || "document").replace(/\.[^.]+$/, "") || "document";
-          addDoc({ title: base, filenameBase: base, source: data.source, kind: data.kind, markdown: data.markdown });
-        } catch (e) {
-          failed.push(url + ": " + e.message);
-        } finally {
-          done++;
-          busy(`Bezig: ${done}/${urls.length} opgehaald…`);
-        }
-      }));
-      btn.disabled = false;
-      if (failed.length) {
-        setStatus(`${urls.length - failed.length} van ${urls.length} opgehaald. Mislukt — ` + failed.join(" · "),
-          failed.length === urls.length ? "err" : "");
-      } else {
-        setStatus("Klaar.", "ok");
-      }
-    }
-    initRows("rows-doc", "add-row-doc",
-      "https://… (link naar een PDF, Word, Excel …)", false, fetchAllFileUrls);
-    $("#btn-fetch-doc").onclick = fetchAllFileUrls;
-
-    // File upload — meerdere bestanden tegelijk (drag of kiezen).
-    const drop = $("#drop"), fileInput = $("#file");
-    drop.onclick = () => fileInput.click();
-    drop.ondragover = e => { e.preventDefault(); drop.classList.add("over"); };
-    drop.ondragleave = () => drop.classList.remove("over");
-    drop.ondrop = e => { e.preventDefault(); drop.classList.remove("over");
-      if (e.dataTransfer.files.length) uploadFiles(e.dataTransfer.files); };
-    fileInput.onchange = () => { if (fileInput.files.length) uploadFiles(fileInput.files); };
-
-    async function uploadFiles(fileList) {
-      const files = [...fileList];
-      let done = 0, failed = [];
-      busy(`Bezig: 0/${files.length} bestand(en) converteren…`);
-      await Promise.allSettled(files.map(async file => {
-        const base = file.name.replace(/\.[^.]+$/, "") || "document";
-        try {
-          const fd = new FormData();
-          fd.append("file", file);
-          const data = await post("/api/convert/file", { method: "POST", body: fd });
-          addDoc({ title: base, filenameBase: base, source: data.source, kind: data.kind, markdown: data.markdown });
-        } catch (e) {
-          failed.push(file.name + ": " + e.message);
-        } finally {
-          done++;
-          busy(`Bezig: ${done}/${files.length} bestand(en) geconverteerd…`);
-        }
-      }));
-      if (failed.length) {
-        setStatus(`${files.length - failed.length} van ${files.length} geconverteerd. Mislukt — ` + failed.join(" · "),
-          failed.length === files.length ? "err" : "");
-      } else {
-        setStatus("Klaar.", "ok");
-      }
-    }
-
-    // Regelnummers — altijd aan. Eén nummer per echte regel (enter), niet per
-    // visueel omgebogen regel: een lange zin die over meerdere visuele regels
-    // wrapt, heeft dus toch maar één regelnummer. Om de gutter exact uit te
-    // lijnen met hoe de textarea zelf wrapt, meten we elke regel in een
-    // onzichtbare "spiegel" met identieke breedte/lettertype, en geven we elk
-    // regelnummer in de gutter precies die gemeten hoogte.
-    const mdEl = $("#md"), gutterInnerEl = $("#gutter-inner"), mirrorEl = $("#line-mirror");
-
-    function syncGutterScroll() {
-      gutterInnerEl.style.transform = "translateY(" + (-mdEl.scrollTop) + "px)";
-    }
-
-    function updateLineNumbers() {
-      const lines = mdEl.value.split("\n");
-      mirrorEl.style.width = mdEl.clientWidth + "px";
-
-      const frag = document.createDocumentFragment();
-      const divs = [];
-      for (const line of lines) {
-        const div = document.createElement("div");
-        div.textContent = line.length ? line : " ";
-        frag.appendChild(div);
-        divs.push(div);
-      }
-      mirrorEl.replaceChildren(frag);
-
-      let html = "";
-      for (let i = 0; i < divs.length; i++) {
-        const h = divs[i].getBoundingClientRect().height;
-        html += '<div style="height:' + h + 'px">' + (i + 1) + "</div>";
-      }
-      gutterInnerEl.innerHTML = html;
-      syncGutterScroll();
-    }
-
-    mdEl.addEventListener("input", updateLineNumbers);
-    mdEl.addEventListener("scroll", syncGutterScroll);
-    let resizeTimer;
-    window.addEventListener("resize", () => {
-      clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(updateLineNumbers, 150);
-    });
-    // Het hele editor-blok (gutter + textarea) is samen resizebaar via de
-    // rand van #editor; alleen de hoogte verandert, dus de gemeten regel-
-    // hoogtes (breedte-afhankelijk) blijven geldig — enkel opnieuw syncen.
-    new ResizeObserver(syncGutterScroll).observe($("#editor"));
-
-    // Copy / download
-    $("#copy").onclick = async () => {
-      await navigator.clipboard.writeText($("#md").value);
-      const b = $("#copy"); b.textContent = "Gekopieerd!";
-      setTimeout(() => b.textContent = "Kopiëren", 1400);
-    };
-    $("#dl").onclick = async () => {
-      const doc = activeDoc();
-      const filename = doc ? doc.filenameBase : "document";
-      const r = await fetch("/api/download", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ markdown: $("#md").value, filename })
-      });
-      const blob = await r.blob();
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = filename + ".md";
-      a.click();
-      URL.revokeObjectURL(a.href);
-    };
-
-    // --- Instellingen (gear icon) --------------------------------------
-    let settingsDefaults = null;
-
-    function modelRow(id, label) {
-      const row = document.createElement("div");
-      row.className = "model-row";
-      row.innerHTML =
-        '<input class="mid" type="text" placeholder="model-id (bv. anthropic/claude-haiku-4.5:nitro)">' +
-        '<input class="mlabel" type="text" placeholder="label in de dropdown">' +
-        '<button type="button" class="rm" title="Verwijderen">×</button>';
-      row.querySelector(".mid").value = id || "";
-      row.querySelector(".mlabel").value = label || "";
-      row.querySelector(".rm").onclick = () => row.remove();
-      return row;
-    }
-
-    function renderModelRows(models) {
-      const wrap = $("#settings-models");
-      wrap.innerHTML = "";
-      (models || []).forEach(m => wrap.appendChild(modelRow(m.id, m.label)));
-    }
-
-    $("#settings-add-model").onclick = () => $("#settings-models").appendChild(modelRow("", ""));
-
-    async function openSettings() {
-      $("#settings-status").textContent = "";
-      $("#settings-status").className = "";
-      try {
-        const data = await post("/api/settings", { method: "GET" });
-        settingsDefaults = data.defaults;
-        renderModelRows(data.models);
-        $("#settings-chunk").value = data.chunk_tokens;
-        $("#settings-chunk").min = data.defaults.min_chunk_tokens;
-        $("#settings-chunk").max = data.defaults.max_chunk_tokens;
-        $("#settings-chunk-range").textContent =
-          fmtNum(data.defaults.min_chunk_tokens) + "–" + fmtNum(data.defaults.max_chunk_tokens);
-        $("#settings-prompt-generic").value = data.prompts.generic;
-        $("#settings-prompt-caselaw").value = data.prompts.caselaw;
-        $("#settings-prompt-obsidian").value = data.prompts.obsidian;
-        $("#settings-backdrop").classList.add("show");
-      } catch (e) {
-        setStatus(e.message, "err");
-      }
-    }
-
-    $("#btn-settings").onclick = openSettings;
-    $("#settings-cancel").onclick = () => $("#settings-backdrop").classList.remove("show");
-    $("#settings-backdrop").addEventListener("click", e => {
-      if (e.target === $("#settings-backdrop")) $("#settings-backdrop").classList.remove("show");
-    });
-
-    $("#settings-reset-models").onclick = () => renderModelRows(settingsDefaults.models);
-    $("#settings-reset-chunk").onclick = () => { $("#settings-chunk").value = settingsDefaults.chunk_tokens; };
-    $("#settings-reset-generic").onclick = () => { $("#settings-prompt-generic").value = settingsDefaults.prompts.generic; };
-    $("#settings-reset-caselaw").onclick = () => { $("#settings-prompt-caselaw").value = settingsDefaults.prompts.caselaw; };
-    $("#settings-reset-obsidian").onclick = () => { $("#settings-prompt-obsidian").value = settingsDefaults.prompts.obsidian; };
-
-    $("#settings-save").onclick = async () => {
-      const models = [...$("#settings-models").querySelectorAll(".model-row")].map(row => ({
-        id: row.querySelector(".mid").value.trim(),
-        label: row.querySelector(".mlabel").value.trim(),
-      })).filter(m => m.id);
-      const payload = {
-        models,
-        chunk_tokens: parseInt($("#settings-chunk").value, 10) || null,
-        prompts: {
-          generic: $("#settings-prompt-generic").value,
-          caselaw: $("#settings-prompt-caselaw").value,
-          obsidian: $("#settings-prompt-obsidian").value,
-        },
-      };
-      const btn = $("#settings-save");
-      btn.disabled = true;
-      try {
-        await post("/api/settings", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-        await loadModelChoices();
-        $("#settings-status").className = "ok";
-        $("#settings-status").textContent = "Opgeslagen.";
-        setTimeout(() => { $("#settings-backdrop").classList.remove("show"); }, 500);
-      } catch (e) {
-        $("#settings-status").className = "err";
-        $("#settings-status").textContent = e.message;
-      } finally {
-        btn.disabled = false;
-      }
-    };
-  </script>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>

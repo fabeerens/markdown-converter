@@ -1,0 +1,601 @@
+/* ==========================================================================
+   Markdown converter — opmaak in de stijl van Radix Themes.
+
+   Geen build-stap en geen React: dit zijn de echte kleurschalen, radii en
+   maten van Radix Themes, met de hand in platte CSS gezet. De 12-stapsschaal
+   heeft een vaste betekenis en die wordt hier consequent gevolgd:
+
+     1 paginablad · 2 subtiel blad · 3 vulling · 4 hover · 5 actief/geselecteerd
+     6 zachte rand · 7 randen en 1px-ringen · 8 hover-rand + focusring
+     9 volvlak (knop, indicator, aangevinkt) · 10 volvlak-hover
+     11 secundaire tekst · 12 primaire tekst
+
+   Dark/light volgt de systeeminstelling via prefers-color-scheme; er is
+   bewust geen knop, want de gebruiker heeft dat op OS-niveau al gekozen.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Licht (slate + blue)
+   -------------------------------------------------------------------------- */
+:root {
+  color-scheme: light;
+
+  --gray-1:  #fcfcfd;  --gray-2:  #f9f9fb;  --gray-3:  #f0f0f3;
+  --gray-4:  #e8e8ec;  --gray-5:  #e0e1e6;  --gray-6:  #d9d9e0;
+  --gray-7:  #cdced6;  --gray-8:  #b9bbc6;  --gray-9:  #8b8d98;
+  --gray-10: #80838d;  --gray-11: #60646c;  --gray-12: #1c2024;
+
+  --gray-a2: #00005506; --gray-a3: #0000330f; --gray-a4: #00002d17;
+  --gray-a5: #0009321f; --gray-a6: #00002f26; --gray-a7: #00062e32;
+  --gray-a8: #00083046; --gray-a9: #00051d74; --gray-a11: #0007149f;
+
+  --accent-1:  #fbfdff;  --accent-2:  #f4faff;  --accent-3:  #e6f4fe;
+  --accent-4:  #d5efff;  --accent-5:  #c2e5ff;  --accent-6:  #acd8fc;
+  --accent-7:  #8ec8f6;  --accent-8:  #5eb1ef;  --accent-9:  #0090ff;
+  --accent-10: #0588f0;  --accent-11: #0d74ce;  --accent-12: #113264;
+
+  --accent-a2: #008cff0b; --accent-a3: #008ff519; --accent-a4: #009eff2a;
+  --accent-a5: #0093ff3d; --accent-a6: #0088f653; --accent-a7: #0083eb74;
+  --accent-a8: #0084e6a1; --accent-a11: #0b74cef2;
+
+  --green-3: #e9f9ee; --green-6: #b4dfc4; --green-9: #30a46c;
+  --green-a3: #00a43319; --green-a6: #00933b4b; --green-a11: #008a3ee6;
+
+  --red-3: #ffefef; --red-6: #f9c6c6; --red-9: #e5484d;
+  --red-a3: #ff000010; --red-a6: #f3000d39; --red-a11: #db0b00d3;
+
+  --black-a1: #0000000d; --black-a2: #0000001a; --black-a3: #00000026;
+
+  /* Semantische aliassen. In licht is een paneel wit-op-wit: gescheiden door
+     een haarlijn en schaduw, niet door een andere vulkleur. Een invoerveld is
+     een licht opgetild vlak (translucent wit). */
+  --bg: var(--gray-1);
+  --panel: #ffffff;
+  --surface: #ffffffd9;
+  --border: var(--gray-a7);
+  --border-subtle: var(--gray-a6);
+  --text: var(--gray-12);
+  --muted: var(--gray-11);
+  --accent: var(--accent-9);
+  --accent-hover: var(--accent-10);
+  --accent-contrast: #ffffff;
+  --accent-text: var(--accent-a11);
+  --overlay: #00000066;
+  --focus-ring: var(--accent-8);
+
+  --shadow-2: 0 0 0 1px var(--gray-a3), 0 1px 1px 0 var(--gray-a2),
+              0 2px 1px -1px var(--black-a1), 0 1px 3px 0 var(--black-a1);
+  --shadow-6: 0 0 0 1px var(--gray-a3), 0 12px 60px var(--black-a3),
+              0 16px 64px var(--gray-a2), 0 16px 36px -20px var(--gray-a7);
+  --card-ring: 0 0 0 1px var(--gray-a5);
+
+  /* Maatvoering */
+  --space-1: 4px;  --space-2: 8px;  --space-3: 12px; --space-4: 16px;
+  --space-5: 24px; --space-6: 32px; --space-7: 40px; --space-8: 48px;
+  --radius-1: 3px; --radius-2: 4px; --radius-3: 6px; --radius-4: 8px;
+  --radius-5: 12px;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", system-ui, sans-serif, "Apple Color Emoji";
+  --font-mono: Menlo, Consolas, "Bitstream Vera Sans Mono", monospace;
+  --fs-1: 12px; --lh-1: 16px;
+  --fs-2: 14px; --lh-2: 20px;
+  --fs-3: 16px; --lh-3: 24px;
+  --fs-5: 20px; --lh-5: 28px;
+  --fs-6: 24px; --lh-6: 30px;
+  --fw-regular: 400; --fw-medium: 500; --fw-bold: 700;
+
+  /* Editor: monospace-maat op één plek, zodat de regelnummer-spiegel
+     gegarandeerd identiek meet aan het tekstvak. */
+  --editor-font: 13px/1.6 var(--font-mono);
+  --editor-padding: 16px;
+}
+
+/* --------------------------------------------------------------------------
+   Donker (slate dark + blue dark)
+
+   Drie dingen kantelen van betekenis; zonder die omkering leest het niet als
+   Radix: een paneel is hier líchter dan de pagina, een invoerveld wordt een
+   verzonken (donkerder) vlak in plaats van een opgetild vlak, en stap 10
+   wordt lichter waar hij in licht juist donkerder werd.
+   -------------------------------------------------------------------------- */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    --gray-1:  #111113;  --gray-2:  #18191b;  --gray-3:  #212225;
+    --gray-4:  #272a2d;  --gray-5:  #2e3135;  --gray-6:  #363a3f;
+    --gray-7:  #43484e;  --gray-8:  #5a6169;  --gray-9:  #696e77;
+    --gray-10: #777b84;  --gray-11: #b0b4ba;  --gray-12: #edeef0;
+
+    --gray-a2: #d8f4f609; --gray-a3: #ddeaf814; --gray-a4: #d3edf81d;
+    --gray-a5: #d9edfe25; --gray-a6: #d6ebfd30; --gray-a7: #d9edff40;
+    --gray-a8: #d9edff5d; --gray-a9: #dfebfd6d; --gray-a11: #f1f7feb5;
+
+    --accent-1:  #0d1520;  --accent-2:  #111927;  --accent-3:  #0d2847;
+    --accent-4:  #003362;  --accent-5:  #004074;  --accent-6:  #104d87;
+    --accent-7:  #205d9e;  --accent-8:  #2870bd;  --accent-9:  #0090ff;
+    --accent-10: #3b9eff;  --accent-11: #70b8ff;  --accent-12: #c2e6ff;
+
+    --accent-a2: #1166fb18; --accent-a3: #0077ff3a; --accent-a4: #0075ff57;
+    --accent-a5: #0081fd6b; --accent-a6: #0f89fd7f; --accent-a7: #2a91fe98;
+    --accent-a8: #3094feb9; --accent-a11: #70b8ff;
+
+    --green-3: #132d21; --green-6: #20573e; --green-9: #30a46c;
+    --green-a3: #22ff991e; --green-a6: #44ffaa4b; --green-a11: #46fea5d4;
+
+    --red-3: #3b1219; --red-6: #72232d; --red-9: #e5484d;
+    --red-a3: #ff173f2d; --red-a6: #ff3e5668; --red-a11: #ff9592;
+
+    --black-a1: #00000033; --black-a2: #00000066; --black-a3: #0000008c;
+
+    --panel: var(--gray-2);
+    --surface: #00000040;
+    --accent-text: var(--accent-11);
+    --overlay: #00000099;
+
+    --shadow-2: 0 0 0 1px var(--gray-a6), 0 1px 3px var(--black-a2);
+    --shadow-6: 0 0 0 1px var(--gray-a6), 0 12px 60px var(--black-a3),
+                0 16px 64px var(--black-a2);
+    --card-ring: 0 0 0 1px var(--gray-a6);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Basis
+   -------------------------------------------------------------------------- */
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: var(--fw-regular) var(--fs-3)/var(--lh-3) var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Het hidden-attribuut moet altijd winnen. De UA-stijl ([hidden] → display:none)
+   heeft de laagste specificiteit, dus een `display` in een class-regel verslaat
+   hem: `.checkbox { display: inline-flex }` maakte het Obsidian-vinkje zichtbaar
+   bij documenten die geen rechtspraak zijn, ondanks `hidden = true`. De JS zet
+   zichtbaarheid via dit attribuut, dus dit is de plek om dat te garanderen. */
+[hidden] { display: none !important; }
+
+/* Eén focusring voor de hele app: alleen bij toetsenbordnavigatie. */
+:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+:focus:not(:focus-visible) { outline: none; }
+
+.wrap { max-width: 1040px; margin: 0 auto; padding: var(--space-5) var(--space-4) var(--space-8); }
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* --------------------------------------------------------------------------
+   Kop
+   -------------------------------------------------------------------------- */
+.app-header {
+  display: flex; align-items: center; gap: var(--space-3);
+  max-width: 1040px; margin: 0 auto;
+  padding: var(--space-5) var(--space-4) 0;
+}
+.app-header .titles { flex: 1; min-width: 0; }
+.app-header h1 {
+  margin: 0; font-size: var(--fs-6); line-height: var(--lh-6);
+  font-weight: var(--fw-bold); letter-spacing: -0.00625em;
+}
+.app-header p {
+  margin: var(--space-1) 0 0; color: var(--muted);
+  font-size: var(--fs-2); line-height: var(--lh-2);
+}
+
+/* --------------------------------------------------------------------------
+   Knoppen — solid / soft / ghost, zoals Radix ze opbouwt
+   -------------------------------------------------------------------------- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  gap: var(--space-2); flex-shrink: 0;
+  height: var(--space-6); padding: 0 var(--space-3);
+  border: 0; border-radius: var(--radius-2);
+  font: var(--fw-medium) var(--fs-2)/1 var(--font-sans);
+  cursor: pointer; user-select: none;
+  transition: background-color 80ms, box-shadow 80ms, color 80ms;
+}
+.btn:disabled { cursor: not-allowed; opacity: 1; }
+
+.btn-solid { background: var(--accent); color: var(--accent-contrast); }
+.btn-solid:hover:not(:disabled) { background: var(--accent-hover); }
+.btn-solid:disabled { background: var(--gray-a3); color: var(--gray-a11); }
+
+.btn-soft { background: var(--accent-a3); color: var(--accent-text); }
+.btn-soft:hover:not(:disabled) { background: var(--accent-a4); }
+.btn-soft:disabled { background: var(--gray-a3); color: var(--gray-a11); }
+
+.btn-ghost { background: transparent; color: var(--gray-11); }
+.btn-ghost:hover:not(:disabled) { background: var(--gray-a3); color: var(--text); }
+
+.btn-outline {
+  background: transparent; color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.btn-outline:hover:not(:disabled) { box-shadow: inset 0 0 0 1px var(--gray-a8); }
+
+.btn-lg { height: var(--space-7); padding: 0 var(--space-4); font-size: var(--fs-3); }
+.btn-icon { width: var(--space-6); padding: 0; font-size: var(--fs-3); }
+.btn-danger { color: var(--red-a11); }
+.btn-danger:hover:not(:disabled) { background: var(--red-a3); }
+
+/* Streepjesrand: nodig voor "voeg iets toe", zodat het niet als
+   hoofdactie leest maar wel duidelijk klikbaar is. */
+.btn-dashed {
+  background: transparent; color: var(--muted);
+  box-shadow: inset 0 0 0 1px var(--border-subtle);
+  border-radius: var(--radius-2);
+}
+.btn-dashed:hover:not(:disabled) { color: var(--text); box-shadow: inset 0 0 0 1px var(--accent-a7); }
+
+/* --------------------------------------------------------------------------
+   Brontabs — een tablist met onderliggende indicator (stap 9)
+   -------------------------------------------------------------------------- */
+.tabs {
+  display: flex; gap: var(--space-1);
+  box-shadow: inset 0 -1px 0 0 var(--gray-a6);
+  margin-bottom: var(--space-5);
+}
+.tab {
+  position: relative; flex: 1;
+  height: var(--space-7); padding: 0 var(--space-3);
+  display: inline-flex; align-items: center; justify-content: center;
+  background: none; border: 0; cursor: pointer;
+  color: var(--muted); font: var(--fw-medium) var(--fs-2)/1 var(--font-sans);
+  border-radius: var(--radius-2) var(--radius-2) 0 0;
+}
+.tab:hover { color: var(--text); background: var(--gray-a3); }
+.tab[aria-selected="true"] { color: var(--text); font-weight: var(--fw-bold); }
+.tab[aria-selected="true"]::after {
+  content: ""; position: absolute; inset-inline: 0; bottom: 0;
+  height: 2px; background: var(--accent-9);
+}
+
+/* --------------------------------------------------------------------------
+   Panelen en kaarten
+   -------------------------------------------------------------------------- */
+.card {
+  background: var(--panel);
+  border-radius: var(--radius-4);
+  box-shadow: var(--card-ring);
+  padding: var(--space-4);
+}
+.stack { display: flex; flex-direction: column; gap: var(--space-3); }
+.hint {
+  color: var(--muted); font-size: var(--fs-2); line-height: var(--lh-2);
+  margin: var(--space-3) 0 0;
+}
+.hint code {
+  font: var(--fs-1)/1 var(--font-mono);
+  background: var(--gray-a3); padding: 2px 4px; border-radius: var(--radius-1);
+}
+
+/* --------------------------------------------------------------------------
+   Invoervelden
+   -------------------------------------------------------------------------- */
+.field {
+  display: flex; align-items: center;
+  height: var(--space-6);
+  padding: 1px;
+  background: var(--surface);
+  background-clip: content-box;
+  box-shadow: inset 0 0 0 1px var(--border);
+  border-radius: var(--radius-2);
+}
+.field:focus-within { outline: 2px solid var(--focus-ring); outline-offset: -1px; }
+.field input {
+  flex: 1; min-width: 0;
+  background: none; border: 0; outline: 0; color: var(--text);
+  padding: 0 calc(var(--space-2) - 1px);
+  font: var(--fw-regular) var(--fs-2)/1 var(--font-sans);
+}
+.field input::placeholder { color: var(--gray-a9); }
+
+/* Native select met de Radix-chevron als achtergrond-SVG. */
+.select {
+  appearance: none;
+  height: var(--space-6);
+  padding: 0 var(--space-6) 0 var(--space-3);
+  background-color: var(--surface);
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg width='9' height='9' viewBox='0 0 9 9' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0.135 3.13a.5.5 0 0 1 .73-.68L4.5 6.06l3.635-3.61a.5.5 0 1 1 .73.68L4.5 7.44z' fill='%2360646c'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right var(--space-3) center;
+  box-shadow: inset 0 0 0 1px var(--border);
+  border: 0; border-radius: var(--radius-2);
+  color: var(--text); font: var(--fw-regular) var(--fs-2)/1 var(--font-sans);
+  cursor: pointer; max-width: 280px;
+}
+.select:hover { box-shadow: inset 0 0 0 1px var(--gray-a8); }
+.select:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -1px; }
+@media (prefers-color-scheme: dark) {
+  .select {
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg width='9' height='9' viewBox='0 0 9 9' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0.135 3.13a.5.5 0 0 1 .73-.68L4.5 6.06l3.635-3.61a.5.5 0 1 1 .73.68L4.5 7.44z' fill='%23b0b4ba'/%3E%3C/svg%3E");
+  }
+}
+
+/* Herhaalbare invoerrijen */
+.rows { display: flex; flex-direction: column; gap: var(--space-2); }
+.row { display: flex; gap: var(--space-2); align-items: center; }
+.row .field { flex: 1; min-width: 0; }
+.row .select { flex-shrink: 0; width: 84px; }
+.row-actions { display: flex; gap: var(--space-2); align-items: center; margin-top: var(--space-1); }
+
+/* --------------------------------------------------------------------------
+   Checkbox — echte <input type=checkbox>, met de Radix-vinkstijl
+   -------------------------------------------------------------------------- */
+.checkbox { display: inline-flex; align-items: center; gap: var(--space-2); cursor: pointer; }
+.checkbox input {
+  appearance: none; margin: 0; flex-shrink: 0;
+  width: var(--space-4); height: var(--space-4);
+  border-radius: var(--radius-1);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--border);
+  cursor: pointer;
+  transition: background-color 80ms, box-shadow 80ms;
+}
+.checkbox input:hover { box-shadow: inset 0 0 0 1px var(--gray-a8); }
+.checkbox input:checked {
+  background-color: var(--accent-9);
+  box-shadow: none;
+  /* Het vinkje: 10px, gecentreerd, in de contrastkleur van het volvlak. */
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg width='10' height='10' viewBox='0 0 10 10' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M9.1 1.6 3.9 8.3 0.8 5.4l.9-1 2.1 2 4.4-5.6z' fill='white'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+}
+.checkbox input:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.checkbox span { font-size: var(--fs-2); line-height: var(--lh-2); color: var(--text); }
+
+/* --------------------------------------------------------------------------
+   Statusregel en callouts
+   -------------------------------------------------------------------------- */
+.status {
+  display: none; align-items: flex-start; gap: var(--space-3);
+  margin: var(--space-4) 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-4);
+  font-size: var(--fs-2); line-height: var(--lh-2);
+}
+.status.show { display: flex; }
+.status.info { background: var(--accent-a3); color: var(--accent-text); }
+.status.ok { background: var(--green-a3); color: var(--green-a11); }
+.status.err { background: var(--red-a3); color: var(--red-a11); }
+.status .detail { display: block; margin-top: var(--space-1); opacity: .85; }
+
+.spinner {
+  flex-shrink: 0; width: 14px; height: 14px; margin-top: 3px;
+  border: 2px solid currentColor; border-top-color: transparent;
+  border-radius: 50%; animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2s; } }
+
+/* --------------------------------------------------------------------------
+   Documenttabs
+   -------------------------------------------------------------------------- */
+.doc-tabs {
+  display: flex; gap: var(--space-2); flex-wrap: wrap;
+  margin-bottom: var(--space-3);
+}
+.doc-tab {
+  display: inline-flex; align-items: center; gap: var(--space-1);
+  max-width: 260px; height: var(--space-6); padding: 0 var(--space-1) 0 var(--space-3);
+  background: var(--gray-a3); border: 0; border-radius: var(--radius-2);
+  color: var(--muted); font: var(--fw-medium) var(--fs-2)/1 var(--font-sans);
+  cursor: pointer;
+}
+.doc-tab:hover { background: var(--gray-a4); color: var(--text); }
+.doc-tab[aria-current="true"] {
+  background: var(--accent-a3); color: var(--accent-text);
+  box-shadow: inset 0 0 0 1px var(--accent-a6);
+}
+.doc-tab .label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.doc-tab .close {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; flex-shrink: 0;
+  background: none; border: 0; border-radius: var(--radius-1);
+  color: inherit; opacity: .7; cursor: pointer; font-size: var(--fs-2);
+}
+.doc-tab .close:hover { opacity: 1; background: var(--gray-a4); color: var(--red-a11); }
+.doc-tab .badge {
+  flex-shrink: 0; padding: 0 var(--space-1); border-radius: var(--radius-1);
+  background: var(--green-a3); color: var(--green-a11);
+  font-size: var(--fs-1); line-height: var(--lh-1); font-weight: var(--fw-medium);
+}
+
+/* --------------------------------------------------------------------------
+   Opschoonpaneel
+   -------------------------------------------------------------------------- */
+.clean-panel {
+  display: none; align-items: center; gap: var(--space-4); flex-wrap: wrap;
+  margin-bottom: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--accent-a2);
+  box-shadow: inset 0 0 0 1px var(--accent-a6);
+  border-radius: var(--radius-4);
+}
+.clean-panel.show { display: flex; }
+.clean-info { flex: 1 1 260px; min-width: 0; }
+.clean-info strong {
+  display: block; font-size: var(--fs-2); line-height: var(--lh-2);
+  font-weight: var(--fw-medium); color: var(--text);
+}
+.clean-info .est {
+  display: block; margin-top: 2px;
+  font-size: var(--fs-1); line-height: var(--lh-1); color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.clean-controls { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+
+/* --------------------------------------------------------------------------
+   Editor: regelnummers + tekstvak
+
+   Gutter en tekstvak zitten in één blok met een expliciete hoogte, dat als
+   geheel verticaal resizebaar is. Zo kunnen ze nooit uit elkaar lopen — de
+   textarea heeft daarom zelf resize:none.
+   -------------------------------------------------------------------------- */
+.out-bar {
+  display: flex; align-items: center; gap: var(--space-2);
+  margin-bottom: var(--space-2); flex-wrap: wrap;
+}
+.out-bar .src {
+  flex: 1 1 auto; min-width: 0; margin-right: auto;
+  color: var(--muted); font-size: var(--fs-1); line-height: var(--lh-2);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.editor {
+  position: relative; display: flex;
+  height: 480px; min-height: 200px;
+  resize: vertical; overflow: hidden;
+  background: var(--panel);
+  border-radius: var(--radius-4);
+  box-shadow: var(--card-ring);
+}
+.gutter {
+  flex-shrink: 0; width: 52px; height: 100%; overflow: hidden;
+  text-align: right; user-select: none;
+  background: var(--gray-a2);
+  border-right: 1px solid var(--border-subtle);
+  border-radius: var(--radius-4) 0 0 var(--radius-4);
+  color: var(--gray-9); font: var(--editor-font);
+  font-variant-numeric: tabular-nums;
+}
+/* Verschoven met een transform in plaats van eigen scrollTop: dat blijft
+   pixel-exact gelijklopen met de textarea, ongeacht scroll-eigenaardigheden. */
+.gutter-inner { padding: var(--editor-padding) var(--space-2) var(--editor-padding) 0; }
+
+.editor textarea {
+  flex: 1 1 auto; min-width: 0; height: 100%;
+  background: none; border: 0; outline: 0; resize: none;
+  padding: var(--editor-padding);
+  color: var(--text); font: var(--editor-font);
+  white-space: pre-wrap; overflow-wrap: break-word;
+  tab-size: 4;
+}
+.editor:focus-within { box-shadow: var(--card-ring), 0 0 0 2px var(--focus-ring); }
+
+/* Onzichtbare kloon van het tekstvak: hierin wordt per regel gemeten hoe hoog
+   die wordt na word-wrap, zodat elk regelnummer exact die hoogte krijgt en een
+   lange gewrapte regel één nummer houdt. Moet identiek zijn aan de textarea. */
+.line-mirror {
+  position: absolute; visibility: hidden; pointer-events: none;
+  left: -99999px; top: 0;
+  padding: var(--editor-padding); border: 0;
+  font: var(--editor-font);
+  white-space: pre-wrap; overflow-wrap: break-word; tab-size: 4;
+}
+.line-mirror div { margin: 0; }
+
+.editor textarea::-webkit-scrollbar { width: var(--space-3); }
+.editor textarea::-webkit-scrollbar-track { background: none; }
+.editor textarea::-webkit-scrollbar-thumb {
+  background: var(--gray-a8); border-radius: var(--space-3);
+  border: var(--space-1) solid transparent; background-clip: content-box;
+}
+.editor textarea::-webkit-scrollbar-thumb:hover { background: var(--gray-a9); background-clip: content-box; }
+
+/* --------------------------------------------------------------------------
+   Sleepzone
+   -------------------------------------------------------------------------- */
+.drop {
+  display: flex; flex-direction: column; align-items: center; gap: var(--space-1);
+  padding: var(--space-8) var(--space-4);
+  background: var(--gray-a2);
+  border-radius: var(--radius-4);
+  box-shadow: inset 0 0 0 1px var(--border-subtle);
+  cursor: pointer; text-align: center;
+  transition: background-color 100ms, box-shadow 100ms;
+}
+.drop:hover { background: var(--gray-a3); }
+.drop.over { background: var(--accent-a3); box-shadow: inset 0 0 0 2px var(--accent-8); }
+.drop strong { font-size: var(--fs-2); font-weight: var(--fw-medium); }
+.drop span { color: var(--muted); font-size: var(--fs-1); line-height: var(--lh-2); }
+.or {
+  display: flex; align-items: center; gap: var(--space-3);
+  margin: var(--space-4) 0; color: var(--muted); font-size: var(--fs-1);
+}
+.or::before, .or::after { content: ""; flex: 1; height: 1px; background: var(--gray-a6); }
+
+/* --------------------------------------------------------------------------
+   Instellingen-dialoog
+   -------------------------------------------------------------------------- */
+.overlay {
+  position: fixed; inset: 0; z-index: 50;
+  display: none; align-items: flex-start; justify-content: center;
+  padding: var(--space-6) var(--space-4);
+  background: var(--overlay);
+  overflow-y: auto;
+}
+.overlay.show { display: flex; }
+.dialog {
+  width: 100%; max-width: 680px;
+  background: var(--panel);
+  border-radius: var(--radius-5);
+  box-shadow: var(--shadow-6);
+  padding: var(--space-5);
+}
+.dialog h2 { margin: 0; font-size: var(--fs-5); line-height: var(--lh-5); font-weight: var(--fw-bold); }
+.dialog .sub {
+  margin: var(--space-1) 0 var(--space-5);
+  color: var(--muted); font-size: var(--fs-2); line-height: var(--lh-2);
+}
+.dialog section { margin-bottom: var(--space-5); }
+.dialog section > h3 {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
+  margin: 0 0 var(--space-2);
+  font-size: var(--fs-1); line-height: var(--lh-1);
+  text-transform: uppercase; letter-spacing: .04em;
+  color: var(--muted); font-weight: var(--fw-medium);
+}
+.dialog .reset {
+  background: none; border: 0; padding: 0; cursor: pointer;
+  color: var(--accent-text); font: var(--fw-medium) var(--fs-1)/1 var(--font-sans);
+  text-transform: none; letter-spacing: 0;
+}
+.dialog .reset:hover { text-decoration: underline; }
+.dialog label.block {
+  display: block; margin: var(--space-3) 0 var(--space-1);
+  font-size: var(--fs-2); color: var(--text);
+}
+.dialog textarea {
+  width: 100%; min-height: 120px; resize: vertical;
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface); background-clip: content-box;
+  box-shadow: inset 0 0 0 1px var(--border);
+  border: 0; border-radius: var(--radius-2);
+  color: var(--text); font: 12.5px/1.5 var(--font-mono);
+}
+.dialog textarea:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -1px; }
+.dialog input[type="number"] { width: 140px; }
+.dialog .field { max-width: 100%; }
+.dialog-actions {
+  display: flex; justify-content: flex-end; align-items: center;
+  gap: var(--space-3); margin-top: var(--space-4);
+}
+.dialog-actions .msg { margin-right: auto; font-size: var(--fs-2); }
+.dialog-actions .msg.ok { color: var(--green-a11); }
+.dialog-actions .msg.err { color: var(--red-a11); }
+.unit { color: var(--muted); font-size: var(--fs-1); }
+
+.app-footer {
+  max-width: 1040px; margin: 0 auto;
+  padding: 0 var(--space-4) var(--space-6);
+  color: var(--gray-9); font-size: var(--fs-1); text-align: center;
+}
+
+/* --------------------------------------------------------------------------
+   Smal scherm
+   -------------------------------------------------------------------------- */
+@media (max-width: 640px) {
+  .tab { font-size: var(--fs-1); padding: 0 var(--space-2); }
+  .row { flex-wrap: wrap; }
+  .row .field { flex-basis: 100%; }
+  .clean-controls { width: 100%; }
+  .editor { height: 380px; }
+}
