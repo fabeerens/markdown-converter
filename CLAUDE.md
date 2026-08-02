@@ -29,7 +29,7 @@ converters/
   eurlex.py            EUR-Lex ophalen (CELEX / EU-ECLI / URL) + generieke HTML→markdown
   caselaw.py           link-dispatcher: rechtspraak.nl (ECLI), HUDOC (EHRM), wetten.overheid.nl
   wetten.py            Nederlandse wetgeving (wetten.overheid.nl / BWB) → markdown
-  generic.py           overige bestanden → markdown via Microsoft MarkItDown (+ PDF-reflow)
+  generic.py           overige bestanden → PDF via pdf-inspector (val. MarkItDown), rest via MarkItDown
   llm_cleanup.py       optionele AI-opschoning via OpenRouter + kostenraming
 templates/index.html   web-interface (één pagina, vanilla JS)
 ```
@@ -37,7 +37,7 @@ templates/index.html   web-interface (één pagina, vanilla JS)
 ### API-endpoints
 - `POST /api/convert/link`  `{query, lang}` → `{markdown, source, kind}` — dispatcht op bron.
 - `POST /api/convert/file`  multipart bestand → `{markdown, source, kind}`.
-- `POST /api/convert/file-url`  `{url}` → downloadt het bestand en zet het om via MarkItDown.
+- `POST /api/convert/file-url`  `{url}` → downloadt het bestand en zet het om (zie `generic.py`).
 - `POST /api/estimate`      `{markdown, profile, model?}` → chunks/tokens/kosten voor opschoning.
 - `POST /api/clean`         `{markdown, profile, model?}` → opgeschoonde markdown.
 - `POST /api/download`      `{markdown, filename}` → `.md`-bestand.
@@ -79,6 +79,16 @@ templates/index.html   web-interface (één pagina, vanilla JS)
   en bevat de volledige tekst in `#regeling` (h1 titel, h3 hoofdstuk, h4 artikel). `wetten.py` pakt
   die container, strip't werkbalk-ruis (`[class*=action--]`, `.visually-hidden`) en markdownify't.
   URL wordt herbouwd uit BWB-id + optionele versiedatum (`/{jjjj-mm-dd}`).
+- **PDF-conversie** (`converters/generic.py`): een geüploade/gelinkte `.pdf` gaat eerst door
+  **pdf-inspector** (Rust-library van Firecrawl, `process_pdf_bytes()`) — layout-aware Markdown
+  (koppen/lijsten/tabellen) zonder de losse-regeleinde-reflow-hack die MarkItDown nodig heeft.
+  `result.pdf_type` classificeert de PDF (`text_based`/`scanned`/`image_based`/`mixed`); bij
+  `scanned`/`image_based` (geen tekstlaag) of een lege/foutieve extractie valt de code terug op
+  MarkItDown (die óók geen OCR doet, maar wel de bestaande gedrag is voor dat geval). Alle andere
+  formaten (Word/Excel/PowerPoint/HTML/CSV/JSON/EPUB/…) blijven altijd via MarkItDown lopen —
+  pdf-inspector kent alleen PDF. `convert_with_markitdown()` geeft `(markdown, engine_label)`
+  terug zodat de UI kan tonen welke engine het document daadwerkelijk verwerkte
+  (`"pdf-inspector"` of `"MarkItDown"` in het bronveld).
 
 ## AI-opschoning (`converters/llm_cleanup.py`)
 

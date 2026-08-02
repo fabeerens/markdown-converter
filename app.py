@@ -170,7 +170,8 @@ def _looks_like_formex(data: bytes) -> bool:
 def convert_file():
     """Convert an uploaded file to Markdown.
 
-    Formex XML → dedicated structural parser. Any other format (PDF, Word,
+    Formex XML → dedicated structural parser. PDF → pdf-inspector, falling
+    back to MarkItDown for scanned/image-only PDFs. Any other format (Word,
     Excel, PowerPoint, HTML, …) → Microsoft MarkItDown.
     """
     if "file" not in request.files:
@@ -189,11 +190,11 @@ def convert_file():
             source = f"Formex XML • {f.filename}"
             # Guard against a mislabelled / non-Formex XML slipping through.
             if len(markdown.strip()) < 40:
-                markdown = convert_with_markitdown(data, f.filename)
-                source = f"MarkItDown • {f.filename}"
+                markdown, engine = convert_with_markitdown(data, f.filename)
+                source = f"{engine} • {f.filename}"
         else:
-            markdown = convert_with_markitdown(data, f.filename)
-            source = f"MarkItDown • {f.filename}"
+            markdown, engine = convert_with_markitdown(data, f.filename)
+            source = f"{engine} • {f.filename}"
     except Exception as e:  # noqa: BLE001
         return jsonify(error=f"Conversie mislukt: {e}"), 400
     return jsonify(markdown=markdown, source=source, kind="document")
@@ -242,10 +243,10 @@ def convert_file_url():
         if len(data) > 40 * 1024 * 1024:
             return jsonify(error="Bestand is groter dan 40 MB."), 400
         filename = _filename_from_url(url, r.headers.get("Content-Type", ""))
-        markdown = convert_with_markitdown(data, filename)
+        markdown, engine = convert_with_markitdown(data, filename)
     except Exception as e:  # noqa: BLE001
         return jsonify(error=f"Conversie mislukt: {e}"), 400
-    return jsonify(markdown=markdown, source=f"MarkItDown • {url}", kind="document")
+    return jsonify(markdown=markdown, source=f"{engine} • {url}", kind="document")
 
 
 def _kind_for_source(source: str) -> str:

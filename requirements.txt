@@ -4,4 +4,5 @@ lxml>=5.0
 beautifulsoup4>=4.12
 markdownify>=0.11
 markitdown[pdf,docx,pptx,xlsx]>=0.1
+pdf-inspector>=0.2
 gunicorn>=21.0

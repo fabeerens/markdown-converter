@@ -1,12 +1,16 @@
-"""Convert arbitrary document formats to Markdown via Microsoft MarkItDown.
+"""Convert arbitrary document formats to Markdown.
 
 Used as the fallback for the file-upload route: EUR-Lex Formex XML gets the
-dedicated structural parser (converters/formex.py); everything else — PDF,
-Word, Excel, PowerPoint, HTML, CSV, JSON, EPUB, … — is handled here.
+dedicated structural parser (converters/formex.py). PDF's go through
+**pdf-inspector** first (layout-aware Markdown, no reflow-hack needed);
+everything else — and any PDF pdf-inspector can't handle (scanned/image-only,
+or a parse error) — falls back to **Microsoft MarkItDown**.
 
-PDF (and plain-text) extraction inserts a hard line break at every visual
-line, so a single paragraph arrives split across many lines. `_reflow`
-re-joins those soft-wrapped lines back into paragraphs.
+PDF (and plain-text) extraction via MarkItDown inserts a hard line break at
+every visual line, so a single paragraph arrives split across many lines.
+`_reflow` re-joins those soft-wrapped lines back into paragraphs. pdf-inspector
+does its own layout-aware Markdown conversion, so its output does not need
+this treatment.
 """
 
 from __future__ import annotations
@@ -16,6 +20,11 @@ import os
 import re
 
 from markitdown import MarkItDown
+
+try:
+    import pdf_inspector
+except ImportError:  # pragma: no cover
+    pdf_inspector = None
 
 # One shared instance; MarkItDown is stateless per-conversion.
 _ENGINE = MarkItDown()
@@ -30,10 +39,39 @@ SUPPORTED_EXTENSIONS = [
 # Formats whose text is extracted line-by-line and benefits from reflowing.
 _REFLOW_EXTENSIONS = {".pdf", ".txt"}
 
+# pdf-inspector's own classification for a PDF with no usable text layer —
+# for these we fall back to MarkItDown rather than return empty/garbage output.
+_NO_TEXT_LAYER = {"scanned", "image_based"}
 
-def convert_with_markitdown(data: bytes, filename: str = "") -> str:
-    """Convert raw file bytes to Markdown. Raises ValueError on failure."""
+
+def _convert_pdf_with_pdf_inspector(data: bytes) -> str | None:
+    """Try pdf-inspector for a text-based PDF. None = fall back to MarkItDown."""
+    if pdf_inspector is None:
+        return None
+    try:
+        result = pdf_inspector.process_pdf_bytes(data)
+    except Exception:  # noqa: BLE001
+        return None
+    if result.pdf_type in _NO_TEXT_LAYER:
+        return None
+    markdown = (result.markdown or "").strip()
+    return markdown + "\n" if markdown else None
+
+
+def convert_with_markitdown(data: bytes, filename: str = "") -> tuple[str, str]:
+    """Convert raw file bytes to Markdown. Raises ValueError on failure.
+
+    Returns (markdown, engine_label) — the label reflects which engine
+    actually produced the output (pdf-inspector vs. MarkItDown), since a PDF
+    may fall back from the former to the latter.
+    """
     ext = os.path.splitext(filename)[1].lower() or None
+
+    if ext == ".pdf":
+        pdf_markdown = _convert_pdf_with_pdf_inspector(data)
+        if pdf_markdown is not None:
+            return pdf_markdown, "pdf-inspector"
+
     try:
         result = _ENGINE.convert_stream(io.BytesIO(data), file_extension=ext)
     except Exception as e:  # noqa: BLE001
@@ -45,7 +83,7 @@ def convert_with_markitdown(data: bytes, filename: str = "") -> str:
 
     if ext in _REFLOW_EXTENSIONS:
         text = _reflow(text)
-    return text.strip() + "\n"
+    return text.strip() + "\n", "MarkItDown"
 
 
 # Unmapped glyphs (e.g. bullet characters) that pdfminer emits as "(cid:NNN)".

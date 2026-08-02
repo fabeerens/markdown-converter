@@ -19,7 +19,8 @@ Plak een ECLI of link; de tool herkent de bron automatisch:
 ### 3. Documentupload
 - Sleep een of meer bestanden in het venster (of klik om te bladeren), **of plak een of meer links naar bestanden** (bv. directe PDF-links).
 - **Formex-XML** (`.xml`) van EUR-Lex → eigen structuur-parser (nette koppen, recitals, artikelen, lijsten, voetnoten).
-- **Alle andere formaten** (PDF, Word, Excel, PowerPoint, HTML, CSV, JSON, EPUB…) → via [Microsoft MarkItDown](https://github.com/microsoft/markitdown). Bij PDF's worden de "zachte" regeleindes binnen een alinea automatisch samengevoegd.
+- **PDF** → via [pdf-inspector](https://github.com/firecrawl/pdf-inspector), met nette, layout-bewuste markdown (koppen, lijsten, tabellen). Bij een gescande/foto-PDF zonder tekstlaag valt de tool terug op MarkItDown.
+- **Alle andere formaten** (Word, Excel, PowerPoint, HTML, CSV, JSON, EPUB…) → via [Microsoft MarkItDown](https://github.com/microsoft/markitdown). Bij tekstbestanden worden de "zachte" regeleindes binnen een alinea automatisch samengevoegd.
 
 ### Meerdere documenten tegelijk
 
@@ -149,7 +150,7 @@ converters/
   eurlex.py            ophalen bij EUR-Lex (CELEX/ELI/URL) + HTML → markdown
   caselaw.py           link-dispatcher: rechtspraak.nl (ECLI), HUDOC (EHRM), wetten.overheid.nl
   wetten.py            Nederlandse wetgeving (wetten.overheid.nl / BWB) → markdown
-  generic.py           overige formaten → markdown via MarkItDown
+  generic.py           PDF → markdown via pdf-inspector (val. MarkItDown); overige formaten → MarkItDown
   llm_cleanup.py       optionele AI-opschoning + kostenraming (OpenRouter)
 templates/index.html   web-interface
 ```
