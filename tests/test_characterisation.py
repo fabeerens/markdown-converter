@@ -1,11 +1,13 @@
-"""Karakteriseringstests: pinnen het gedrag van de HUIDIGE tool vast.
+"""Karakteriseringstests: pinnen het gedrag van de tool vast.
 
-Deze tests beschrijven geen wenselijk gedrag maar het *bestaande* gedrag, zodat
-de herbouw aantoonbaar niets verandert. Ze raken geen netwerk: alleen de pure
-functies (detectie, afleiding, chunking, reflow, Formex-parsing, instellingen).
+Deze tests beschrijven geen wenselijk gedrag maar het *bestaande* gedrag van vóór
+de herstructurering, zodat de herbouw aantoonbaar niets verandert. Ze raken geen
+netwerk: alleen de pure functies (detectie, afleiding, chunking, reflow,
+Formex-parsing, instellingen) en de HTTP-validatie.
 
-Na de herstructurering hoeven alleen de imports mee te verhuizen; slaagt de
-suite dan nog, dan is de conversie- en opschoonlogica functioneel identiek.
+De assertions zijn ongewijzigd overgenomen van de vorige structuur; alleen de
+imports verwijzen nu naar de nieuwe modules. Slagen ze nog, dan is de conversie-
+en opschoonlogica functioneel identiek.
 """
 
 from __future__ import annotations
@@ -13,7 +15,6 @@ from __future__ import annotations
 import json
 import os
 import sys
-import tempfile
 
 import pytest
 
@@ -41,13 +42,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     ("https://eur-lex.europa.eu/eli/reg/2016/679/oj", None),
 ])
 def test_detect_source(query, expected):
-    from converters.caselaw import detect_source
+    from mdconv.sources import detect_source
     assert detect_source(query) == expected
 
 
 def test_detect_source_hudoc_id_does_not_hijack_dutch_ecli():
     """Een ECLI met cijfergroepen mag niet als HUDOC-item-id worden gelezen."""
-    from converters.caselaw import detect_source
+    from mdconv.sources import detect_source
     assert detect_source("ECLI:NL:RBAMS:2021:001-2345") == "rechtspraak"
 
 
@@ -62,18 +63,29 @@ def test_detect_source_hudoc_id_does_not_hijack_dutch_ecli():
     ("/eli/reco/2019/12", "32019H0012"),
 ])
 def test_eli_to_celex(eli, expected):
-    from converters.eurlex import eli_to_celex
+    from mdconv.sources.eurlex import eli_to_celex
     assert eli_to_celex(eli) == expected
 
 
 def test_eli_to_celex_unknown_type_is_none():
-    from converters.eurlex import eli_to_celex
+    from mdconv.sources.eurlex import eli_to_celex
     assert eli_to_celex("/eli/onbekend/2016/679") is None
 
 
 def test_eli_to_celex_pads_number_to_four_digits():
-    from converters.eurlex import eli_to_celex
+    from mdconv.sources.eurlex import eli_to_celex
     assert eli_to_celex("/eli/reg/2016/7").endswith("R0007")
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("32016R0679", "32016R0679"),
+    ("https://eur-lex.europa.eu/legal-content/NL/TXT/?uri=CELEX:32016R0679", "32016R0679"),
+    ("62019CJ0311", "62019CJ0311"),
+    ("geen celex hier", None),
+])
+def test_extract_celex(text, expected):
+    from mdconv.sources.eurlex import extract_celex
+    assert extract_celex(text) == expected
 
 
 # ---------------------------------------------------------------------------
@@ -81,39 +93,46 @@ def test_eli_to_celex_pads_number_to_four_digits():
 # ---------------------------------------------------------------------------
 
 def test_split_chunks_respects_limit_with_paragraphs():
-    from converters.llm_cleanup import _split_chunks
+    from mdconv.cleanup.chunking import split
     text = "\n\n".join(["alinea " * 50] * 40)
-    chunks = _split_chunks(text, limit=1000)
+    chunks = split(text, limit=1000)
     assert chunks
     assert all(len(c) <= 1000 for c in chunks)
 
 
 def test_split_chunks_respects_limit_without_any_blank_lines():
     """Een PDF-conversie kan één doorlopend blok zijn; dat moet alsnog splitsen."""
-    from converters.llm_cleanup import _split_chunks
+    from mdconv.cleanup.chunking import split
     text = "woord " * 5000  # geen enkele witregel
-    chunks = _split_chunks(text, limit=1000)
+    chunks = split(text, limit=1000)
     assert len(chunks) > 1
     assert all(len(c) <= 1000 for c in chunks)
 
 
 def test_split_chunks_hard_slices_a_single_oversized_word():
-    from converters.llm_cleanup import _split_chunks
-    chunks = _split_chunks("x" * 2500, limit=1000)
+    from mdconv.cleanup.chunking import split
+    chunks = split("x" * 2500, limit=1000)
     assert all(len(c) <= 1000 for c in chunks)
     assert "".join(chunks) == "x" * 2500
 
 
 def test_split_chunks_preserves_all_content():
-    from converters.llm_cleanup import _split_chunks
+    from mdconv.cleanup.chunking import split
     text = "\n\n".join(f"alinea {i} " + "tekst " * 30 for i in range(30))
-    chunks = _split_chunks(text, limit=800)
+    chunks = split(text, limit=800)
     assert "".join(text.split()) == "".join("".join(c.split()) for c in chunks)
 
 
 def test_split_chunks_default_limit_follows_configured_chunk_tokens():
-    from converters import llm_cleanup
-    assert llm_cleanup.get_chunk_tokens() == llm_cleanup._DEFAULT_CHUNK_TOKENS
+    from mdconv.cleanup import config
+    assert config.get_chunk_tokens() == config.DEFAULT_CHUNK_TOKENS
+
+
+def test_obsidian_profile_is_never_chunked():
+    from mdconv.cleanup import chunking
+    long_text = "\n\n".join(["alinea " * 200] * 200)
+    assert len(chunking.chunks_for(long_text, "obsidian")) == 1
+    assert len(chunking.chunks_for(long_text, "caselaw")) > 1
 
 
 # ---------------------------------------------------------------------------
@@ -121,39 +140,36 @@ def test_split_chunks_default_limit_follows_configured_chunk_tokens():
 # ---------------------------------------------------------------------------
 
 def test_reflow_joins_soft_wrapped_sentence():
-    from converters.generic import _reflow
+    from mdconv.sources.files import reflow
     text = ("Dit is een lange regel die tegen de rechtermarge aanloopt en daarom\n"
             "doorloopt op de volgende regel binnen dezelfde alinea.")
-    out = _reflow(text)
-    assert "\n" not in out.strip()
+    assert "\n" not in reflow(text).strip()
 
 
 def test_reflow_keeps_paragraph_breaks():
-    from converters.generic import _reflow
+    from mdconv.sources.files import reflow
     text = "Eerste alinea met voldoende lengte om als volle regel te gelden.\n\nTweede alinea."
-    assert "\n\n" in _reflow(text)
+    assert "\n\n" in reflow(text)
 
 
 def test_reflow_never_merges_structural_lines():
-    from converters.generic import _reflow
+    from mdconv.sources.files import reflow
     text = ("## Een kop die lang genoeg is om boven de drempel uit te komen ja\n"
             "- lijstitem dat lang genoeg is om boven de drempel uit te komen ja\n"
             "- tweede lijstitem dat ook lang genoeg is om mee te tellen hierin")
-    out = _reflow(text)
-    assert out.count("\n") == 2
+    assert reflow(text).count("\n") == 2
 
 
 def test_reflow_glues_hyphenated_word_split():
-    from converters.generic import _reflow
+    from mdconv.sources.files import reflow
     text = ("Dit is een regel die eindigt met een afgebroken woord, namelijk voor-\n"
             "beeld, en gaat daarna verder.")
-    out = _reflow(text)
-    assert "voorbeeld" in out
+    assert "voorbeeld" in reflow(text)
 
 
 def test_reflow_strips_cid_artefacts():
-    from converters.generic import _reflow
-    assert "(cid:" not in _reflow("tekst (cid:123) meer tekst")
+    from mdconv.sources.files import reflow
+    assert "(cid:" not in reflow("tekst (cid:123) meer tekst")
 
 
 # ---------------------------------------------------------------------------
@@ -192,7 +208,7 @@ FORMEX_SAMPLE = b"""<?xml version="1.0" encoding="UTF-8"?>
 
 
 def test_formex_produces_expected_structure():
-    from converters.formex import convert_formex
+    from mdconv.sources.formex import convert_formex
     md = convert_formex(FORMEX_SAMPLE)
     assert "# VERORDENING (EU) 2016/679" in md
     assert "## inzake gegevensbescherming" in md
@@ -205,14 +221,14 @@ def test_formex_produces_expected_structure():
 
 def test_formex_recitals_are_not_headings():
     """Genummerde overwegingen blijven alinea's (uitdrukkelijke wens)."""
-    from converters.formex import convert_formex
+    from mdconv.sources.formex import convert_formex
     for line in convert_formex(FORMEX_SAMPLE).splitlines():
         if line.startswith("#"):
             assert "(1)" not in line and "(2)" not in line
 
 
 def test_formex_inline_formatting_and_footnotes():
-    from converters.formex import convert_formex
+    from mdconv.sources.formex import convert_formex
     xml = (b'<ACT><ENACTING.TERMS><P>Gewoon <HT TYPE="BOLD">vet</HT> en '
            b'<HT TYPE="ITALIC">cursief</HT>.<NOTE NOTE.ID="1">De voetnoot.</NOTE></P>'
            b'</ENACTING.TERMS></ACT>')
@@ -224,7 +240,7 @@ def test_formex_inline_formatting_and_footnotes():
 
 
 def test_formex_table_becomes_markdown_table():
-    from converters.formex import convert_formex
+    from mdconv.sources.formex import convert_formex
     xml = (b"<ACT><ENACTING.TERMS><TBL><CORPUS>"
            b"<ROW><CELL>Kop A</CELL><CELL>Kop B</CELL></ROW>"
            b"<ROW><CELL>a1</CELL><CELL>b1</CELL></ROW>"
@@ -236,35 +252,31 @@ def test_formex_table_becomes_markdown_table():
 
 
 def test_formex_falls_back_to_plain_text_when_structure_is_unknown():
-    from converters.formex import convert_formex
+    from mdconv.sources.formex import convert_formex
     xml = (b"<ONBEKEND><RARE>Dit is losse tekst die toch zichtbaar moet blijven "
            b"ook al kent de parser deze structuur niet.</RARE></ONBEKEND>")
     assert "losse tekst die toch zichtbaar moet blijven" in convert_formex(xml)
 
 
 def test_formex_footnotes_are_isolated_per_conversion():
-    """Voetnoten mogen niet lekken tussen conversies (module-level ctx-stack)."""
-    from converters.formex import convert_formex
-    xml_a = b'<ACT><P>A<NOTE NOTE.ID="1">nootA</NOTE></P></ACT>'
-    xml_b = b'<ACT><P>B<NOTE NOTE.ID="1">nootB</NOTE></P></ACT>'
-    convert_formex(xml_a)
-    md_b = convert_formex(xml_b)
+    """Voetnoten mogen niet lekken tussen conversies."""
+    from mdconv.sources.formex import convert_formex
+    convert_formex(b'<ACT><P>A<NOTE NOTE.ID="1">nootA</NOTE></P></ACT>')
+    md_b = convert_formex(b'<ACT><P>B<NOTE NOTE.ID="1">nootB</NOTE></P></ACT>')
     assert "nootB" in md_b
     assert "nootA" not in md_b
 
 
-@pytest.mark.xfail(
-    reason="Bekende bug: converters/formex.py gebruikt een module-level _CURRENT_CTX-stack, "
-           "dus gelijktijdige conversies wisselen voetnoten uit. Nog niet bereikbaar met "
-           "gunicorn --workers 2 (geen threads), maar wel zodra er threads bijkomen. "
-           "De herbouw moet dit oplossen (ctx als parameter of contextvar).",
-    strict=False,
-)
 def test_formex_footnotes_survive_concurrent_conversions():
-    """Twee documenten tegelijk omzetten mag hun voetnoten niet vermengen."""
+    """Twee documenten tegelijk omzetten mag hun voetnoten niet vermengen.
+
+    Dit faalde in de vorige opzet: `_CURRENT_CTX` was een module-level stack, dus
+    gelijktijdige conversies pikten elkaars voetnoten op. Flask draait lokaal met
+    threads en documenten worden parallel geüpload, dus dat was echt bereikbaar.
+    """
     import re
     import threading
-    from converters.formex import convert_formex
+    from mdconv.sources.formex import convert_formex
 
     def document(tag: str, n: int = 12) -> bytes:
         body = "".join(
@@ -297,62 +309,64 @@ def test_formex_footnotes_survive_concurrent_conversions():
 # ---------------------------------------------------------------------------
 
 def test_profiles_exist_and_obsidian_runs_unsplit():
-    from converters import llm_cleanup
-    assert set(llm_cleanup._DEFAULT_PROMPTS) == {"generic", "caselaw", "obsidian"}
-    assert "obsidian" in llm_cleanup._NO_CHUNK_PROFILES
+    from mdconv.cleanup import config, prompts
+    assert set(prompts.DEFAULTS) == {"generic", "caselaw", "obsidian"}
+    assert "obsidian" in config.NO_CHUNK_PROFILES
 
 
 def test_caselaw_prompt_forbids_promoting_paragraph_numbers():
-    from converters.llm_cleanup import get_prompt
+    from mdconv.cleanup.config import get_prompt
     prompt = get_prompt("caselaw")
     assert "never turn" in prompt.lower() or "never promote" in prompt.lower()
     assert "##" in prompt
 
 
 def test_default_model_keeps_its_leading_tilde():
-    from converters.llm_cleanup import DEFAULT_MODEL
+    from mdconv.cleanup.config import DEFAULT_MODEL
     assert DEFAULT_MODEL.startswith("~"), "de tilde is de OpenRouter latest-alias"
 
 
 def test_strip_markdown_fence():
-    from converters.llm_cleanup import _strip_markdown_fence
-    assert _strip_markdown_fence("```markdown\n# Titel\n\ntekst\n```") == "# Titel\n\ntekst"
-    assert _strip_markdown_fence("# Titel\n\ntekst") == "# Titel\n\ntekst"
+    from mdconv.cleanup.openrouter import strip_markdown_fence
+    assert strip_markdown_fence("```markdown\n# Titel\n\ntekst\n```") == "# Titel\n\ntekst"
+    assert strip_markdown_fence("# Titel\n\ntekst") == "# Titel\n\ntekst"
 
 
 def test_base_url_strips_chat_completions_suffix(monkeypatch):
-    from converters import llm_cleanup
+    from mdconv.cleanup import config
     monkeypatch.setenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1/chat/completions")
-    assert llm_cleanup._base_url() == "https://openrouter.ai/api/v1"
+    assert config.base_url() == "https://openrouter.ai/api/v1"
 
 
 def test_base_url_empty_env_falls_back_to_default(monkeypatch):
-    from converters import llm_cleanup
+    from mdconv.cleanup import config
     monkeypatch.setenv("OPENROUTER_BASE_URL", "")
-    assert llm_cleanup._base_url() == llm_cleanup.DEFAULT_BASE_URL
+    assert config.base_url() == config.DEFAULT_BASE_URL
 
 
 def test_estimate_counts_input_without_network(monkeypatch):
-    from converters import llm_cleanup
-    monkeypatch.setattr(llm_cleanup, "is_available", lambda: False)
-    est = llm_cleanup.estimate("regel\n\n" * 100, profile="generic")
+    import mdconv.cleanup as cleanup
+    from mdconv.cleanup import config
+    monkeypatch.setattr(config, "is_available", lambda: False)
+    est = cleanup.estimate("regel\n\n" * 100, profile="generic")
     assert est["chunks"] == 1
     assert est["input_tokens"] > 0
     assert est["cost_usd"] is None
 
 
 def test_estimate_obsidian_expects_more_output_than_input(monkeypatch):
-    from converters import llm_cleanup
-    monkeypatch.setattr(llm_cleanup, "is_available", lambda: False)
+    import mdconv.cleanup as cleanup
+    from mdconv.cleanup import config
+    monkeypatch.setattr(config, "is_available", lambda: False)
     text = "tekst " * 2000
-    generic = llm_cleanup.estimate(text, profile="generic")
-    obsidian = llm_cleanup.estimate(text, profile="obsidian")
+    generic = cleanup.estimate(text, profile="generic")
+    obsidian = cleanup.estimate(text, profile="obsidian")
     assert obsidian["output_tokens"] > generic["output_tokens"]
 
 
 def test_pricing_lookup_matches_model_id_without_nitro_suffix(monkeypatch):
     """:nitro bestaat niet als los item in de OpenRouter-catalogus."""
-    from converters import llm_cleanup
+    from mdconv.cleanup import openrouter
 
     class FakeResp:
         status_code = 200
@@ -362,10 +376,16 @@ def test_pricing_lookup_matches_model_id_without_nitro_suffix(monkeypatch):
             return {"data": [{"id": "anthropic/claude-haiku-4.5",
                               "pricing": {"prompt": "0.000001", "completion": "0.000005"}}]}
 
-    monkeypatch.setattr(llm_cleanup.requests, "get", lambda *a, **k: FakeResp())
-    llm_cleanup._pricing_cache.clear()
-    pricing = llm_cleanup.get_pricing("anthropic/claude-haiku-4.5:nitro")
+    class FakeSession:
+        @staticmethod
+        def get(*_a, **_k):
+            return FakeResp()
+
+    monkeypatch.setattr(openrouter.net, "llm", lambda: FakeSession())
+    openrouter.clear_pricing_cache()
+    pricing = openrouter.get_pricing("anthropic/claude-haiku-4.5:nitro")
     assert pricing is not None and pricing["completion"] == 0.000005
+    openrouter.clear_pricing_cache()
 
 
 # ---------------------------------------------------------------------------
@@ -374,68 +394,81 @@ def test_pricing_lookup_matches_model_id_without_nitro_suffix(monkeypatch):
 
 @pytest.fixture
 def isolated_settings(monkeypatch, tmp_path):
-    from converters import llm_cleanup
-    monkeypatch.setattr(llm_cleanup, "_STATE_DIR", str(tmp_path))
-    monkeypatch.setattr(llm_cleanup, "_SETTINGS_PATH", str(tmp_path / "settings.json"))
-    monkeypatch.setattr(llm_cleanup, "_SETTINGS_LOCK_PATH", str(tmp_path / ".settings.lock"))
-    return llm_cleanup
+    """Laat de instellingen naar een tijdelijke map schrijven i.p.v. .deploy-state."""
+    from mdconv.cleanup import config
+    from mdconv.state import StateFile
+
+    monkeypatch.setattr("mdconv.state.STATE_DIR", str(tmp_path))
+    store = StateFile("settings.json")
+    monkeypatch.setattr(config, "_store", store)
+    return config
 
 
 def test_settings_defaults_when_nothing_stored(isolated_settings):
-    lc = isolated_settings
-    assert lc.get_chunk_tokens() == lc._DEFAULT_CHUNK_TOKENS
-    assert lc.get_model_choices() == lc._DEFAULT_MODEL_CHOICES
-    assert lc.get_prompt("generic") == lc._DEFAULT_PROMPTS["generic"]
+    cfg = isolated_settings
+    assert cfg.get_chunk_tokens() == cfg.DEFAULT_CHUNK_TOKENS
+    assert cfg.get_model_choices() == cfg.DEFAULT_MODEL_CHOICES
+    from mdconv.cleanup import prompts
+    assert cfg.get_prompt("generic") == prompts.DEFAULTS["generic"]
 
 
 def test_settings_roundtrip_and_take_effect_immediately(isolated_settings):
-    lc = isolated_settings
-    lc.update_settings({"chunk_tokens": 30000, "prompts": {"generic": "eigen prompt"}})
-    assert lc.get_chunk_tokens() == 30000
-    assert lc.get_prompt("generic") == "eigen prompt"
-    assert lc._system_for("generic") == "eigen prompt"
+    cfg = isolated_settings
+    cfg.update_settings({"chunk_tokens": 30000, "prompts": {"generic": "eigen prompt"}})
+    assert cfg.get_chunk_tokens() == 30000
+    assert cfg.get_prompt("generic") == "eigen prompt"
 
 
 def test_settings_empty_value_clears_back_to_default(isolated_settings):
-    lc = isolated_settings
-    lc.update_settings({"chunk_tokens": 30000, "models": [{"id": "x/y", "label": "X"}],
-                        "prompts": {"generic": "eigen"}})
-    lc.update_settings({"chunk_tokens": None, "models": [], "prompts": {"generic": ""}})
-    assert lc.get_chunk_tokens() == lc._DEFAULT_CHUNK_TOKENS
-    assert lc.get_model_choices() == lc._DEFAULT_MODEL_CHOICES
-    assert lc.get_prompt("generic") == lc._DEFAULT_PROMPTS["generic"]
+    cfg = isolated_settings
+    cfg.update_settings({"chunk_tokens": 30000, "models": [{"id": "x/y", "label": "X"}],
+                         "prompts": {"generic": "eigen"}})
+    cfg.update_settings({"chunk_tokens": None, "models": [], "prompts": {"generic": ""}})
+    from mdconv.cleanup import prompts
+    assert cfg.get_chunk_tokens() == cfg.DEFAULT_CHUNK_TOKENS
+    assert cfg.get_model_choices() == cfg.DEFAULT_MODEL_CHOICES
+    assert cfg.get_prompt("generic") == prompts.DEFAULTS["generic"]
 
 
 def test_settings_out_of_range_chunk_size_is_rejected(isolated_settings):
-    lc = isolated_settings
-    lc.update_settings({"chunk_tokens": 10 ** 9})
-    assert lc.get_chunk_tokens() == lc._DEFAULT_CHUNK_TOKENS
-    lc.update_settings({"chunk_tokens": 1})
-    assert lc.get_chunk_tokens() == lc._DEFAULT_CHUNK_TOKENS
+    cfg = isolated_settings
+    cfg.update_settings({"chunk_tokens": 10 ** 9})
+    assert cfg.get_chunk_tokens() == cfg.DEFAULT_CHUNK_TOKENS
+    cfg.update_settings({"chunk_tokens": 1})
+    assert cfg.get_chunk_tokens() == cfg.DEFAULT_CHUNK_TOKENS
 
 
 def test_settings_only_stores_changed_keys(isolated_settings):
-    lc = isolated_settings
-    lc.update_settings({"chunk_tokens": 40000})
-    stored = json.loads(open(lc._SETTINGS_PATH, encoding="utf-8").read())
+    cfg = isolated_settings
+    cfg.update_settings({"chunk_tokens": 40000})
+    stored = json.loads(open(cfg._store.path, encoding="utf-8").read())
     assert list(stored) == ["chunk_tokens"]
 
 
 def test_settings_payload_exposes_defaults_for_reset(isolated_settings):
-    payload = isolated_settings.get_settings_payload()
+    payload = isolated_settings.settings_payload()
     for key in ("models", "chunk_tokens", "prompts"):
         assert key in payload and key in payload["defaults"]
     assert payload["defaults"]["min_chunk_tokens"] < payload["defaults"]["max_chunk_tokens"]
 
 
+def test_settings_change_is_picked_up_without_restart(isolated_settings):
+    """De mtime-cache mag een wijziging niet blijven verbergen."""
+    cfg = isolated_settings
+    assert cfg.get_chunk_tokens() == cfg.DEFAULT_CHUNK_TOKENS  # vult de cache
+    cfg._store.write({"chunk_tokens": 12345})                  # schrijf er buitenom
+    assert cfg.get_chunk_tokens() == 12345
+
+
 def test_model_override_must_be_in_the_configured_list(isolated_settings):
-    lc = isolated_settings
-    assert lc._model("deepseek/deepseek-v4-flash:nitro") == "deepseek/deepseek-v4-flash:nitro"
-    assert lc._model("verzonnen/model") == lc.DEFAULT_MODEL
+    cfg = isolated_settings
+    assert cfg.resolve_model("deepseek/deepseek-v4-flash:nitro") == \
+        "deepseek/deepseek-v4-flash:nitro"
+    assert cfg.resolve_model("verzonnen/model") == cfg.DEFAULT_MODEL
 
 
 # ---------------------------------------------------------------------------
-# App-laag: classificatie, bestandsnamen, Formex-detectie
+# Classificatie, bestandsnamen, Formex-detectie
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("source,expected", [
@@ -448,8 +481,8 @@ def test_model_override_must_be_in_the_configured_list(isolated_settings):
     ("pdf-inspector • rapport.pdf", "document"),
 ])
 def test_kind_for_source(source, expected):
-    import app
-    assert app._kind_for_source(source) == expected
+    from mdconv.sources import kind_for_source
+    assert kind_for_source(source) == expected
 
 
 @pytest.mark.parametrize("url,ct,expected", [
@@ -458,19 +491,19 @@ def test_kind_for_source(source, expected):
     ("https://x.nl/bestand%20met%20ruimte.docx", "", "bestand met ruimte.docx"),
 ])
 def test_filename_from_url(url, ct, expected):
-    import app
-    assert app._filename_from_url(url, ct) == expected
+    from mdconv.api import _filename_from_url
+    assert _filename_from_url(url, ct) == expected
 
 
 def test_looks_like_formex():
-    import app
-    assert app._looks_like_formex(FORMEX_SAMPLE)
-    assert not app._looks_like_formex(b"<html><body>gewoon html</body></html>")
+    from mdconv.sources import looks_like_formex
+    assert looks_like_formex(FORMEX_SAMPLE)
+    assert not looks_like_formex(b"<html><body>gewoon html</body></html>")
 
 
 def test_valid_profiles_are_the_three_known_ones():
-    import app
-    assert app._VALID_PROFILES == {"generic", "caselaw", "obsidian"}
+    import mdconv.cleanup as cleanup
+    assert set(cleanup.PROFILES) == {"generic", "caselaw", "obsidian"}
 
 
 # ---------------------------------------------------------------------------
@@ -479,9 +512,10 @@ def test_valid_profiles_are_the_three_known_ones():
 
 @pytest.fixture
 def client():
-    import app
-    app.app.config["TESTING"] = True
-    return app.app.test_client()
+    from mdconv import create_app
+    app = create_app()
+    app.config["TESTING"] = True
+    return app.test_client()
 
 
 def test_convert_link_requires_a_query(client):
@@ -509,8 +543,8 @@ def test_clean_rejects_empty_markdown(client):
 
 
 def test_estimate_falls_back_to_generic_for_unknown_profile(client, monkeypatch):
-    from converters import llm_cleanup
-    monkeypatch.setattr(llm_cleanup, "is_available", lambda: False)
+    from mdconv.cleanup import config
+    monkeypatch.setattr(config, "is_available", lambda: False)
     r = client.post("/api/estimate", json={"markdown": "tekst", "profile": "onzin"})
     assert r.status_code == 200
 
@@ -534,19 +568,75 @@ def test_index_page_renders(client):
     assert b"Markdown converter" in r.data
 
 
+def test_settings_endpoints_roundtrip(client):
+    payload = client.get("/api/settings").get_json()
+    assert payload["chunk_tokens"] >= payload["defaults"]["min_chunk_tokens"]
+    # Een lege payload mag niets stukmaken.
+    assert client.post("/api/settings", json={}).status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Bestandsconversie
+# ---------------------------------------------------------------------------
+
 def test_pdf_conversion_prefers_pdf_inspector():
     """Een tekst-PDF gaat via pdf-inspector, niet via MarkItDown."""
-    from converters.generic import convert_with_markitdown
-    pdf = _minimal_text_pdf()
-    markdown, engine = convert_with_markitdown(pdf, "test.pdf")
+    from mdconv.sources.files import convert
+    markdown, engine = convert(_minimal_text_pdf(), "test.pdf")
     assert engine == "pdf-inspector"
     assert "Hallo" in markdown
 
 
 def test_non_pdf_still_uses_markitdown():
-    from converters.generic import convert_with_markitdown
-    markdown, engine = convert_with_markitdown(b"# Kop\n\ntekst\n", "notitie.md")
+    from mdconv.sources.files import convert
+    markdown, engine = convert(b"# Kop\n\ntekst\n", "notitie.md")
     assert engine == "MarkItDown"
+
+
+def test_formex_upload_uses_the_structural_parser():
+    from mdconv.sources import from_file
+    doc = from_file(FORMEX_SAMPLE, "avg.xml")
+    assert doc.source.startswith("Formex XML")
+    assert "# VERORDENING (EU) 2016/679" in doc.markdown
+
+
+def test_pdf_upload_reports_the_engine_in_the_source():
+    from mdconv.sources import from_file
+    doc = from_file(_minimal_text_pdf(), "rapport.pdf")
+    assert doc.source == "pdf-inspector • rapport.pdf"
+    assert doc.kind == "document"
+
+
+# ---------------------------------------------------------------------------
+# Front-end: één regel waar de UI stilletjes op stukliep
+# ---------------------------------------------------------------------------
+
+def test_css_forces_the_hidden_attribute_to_win():
+    """`[hidden]` moet een expliciete display uit een class-regel verslaan.
+
+    De JS regelt zichtbaarheid via het hidden-attribuut, maar de UA-stijl
+    ([hidden] → display:none) heeft de laagste specificiteit. Daardoor bleef het
+    Obsidian-vinkje zichtbaar bij gewone documenten: `.checkbox` zet
+    `display: inline-flex`. Zonder deze regel komt die bug terug.
+    """
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    css = open(os.path.join(root, "static", "app.css"), encoding="utf-8").read()
+    assert "[hidden]" in css and "display: none !important" in css
+
+
+def test_editor_mirror_and_textarea_share_one_font_and_padding():
+    """De regelnummer-spiegel moet exact meten wat de textarea rendert.
+
+    Font en padding staan daarom in variabelen die beide elementen gebruiken;
+    wijkt dat uiteen, dan lopen de regelnummers scheef bij gewrapte regels.
+    """
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    css = open(os.path.join(root, "static", "app.css"), encoding="utf-8").read()
+    for block in (".editor textarea {", ".line-mirror {"):
+        start = css.index(block)
+        body = css[start:css.index("}", start)]
+        assert "var(--editor-font)" in body, f"{block} gebruikt niet --editor-font"
+        assert "var(--editor-padding)" in body, f"{block} gebruikt niet --editor-padding"
 
 
 def _minimal_text_pdf() -> bytes:
