@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # Markdown converter — productie-image voor een VPS.
 FROM python:3.13-slim
 
@@ -7,9 +8,15 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Dependencies eerst (betere build-cache).
+# Dependencies eerst (betere laagcache: verandert er alleen appcode, dan slaat
+# Docker deze stap over). De --mount=type=cache bewaart pip's downloadcache
+# tussen builds in een apart BuildKit-cachevolume — dus ook op een VPS/CI die
+# elke keer "schoon" bouwt (geen laagcache tussen builds) worden pakketten
+# niet telkens opnieuw van PyPI gedownload. Die cache belandt niet in de
+# uiteindelijke image, dus geen --no-cache-dir meer nodig.
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r requirements.txt
 
 # Applicatiecode.
 COPY . .
