@@ -88,6 +88,56 @@ def test_extract_celex(text, expected):
     assert extract_celex(text) == expected
 
 
+def test_fetch_multipart_concatenates_parts_in_document_order(monkeypatch):
+    """Cellar geeft 300 voor documenten die uit meerdere HTML-onderdelen bestaan
+    (bv. een wetgevingsvoorstel met een losse bijlage, elk als eigen
+    manifestatie) — niet alleen bij een taalprobleem, zoals eerder aangenomen.
+    Elk onderdeel moet dan met Accept: text/html opgehaald worden (de
+    manifestatie-URL heeft text/html als resource-mimetype; xhtml+xml geeft
+    daar 406) en in documentvolgorde samengevoegd.
+    """
+    from mdconv.sources import eurlex
+
+    choices_html = (
+        '<html><body><ul><li title="manifestation">cellar:abc'
+        '<ul><li title="item"><a href="http://publications.europa.eu/resource/cellar/abc/DOC_1">1</a></li>'
+        '<li title="item"><a href="http://publications.europa.eu/resource/cellar/abc/DOC_2">2</a></li>'
+        '</ul></li></ul></body></html>'
+    )
+
+    fetched_urls = []
+
+    class FakeResp:
+        def __init__(self, url):
+            self.status_code = 200
+            self.apparent_encoding = "utf-8"
+            self.text = f"<html><body><p>Inhoud van {url.rsplit('/', 1)[-1]}</p></body></html>"
+
+    def fake_get(url, headers=None, timeout=None):
+        fetched_urls.append((url, headers["Accept"]))
+        return FakeResp(url)
+
+    monkeypatch.setattr(eurlex.net, "documents", lambda: type("S", (), {"get": staticmethod(fake_get)})())
+
+    markdown = eurlex._fetch_multipart(choices_html, "NL", "CELEX:test")
+    unescaped = markdown.replace("\\_", "_")  # markdownify escaapt underscores
+
+    assert [u for u, _ in fetched_urls] == [
+        "http://publications.europa.eu/resource/cellar/abc/DOC_1",
+        "http://publications.europa.eu/resource/cellar/abc/DOC_2",
+    ]
+    assert all(accept == "text/html" for _, accept in fetched_urls)
+    assert unescaped.index("DOC_1") < unescaped.index("DOC_2")
+    assert "\n\n---\n\n" in markdown
+
+
+def test_fetch_multipart_without_doc_links_reports_language_problem():
+    from mdconv.sources.eurlex import _fetch_multipart
+    from mdconv.errors import ConversionError
+    with pytest.raises(ConversionError, match="Probeer een andere taal"):
+        _fetch_multipart("<html><body>geen manifestaties hier</body></html>", "NL", "CELEX:x")
+
+
 # ---------------------------------------------------------------------------
 # Chunking: elke chunk moet onder de limiet blijven, ook zonder witregels
 # ---------------------------------------------------------------------------

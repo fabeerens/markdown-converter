@@ -102,11 +102,9 @@ def fetch_and_convert(text: str, lang: str = "NL") -> tuple[str, str]:
     ecli_m = _EU_ECLI_RE.search(text)
     if ecli_m:
         ecli = ecli_m.group(0).upper()
-        html = _fetch_cellar_ecli(ecli, lang)
-        if html:
-            markdown = html_to_markdown(html)
-            if len(markdown.strip()) > 80:
-                return markdown, f"EUR-Lex (Cellar) • {ecli} • {lang}"
+        markdown = _fetch_cellar_ecli(ecli, lang)
+        if markdown and len(markdown.strip()) > 80:
+            return markdown, f"EUR-Lex (Cellar) • {ecli} • {lang}"
         raise ConversionError(
             f"Kon {ecli} niet ophalen bij EUR-Lex (mogelijk niet beschikbaar in taal {lang})."
         )
@@ -121,11 +119,9 @@ def fetch_and_convert(text: str, lang: str = "NL") -> tuple[str, str]:
 
     # Strategie 1: officiële inhoud uit Cellar (betrouwbaar).
     try:
-        html = _fetch_cellar(celex, lang)
-        if html:
-            markdown = html_to_markdown(html)
-            if len(markdown.strip()) > 80:
-                return markdown, f"EUR-Lex (Cellar) • CELEX:{celex} • {lang}"
+        markdown = _fetch_cellar(celex, lang)
+        if markdown and len(markdown.strip()) > 80:
+            return markdown, f"EUR-Lex (Cellar) • CELEX:{celex} • {lang}"
     except ConversionError:
         raise
     except Exception:
@@ -137,29 +133,30 @@ def fetch_and_convert(text: str, lang: str = "NL") -> tuple[str, str]:
 
 
 def _cellar_headers(lang: str) -> dict[str, str]:
-    # `Accept: application/xhtml+xml` is wat de tekst oplevert; zonder dat (of
-    # met notice=object) krijg je alleen metadata. Accept-Language kiest de taal.
-    return {"Accept": "application/xhtml+xml", "Accept-Language": lang.lower()}
+    # `application/xhtml+xml` is wat de tekst oplevert voor de meeste
+    # documenten; `text/html` staat erbij zodat Cellar ook content-negotieert
+    # voor documenten die uit meerdere HTML-onderdelen bestaan (zie
+    # _fetch_multipart) — die geven anders een 300 zonder bruikbare respons.
+    # Zonder Accept-header (of met notice=object) krijg je alleen metadata,
+    # niet de tekst. Accept-Language kiest de taal.
+    return {"Accept": "application/xhtml+xml, text/html;q=0.9", "Accept-Language": lang.lower()}
 
 
 def _fetch_cellar(celex: str, lang: str) -> str | None:
-    """Documentinhoud uit Cellar via content negotiation."""
+    """Markdown uit Cellar via content negotiation, of None."""
     url = f"http://publications.europa.eu/resource/celex/{celex}"
     r = net.documents().get(
         url, headers=_cellar_headers(lang), timeout=_CELLAR_TIMEOUT, allow_redirects=True,
     )
+    if r.status_code == 200:
+        return html_to_markdown(net.decoded_text(r))
     if r.status_code == 300:
-        # Meerdere keuzes zonder taalmatch.
-        raise ConversionError(
-            f"Document niet beschikbaar in taal {lang} (CELEX:{celex}). Probeer een andere taal."
-        )
-    if r.status_code != 200:
-        return None
-    return net.decoded_text(r)
+        return _fetch_multipart(r.text, lang, f"CELEX:{celex}")
+    return None
 
 
 def _fetch_cellar_ecli(ecli: str, lang: str) -> str | None:
-    """EU-rechtspraak uit Cellar, geadresseerd op ECLI.
+    """EU-rechtspraak uit Cellar, geadresseerd op ECLI, of None.
 
     De ECLI moet url-encoded (`ECLI%3AEU%3AC%3A…`), anders geeft Cellar 404.
     """
@@ -167,9 +164,42 @@ def _fetch_cellar_ecli(ecli: str, lang: str) -> str | None:
     r = net.documents().get(
         url, headers=_cellar_headers(lang), timeout=_CELLAR_TIMEOUT, allow_redirects=True,
     )
-    if r.status_code != 200:
-        return None
-    return net.decoded_text(r)
+    if r.status_code == 200:
+        return html_to_markdown(net.decoded_text(r))
+    if r.status_code == 300:
+        return _fetch_multipart(r.text, lang, ecli)
+    return None
+
+
+# Cellar meldt "multiple choices" ook voor documenten die uit meerdere
+# HTML-onderdelen bestaan (bv. een wetgevingsvoorstel met een losse bijlage,
+# elk als eigen manifestatie). Elk onderdeel staat als "…/DOC_<n>"-link in de
+# 300-respons, in documentvolgorde.
+_DOC_PART_RE = re.compile(r'href="(https?://publications\.europa\.eu/resource/cellar/[^"]+?/DOC_\d+)"')
+
+
+def _fetch_multipart(choices_html: str, lang: str, identifier: str) -> str | None:
+    """Haal en concateneer de onderdelen uit een Cellar 300-respons.
+
+    Elk onderdeel moet met `Accept: text/html` opgehaald worden — de
+    manifestatie-URL zelf heeft `text/html` als resource-mimetype, en een
+    `application/xhtml+xml`-verzoek daarop geeft 406.
+    """
+    urls = _DOC_PART_RE.findall(choices_html)
+    if not urls:
+        # Geen onderdelen te vinden: waarschijnlijk toch een taalprobleem.
+        raise ConversionError(
+            f"Document niet beschikbaar in taal {lang} ({identifier}). Probeer een andere taal."
+        )
+    parts = []
+    for part_url in urls:
+        pr = net.documents().get(
+            part_url, headers={"Accept": "text/html", "Accept-Language": lang.lower()},
+            timeout=_CELLAR_TIMEOUT,
+        )
+        if pr.status_code == 200:
+            parts.append(html_to_markdown(net.decoded_text(pr)))
+    return "\n\n---\n\n".join(parts) if parts else None
 
 
 def _fetch_portal_html(celex: str, lang: str) -> str:

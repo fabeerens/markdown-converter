@@ -68,11 +68,21 @@ soort), zodat de route niets over engines of classificatie hoeft te weten.
 
 ## Belangrijke, niet-voor-de-hand-liggende details
 
-- **EUR-Lex fetch**: de portal-HTML (`/legal-content/…/HTML/`) blokkeert bots (HTTP 202, lege body).
-  Gebruik het **Cellar-archief** via content negotiation, `Accept: application/xhtml+xml`:
+- **EUR-Lex fetch**: de portal-HTML (`/legal-content/…/HTML/`) blokkeert bots (HTTP 202, lege body;
+  inmiddels een AWS WAF-JS-challenge, dus ook met retries permanent 202 — de portal is in de praktijk
+  dood voor een simpele `requests`-scraper). Gebruik het **Cellar-archief** via content negotiation,
+  `Accept: application/xhtml+xml, text/html;q=0.9`:
   - CELEX: `http://publications.europa.eu/resource/celex/{CELEX}`
   - EU-ECLI: `http://publications.europa.eu/resource/ecli/{ECLI}` — ECLI **url-encoded** (`ECLI%3AEU%3AC%3A…`), anders 404.
   `Accept-Language` bepaalt de taal. `notice=object` geeft alléén metadata, niet de tekst.
+- **Cellar 300 (multiple choice) is niet alleen een taalprobleem.** Sommige documenten — met name
+  wetgevingsvoorstellen (CELEX-type `PC`/`DC`) met een losse bijlage — bestaan uit **meerdere
+  HTML-onderdelen**, elk een eigen manifestatie. Cellar meldt dat met **HTTP 300** en een lijst
+  `…/DOC_1`, `…/DOC_2`, … in documentvolgorde. `eurlex._fetch_multipart()` haalt die op en plakt ze
+  aan elkaar (`\n\n---\n\n`). **Belangrijk**: elk `DOC_n`-onderdeel moet met `Accept: text/html`
+  worden opgehaald, niet `application/xhtml+xml` — de manifestatie-URL zelf heeft `text/html` als
+  resource-mimetype en geeft anders 406. Voorbeeld: `CELEX:52025PC0837` (voorstel + bijlage).
+  Alleen als er géén `DOC_n`-links in de 300-respons staan, is het wél een taalprobleem.
 - **ELI-links** (`/eli/reg/2016/679/oj`): Cellar resolvet ELI **niet** direct (404) en de portal blokkeert.
   Daarom `eli_to_celex()`: leidt deterministisch een CELEX af (type→letter reg=R/dir=L/dec=D/reco=H,
   `3{jaar}{letter}{nummer:04d}`) en gebruikt vervolgens de normale CELEX-Cellar-route.
