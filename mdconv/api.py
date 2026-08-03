@@ -14,7 +14,7 @@ import re
 from urllib.parse import unquote, urlparse
 
 import requests
-from flask import Blueprint, current_app, jsonify, render_template, request, send_file
+from flask import Blueprint, Response, current_app, jsonify, render_template, request, send_file
 
 from . import cleanup, net, sources, version
 from .errors import ConversionError
@@ -176,6 +176,52 @@ def clean():
         raise ConversionError("Niets om op te schonen.")
     cleaned = cleanup.clean(markdown, _profile(data.get("profile")), data.get("model") or None)
     return jsonify(markdown=cleaned)
+
+
+# Scheidingsteken voor een fout die halverwege een stream optreedt (bv. een
+# netwerkstoring bij het tweede deel van een lang document). De HTTP-status is
+# op dat moment al 200 verzonden, dus een fout kan alleen nog ín de body
+# gemeld worden. \x00 komt niet in echte Markdown voor; de front-end herkent
+# dit teken en toont de rest als foutmelding in plaats van als tekst.
+STREAM_ERROR_SENTINEL = "\x00CLEAN_ERROR\x00"
+
+
+@bp.post("/api/clean/stream")
+def clean_stream():
+    """Als /api/clean, maar streamt de opgeschoonde tekst terwijl die binnenkomt.
+
+    Bekende/verwachte fouten (geen API-sleutel, lege invoer) worden vooraf
+    gevalideerd en geven een normale JSON-foutrespons — precies zoals
+    /api/clean. Alleen een fout die pas ontstaat ná de eerste bytes (een
+    verbindingsstoring bij een later deel) kan niet meer als HTTP-statuscode
+    gemeld worden en verschijnt in de body achter STREAM_ERROR_SENTINEL.
+    """
+    data = _payload()
+    markdown = data.get("markdown", "")
+    if not markdown.strip():
+        raise ConversionError("Niets om op te schonen.")
+    if not cleanup.is_available():
+        raise ConversionError(
+            "AI-opschoning niet beschikbaar: geen OpenRouter API-sleutel. "
+            "Zet de omgevingsvariabele OPENROUTER_API_KEY en herstart de tool."
+        )
+    profile = _profile(data.get("profile"))
+    model = data.get("model") or None
+
+    def generate():
+        try:
+            yield from cleanup.clean_stream(markdown, profile, model)
+        except ConversionError as e:
+            yield STREAM_ERROR_SENTINEL + e.message
+        except Exception as e:  # noqa: BLE001 — moet als leesbare melding aankomen, niet als kapotte stream
+            yield STREAM_ERROR_SENTINEL + str(e)
+
+    response = Response(generate(), mimetype="text/plain")
+    # Zonder deze twee headers bufferen sommige reverse proxies (nginx) de
+    # hele respons voordat ze iets doorsturen — dan is "streamen" niets meer.
+    response.headers["X-Accel-Buffering"] = "no"
+    response.headers["Cache-Control"] = "no-cache"
+    return response
 
 
 # --------------------------------------------------------------------------

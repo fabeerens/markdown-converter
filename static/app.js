@@ -489,31 +489,74 @@ async function refreshEstimate() {
   }
 }
 
+// Moet letterlijk gelijk zijn aan STREAM_ERROR_SENTINEL in mdconv/api.py: de
+// HTTP-status is op dat moment al 200, dus een fout halverwege de stream (bv.
+// een verbindingsstoring bij het tweede deel) kan alleen nog in de body zelf
+// gemeld worden.
+const STREAM_ERROR_SENTINEL = "\x00CLEAN_ERROR\x00";
+
 async function cleanActiveDoc() {
   const doc = activeDoc();
   if (!doc || doc.cleaned) return;
   saveEdits();
 
+  const docId = doc.id;
+  const isLive = () => state.activeId === docId; // gebruiker kan tijdens het wachten wisselen
+
   const button = $("#clean");
   button.disabled = true;
   setStatus(`"${doc.title}" opschonen met AI… dit kan enkele minuten duren.`, "info", { busy: true });
+
   try {
-    const data = await postJSON("/api/clean", {
-      markdown: doc.markdown,
-      profile: profileFor(doc),
-      model: $("#model").value,
+    const response = await fetch("/api/clean/stream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ markdown: doc.markdown, profile: profileFor(doc), model: $("#model").value }),
     });
-    doc.markdown = data.markdown;
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error || `Fout ${response.status}`);
+    }
+
+    // Live bijwerken terwijl de tekst binnenkomt — alleen als dit document nog
+    // steeds getoond wordt; anders schrijven we alleen naar doc.markdown en
+    // rendert de editor het geheel zodra de gebruiker terugschakelt.
+    if (isLive()) $("#md").value = "";
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let acc = "";
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      const text = decoder.decode(value, { stream: true });
+      const errAt = text.indexOf(STREAM_ERROR_SENTINEL);
+      if (errAt !== -1) {
+        acc += text.slice(0, errAt);
+        throw new Error(text.slice(errAt + STREAM_ERROR_SENTINEL.length) || "AI-opschoning mislukt.");
+      }
+      acc += text;
+      if (isLive()) {
+        $("#md").value = acc;
+        updateLineNumbers();
+      }
+    }
+
+    doc.markdown = acc.trim() + "\n";
     doc.source += " • AI-opgeschoond";
     doc.cleaned = true;
-    // Alleen de editor bijwerken als dit document nog steeds actief is; de
-    // gebruiker kan tijdens het wachten naar een ander tabblad zijn gegaan.
-    if (state.activeId === doc.id) renderEditor();
+    if (isLive()) renderEditor();
     renderDocTabs();
     setStatus(`"${doc.title}" is opgeschoond.`, "ok");
   } catch (e) {
     setStatus(e.message, "err");
-    button.disabled = false;
+    if (isLive()) {
+      // De halfklare tekst terugzetten naar de laatst bewaarde staat, niet de
+      // afgebroken streaming-tekst laten staan.
+      $("#md").value = doc.markdown;
+      updateLineNumbers();
+      button.disabled = false;
+    }
   }
 }
 

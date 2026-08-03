@@ -382,6 +382,31 @@ def test_strip_markdown_fence():
     assert strip_markdown_fence("# Titel\n\ntekst") == "# Titel\n\ntekst"
 
 
+@pytest.mark.parametrize("piece_size,expected", [
+    (1000, "# Titel\n\nEen langere alinea met genoeg tekst voor de holdback-buffer."),
+    (1, "# Titel\n\nEen langere alinea met genoeg tekst voor de holdback-buffer."),  # per karakter
+])
+def test_strip_fence_stream_matches_the_non_streaming_version(piece_size, expected):
+    """De streaming-fence-stripper moet, ongeacht hoe klein de binnenkomende
+    stukjes zijn (tot en met één losse letter), hetzelfde resultaat geven als
+    de niet-streaming versie — anders lekt het codeblok van het obsidian-
+    profiel even mee in de live-weergave."""
+    from mdconv.cleanup.openrouter import strip_fence_stream
+
+    raw = "```markdown\n" + expected + "\n```"
+
+    def pieces():
+        for i in range(0, len(raw), piece_size):
+            yield raw[i:i + piece_size]
+
+    assert "".join(strip_fence_stream(pieces())) == expected
+
+
+def test_strip_fence_stream_without_a_fence_passes_text_through():
+    from mdconv.cleanup.openrouter import strip_fence_stream
+    assert "".join(strip_fence_stream(iter(["gewone tekst zonder fence"]))) == "gewone tekst zonder fence"
+
+
 def test_base_url_strips_chat_completions_suffix(monkeypatch):
     from mdconv.cleanup import config
     monkeypatch.setenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1/chat/completions")
@@ -436,6 +461,56 @@ def test_pricing_lookup_matches_model_id_without_nitro_suffix(monkeypatch):
     pricing = openrouter.get_pricing("anthropic/claude-haiku-4.5:nitro")
     assert pricing is not None and pricing["completion"] == 0.000005
     openrouter.clear_pricing_cache()
+
+
+def test_clean_chunk_rejects_a_truncated_response(monkeypatch):
+    """finish_reason='length' betekent dat het model afkapte vóórdat de tekst
+    klaar was. Zonder deze check kwam er stilletjes afgekapte tekst terug —
+    bij het obsidian-profiel (dat nooit chunkt) verdween daardoor het laatste
+    deel van een groot document zonder enige melding."""
+    from mdconv.cleanup import openrouter
+    from mdconv.errors import ConversionError
+
+    class FakeResp:
+        status_code = 200
+
+        @staticmethod
+        def json():
+            return {"choices": [{"message": {"content": "afgekapte tekst..."},
+                                  "finish_reason": "length"}]}
+
+    monkeypatch.setattr(openrouter.config, "api_key", lambda: "sk-test")
+    monkeypatch.setattr(openrouter.net, "llm",
+                         lambda: type("S", (), {"post": staticmethod(lambda *a, **k: FakeResp())})())
+
+    with pytest.raises(ConversionError, match="afgekapt"):
+        openrouter.clean_chunk("tekst", model="x", system="y", profile="generic")
+
+    with pytest.raises(ConversionError, match="Opmaken voor Obsidian"):
+        openrouter.clean_chunk("tekst", model="x", system="y", profile="obsidian")
+
+
+def test_stream_chunk_rejects_a_truncated_response(monkeypatch):
+    from mdconv.cleanup import openrouter
+    from mdconv.errors import ConversionError
+
+    class FakeStreamResp:
+        status_code = 200
+
+        @staticmethod
+        def iter_lines(decode_unicode=True):
+            return iter([
+                'data: {"choices":[{"delta":{"content":"Dit is een stuk"}}]}',
+                'data: {"choices":[{"delta":{},"finish_reason":"length"}]}',
+                "data: [DONE]",
+            ])
+
+    monkeypatch.setattr(openrouter.config, "api_key", lambda: "sk-test")
+    monkeypatch.setattr(openrouter.net, "llm",
+                         lambda: type("S", (), {"post": staticmethod(lambda *a, **k: FakeStreamResp())})())
+
+    with pytest.raises(ConversionError, match="afgekapt"):
+        list(openrouter.stream_chunk("tekst", model="x", system="y", profile="generic"))
 
 
 # ---------------------------------------------------------------------------

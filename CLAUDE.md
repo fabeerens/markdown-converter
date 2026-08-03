@@ -138,6 +138,33 @@ soort), zodat de route niets over engines of classificatie hoeft te weten.
   `config.MAX_OUTPUT_TOKENS` aanlopen. `config.OUTPUT_RATIO["obsidian"] = 1.35` compenseert de
   kostenraming voor de extra analyse-tekst bovenop de verbatim-tekst (output > input,
   anders dan bij `generic`/`caselaw` waar output ≈ input).
+- **Afkapping wordt niet stilletjes geaccepteerd.** Zowel `clean_chunk()` als
+  `stream_chunk()` controleren `choice["finish_reason"]`; is die `"length"`, dan gooien ze
+  een `ConversionError` in plaats van de afgekapte tekst terug te geven. Dit was een echte,
+  bevestigde bug: een groot document (bv. een EU-voorstel met bijlage, ~108k tokens) liep bij
+  het obsidian-profiel tegen `MAX_OUTPUT_TOKENS` (64.000) aan — de bijlage (het tweede "deel")
+  verdween daardoor **zonder enige foutmelding**. `_truncation_message(profile)` geeft een
+  profielspecifieke boodschap: bij `obsidian` (dat nooit chunkt) wordt aangeraden een ander
+  profiel te gebruiken; bij `generic`/`caselaw` wordt aangeraden de deelgrootte te verlagen.
+- **Streaming** (`clean_stream()` in `cleanup/__init__.py`, endpoint `/api/clean/stream`):
+  levert de opgeschoonde tekst als een reeks stukjes op i.p.v. één keer het hele resultaat.
+  Bij meerdere delen worden die **na elkaar** gestreamd (niet parallel zoals `clean()`) —
+  de tekst moet in de editor van boven naar onder groeien, in documentvolgorde.
+  `openrouter.stream_chunk()` leest OpenRouters SSE-respons (`stream: true`,
+  `data: {...}`-regels, afgesloten met `data: [DONE]`) en levert `delta.content`-stukjes op.
+  Voor het obsidian-profiel haalt `openrouter.strip_fence_stream()` het
+  ```markdown-codeblok er *tijdens* het streamen af (een sluitende ``` mag niet even
+  zichtbaar zijn in de live-weergave) — met een kleine "holdback"-buffer die de laatste
+  paar tekens vasthoudt totdat zeker is of ze bij de sluitende fence horen.
+  **Foutafhandeling na de eerste bytes**: de HTTP-status (200) is dan al verzonden, dus een
+  fout die halverwege ontstaat (bv. een afkapping bij het tweede deel) kan niet meer als
+  statuscode gemeld worden. Die komt in de body terecht achter `STREAM_ERROR_SENTINEL`
+  (`\x00CLEAN_ERROR\x00`, identiek gedefinieerd in `mdconv/api.py` en `static/app.js`) — de
+  front-end herkent dat teken, toont de rest als foutmelding, en zet het tekstvak terug naar
+  de laatst bewaarde tekst i.p.v. de afgebroken streaming-tekst te laten staan.
+  `cleanActiveDoc()` in `app.js` bewaakt met `isLive()` of de gebruiker tijdens het streamen
+  naar een ander documenttabblad is gewisseld: dan wordt `doc.markdown` wel bijgewerkt, maar
+  niet het zichtbare tekstvak — pas bij terugschakelen toont de editor het complete resultaat.
 - **Beide reformat-prompts** (`generic`/`caselaw`) maken alléén echte sectietitels koppen;
   genummerde overwegingen/randnummers blijven alinea's (uitdrukkelijke wens gebruiker —
   niet terugdraaien).

@@ -7,6 +7,7 @@ profielen te weten.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 
 from ..errors import ConversionError
@@ -58,6 +59,14 @@ def estimate(markdown: str, profile: str = "generic", model: str | None = None) 
     }
 
 
+def _ensure_available() -> None:
+    if not config.is_available():
+        raise ConversionError(
+            "AI-opschoning niet beschikbaar: geen OpenRouter API-sleutel. "
+            "Zet de omgevingsvariabele OPENROUTER_API_KEY en herstart de tool."
+        )
+
+
 def clean(markdown: str, profile: str = "generic", model: str | None = None) -> str:
     """Schoon `markdown` op met het gekozen profiel en model.
 
@@ -69,12 +78,7 @@ def clean(markdown: str, profile: str = "generic", model: str | None = None) -> 
     if not markdown.strip():
         return markdown
 
-    if not config.is_available():
-        raise ConversionError(
-            "AI-opschoning niet beschikbaar: geen OpenRouter API-sleutel. "
-            "Zet de omgevingsvariabele OPENROUTER_API_KEY en herstart de tool."
-        )
-
+    _ensure_available()
     resolved = config.resolve_model(model)
     system = config.get_prompt(profile)
     chunks = chunking.chunks_for(markdown, profile)
@@ -91,3 +95,29 @@ def clean(markdown: str, profile: str = "generic", model: str | None = None) -> 
             cleaned = list(pool.map(run, chunks))
 
     return "\n\n".join(c for c in cleaned if c).strip() + "\n"
+
+
+def clean_stream(markdown: str, profile: str = "generic", model: str | None = None) -> Iterator[str]:
+    """Als `clean()`, maar levert de opgeschoonde tekst als een reeks stukjes
+    op, zoals het model ze genereert.
+
+    Bij meerdere delen worden die **na elkaar** gestreamd, niet parallel zoals
+    in `clean()`: bij live meelezen moet de tekst van boven naar onder groeien
+    in documentvolgorde. Dat kost bij een lang document iets meer wachttijd in
+    ruil voor een bruikbare live-weergave.
+    """
+    if not markdown.strip():
+        return
+
+    _ensure_available()
+    resolved = config.resolve_model(model)
+    system = config.get_prompt(profile)
+    chunks = chunking.chunks_for(markdown, profile)
+
+    for i, chunk in enumerate(chunks):
+        if i > 0:
+            yield "\n\n"
+        pieces = openrouter.stream_chunk(chunk, model=resolved, system=system, profile=profile)
+        if profile == "obsidian":
+            pieces = openrouter.strip_fence_stream(pieces)
+        yield from pieces
