@@ -65,15 +65,16 @@ soort), zodat de route niets over engines of classificatie hoeft te weten.
 | **`ECLI:NL:…`** of rechtspraak.nl-link | Rechtspraak.nl |
 | HUDOC-link, item-id (`001-…`), **`ECLI:CE:ECHR:…`** | HUDOC (EHRM) |
 | wetten.overheid.nl-link of **BWB-nummer** (`BWBR0040940`) | wetten.overheid.nl |
-| **`ECLI:DE:…`** (Duitse federale rechtspraak) | rechtsprechung-im-internet.de |
+| **`ECLI:DE:…`** (Duitse rechtspraak) | OpenLegalData (terugval: rechtsprechung-im-internet.de) |
 | **`ECLI:BE:…`** (Belgische rechtspraak) | Juportal |
 | **`ECLI:FR:CC:…`** (Frans Conseil constitutionnel; overige FR-gerechten: nette foutmelding) | conseil-constitutionnel.fr |
 
 **Buitenlandse rechtspraak** (`_NATIONAL_SOURCES` in `mdconv/sources/__init__.py`): per
-ECLI-landcode een eigen module. Nu `DE` → `sources/de_rechtsprechung.py`, `BE` →
-`sources/be_juportal.py`, `FR` → `sources/fr_conseil_constitutionnel.py`; uitbreidbaar door
-een module met dezelfde vorm (`ECLI_RE` + `fetch(query) -> (markdown, bron)`) toe te voegen
-en te registreren in `_NATIONAL_SOURCES`.
+ECLI-landcode een eigen module. Nu `DE` → `sources/de_openlegaldata.py` (valt intern terug
+op `sources/de_rechtsprechung.py`), `BE` → `sources/be_juportal.py`, `FR` →
+`sources/fr_conseil_constitutionnel.py`; uitbreidbaar door een module met dezelfde vorm
+(`ECLI_RE` + `fetch(query) -> (markdown, bron)`) toe te voegen en te registreren in
+`_NATIONAL_SOURCES`.
 
 **Onderzocht maar niet haalbaar met plain HTTP** (geen browserautomatisering, geen verplichte
 accountregistratie namens de gebruiker):
@@ -127,26 +128,47 @@ accountregistratie namens de gebruiker):
   en bevat de volledige tekst in `#regeling` (h1 titel, h3 hoofdstuk, h4 artikel). `wetten.py` pakt
   die container, strip't werkbalk-ruis (`[class*=action--]`, `.visually-hidden`) en markdownify't.
   URL wordt herbouwd uit BWB-id + optionele versiedatum (`/{jjjj-mm-dd}`).
-- **Duitse rechtspraak** (`de_rechtsprechung.py`): rechtsprechung-im-internet.de (BMJ)
-  publiceert geselecteerde uitspraken van BGH/BVerfG/BVerwG/BFH/BAG/BSG/BPatG sinds 2010, als
-  schone XML met een eigen DTD — maar zonder directe "haal-op-met-ECLI"-URL. Het is een
-  Java-portlet-app die eerst doorzocht moet worden: (1) GET het zoekfragment
-  (`/js_pane/Suchportlet1/media-type/html`) en lees de verborgen formuliervelden
-  (`sugportal`/`sughashcode`/…) uit — die zijn **sessiegebonden** en server-gegenereerd; zonder
-  exact die velden geeft de site alleen het lege formulier terug. (2) GET hetzelfde fragment,
-  nu met die velden + `query=<ECLI>`, **in dezelfde sessie** (cookies) → de HTML bevat
-  `doc.id=<ID>` (of "0 Treffer"). Dit gebeurt met een **eigen `requests.Session`**, niet de
-  gedeelde `net.documents()` — die wordt gelijktijdig door andere documenten gebruikt (de tool
-  haalt meerdere documenten parallel op) en twee gelijktijdige zoekopdrachten op dezelfde
-  JSESSIONID zouden elkaars tussenstaat overschrijven. Elke gevonden `doc.id` heeft daarna een
-  vaste, **stateloze** `.../docs/bsjrs/{doc.id}.zip` met één XML erin (dus wél via de gedeelde
-  sessie). De secties (`leitsatz`/`tenor`/`tatbestand`/`entscheidungsgruende`/`gruende`/
-  `abwmeinung`) bestaan uit `<dl class="RspDL"><dt>…</dt><dd>…</dd></dl>`-paren: `<dt>` het
-  randnummer (`<a name="rd_N">N</a>`), `<dd>` de alinea of een `<table>` (bv. het
-  handtekeningenblok). `_resolve_doc_id()` onderscheidt een bevestigde "0 Treffer"-melding
-  (échte lege uitkomst, geen nieuwe poging) van een technische hapering zonder die melding
-  (bv. een gewijzigd formulierveld) — dat laatste wordt één keer opnieuw geprobeerd
-  (`_SEARCH_ATTEMPTS`) voordat de tool concludeert dat de uitspraak niet gevonden is.
+- **Duitse rechtspraak** — twee lagen, met een gedeelde parser:
+  - **Primair: OpenLegalData** (`de_openlegaldata.py`, `de.openlegaldata.io`) — een gratis,
+    **sleutelloze** JSON-API, rechtstreeks doorzoekbaar op ECLI (`?ecli=<ECLI>`, dan een
+    detail-GET voor het volledige `content`-veld), géén sessie/tokendans nodig, en met een veel
+    bredere dekking (~424.000 zaken, ook deelstaatgerechten) dan alleen de zeven federale
+    gerechten. OpenLegalData aggregeert echter meerdere bronformaten in dat `content`-veld, dus
+    `_content_to_markdown()` proeft drie lagen: (1) de federale "RspDL"-conventie (zie hieronder)
+    als HTML-fragment (`<h2>`-sectiekoppen + een `<div>` met `<dl class="RspDL">`), (2) een
+    afwijkende deelstaatconventie (geverifieerd: OVG Nordrhein-Westfalen) met
+    `<span class="absatzRechts">N</span>` gevolgd door een **sibling** `<p class="absatzLinks">`
+    — het randnummer staat dus náást de alinea, niet erin — samengevoegd door
+    `_merge_absatz_pairs()`, en (3) een generieke `container_to_markdown()`-fallback voor een
+    nog onbekende conventie. Een bekend data-kwaliteitsgat: `court.name` is voor sommige
+    (vooral oudere) zaken letterlijk `"Unknown court"`; dan wordt het gerecht in plaats daarvan
+    afgeleid uit het 3e ECLI-onderdeel. Levert OpenLegalData geen (bruikbaar) resultaat, dan
+    valt `fetch()` intern terug op `de_rechtsprechung.fetch()`.
+  - **Terugval: rechtsprechung-im-internet.de** (`de_rechtsprechung.py`, BMJ) — publiceert
+    geselecteerde uitspraken van BGH/BVerfG/BVerwG/BFH/BAG/BSG/BPatG sinds 2010, als schone XML
+    met een eigen DTD, maar zonder directe "haal-op-met-ECLI"-URL. Het is een Java-portlet-app
+    die eerst doorzocht moet worden: (1) GET het zoekfragment
+    (`/js_pane/Suchportlet1/media-type/html`) en lees de verborgen formuliervelden
+    (`sugportal`/`sughashcode`/…) uit — die zijn **sessiegebonden** en server-gegenereerd; zonder
+    exact die velden geeft de site alleen het lege formulier terug. (2) GET hetzelfde fragment,
+    nu met die velden + `query=<ECLI>`, **in dezelfde sessie** (cookies) → de HTML bevat
+    `doc.id=<ID>` (of "0 Treffer"). Dit gebeurt met een **eigen `requests.Session`**, niet de
+    gedeelde `net.documents()` — die wordt gelijktijdig door andere documenten gebruikt (de tool
+    haalt meerdere documenten parallel op) en twee gelijktijdige zoekopdrachten op dezelfde
+    JSESSIONID zouden elkaars tussenstaat overschrijven. Elke gevonden `doc.id` heeft daarna een
+    vaste, **stateloze** `.../docs/bsjrs/{doc.id}.zip` met één XML erin (dus wél via de gedeelde
+    sessie). `_resolve_doc_id()` onderscheidt een bevestigde "0 Treffer"-melding (échte lege
+    uitkomst, geen nieuwe poging) van een technische hapering zonder die melding (bv. een
+    gewijzigd formulierveld) — dat laatste wordt één keer opnieuw geprobeerd
+    (`_SEARCH_ATTEMPTS`) voordat de tool concludeert dat de uitspraak niet gevonden is.
+  - **Gedeelde "RspDL"-parser** (`juris_markup.py`): beide bronnen leveren voor federale/
+    juris-gebaseerde uitspraken dezelfde onderliggende structuur —
+    `<dl class="RspDL"><dt>…</dt><dd>…</dd></dl>`-paren, `<dt>` het randnummer
+    (`<a name="rd_N">N</a>`), `<dd>` de alinea of een `<table>` (bv. het handtekeningenblok) —
+    alleen als XML (rechtsprechung-im-internet.de) versus HTML-fragment (OpenLegalData). De
+    walker (`walk_dl_section`/`render_dd`/`inline`/`table_to_markdown`) staat daarom éénmalig in
+    deze module, want `lxml.etree`- en `lxml.html`-elementen delen dezelfde
+    `.tag`/`.text`/`.tail`/iteratie-interface.
 - **Belgische rechtspraak** (`be_juportal.py`): in tegenstelling tot Duitsland een **stateloze,
   directe** route — `GET https://juportal.be/content/{ECLI}`, geen sessie/tokens nodig. Een
   geldige ECLI geeft 200 met statische HTML (geen JS-rendering); een onbekende geeft **HTTP
@@ -215,8 +237,8 @@ accountregistratie namens de gebruiker):
   prompt maakt dit expliciet conditioneel, anders zou "vertaal niet" (voor de verbatim-eis)
   in de weg staan van de vertaaltabel die de gebruiker net daar wél wil. De `Instantie`-
   YAML-lijst is uitgebreid met de Duitse federale gerechten (BGH, BVerfG, BVerwG, BFH, BAG,
-  BSG, BPatG); bij toekomstige landen (BE/FR/AT/ES) moeten hun gerechten er ook bij, anders
-  kan het model geen geldige waarde uit de gesloten lijst kiezen.
+  BSG, BPatG); bij toekomstige landen (AT/ES, of overige FR-gerechten) moeten hun gerechten er
+  ook bij, anders kan het model geen geldige waarde uit de gesloten lijst kiezen.
 - **Afkapping wordt niet stilletjes geaccepteerd.** Zowel `clean_chunk()` als
   `stream_chunk()` controleren `choice["finish_reason"]`; is die `"length"`, dan gooien ze
   een `ConversionError` in plaats van de afgekapte tekst terug te geven. Dit was een echte,

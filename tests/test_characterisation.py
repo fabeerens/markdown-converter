@@ -496,6 +496,101 @@ def test_de_rechtsprechung_rejects_input_without_a_german_ecli():
         de.fetch("dit is geen ECLI")
 
 
+OL_RSPDL_CONTENT = """
+<h2>Tenor</h2>
+<div>
+  <dl class="RspDL"><dt/><dd><p>De beslissing.</p></dd></dl>
+</div>
+<h2>Gründe</h2>
+<div>
+  <dl class="RspDL"><dt><a name="rd_1">1</a></dt><dd><p>Eerste overweging.</p></dd></dl>
+</div>
+"""
+
+OL_ABSATZ_CONTENT = """
+<h2>Tenor</h2>
+<p>De beslissing van het hof.</p>
+<span class="absatzRechts">1</span><p class="absatzLinks"><span style="text-decoration: underline;">Gründe:</span></p>
+<span class="absatzRechts">2</span><p class="absatzLinks">Eerste overweging.</p>
+"""
+
+OL_UNKNOWN_CONTENT = """
+<h2>Tenor</h2>
+<p>Alleen platte alinea's, geen bekend patroon.</p>
+<p>Nog een alinea.</p>
+"""
+
+
+def test_de_openlegaldata_renders_rspdl_content():
+    from mdconv.sources.de_openlegaldata import _content_to_markdown
+    md = _content_to_markdown(OL_RSPDL_CONTENT)
+    assert "## Tenor" in md
+    assert "De beslissing." in md
+    assert "## Gründe" in md
+    assert "1. Eerste overweging." in md
+
+
+def test_de_openlegaldata_merges_absatz_pairs():
+    """Deelstaatconventie (NRW): het randnummer staat als losse <span> náást
+    de alinea, niet erin — moet alsnog samengevoegd worden tot 'N. tekst'."""
+    from mdconv.sources.de_openlegaldata import _content_to_markdown
+    md = _content_to_markdown(OL_ABSATZ_CONTENT)
+    assert "1. <u>Gründe:</u>" in md
+    assert "2. Eerste overweging." in md
+
+
+def test_de_openlegaldata_falls_back_to_generic_markdown_for_unknown_structure():
+    from mdconv.sources.de_openlegaldata import _content_to_markdown
+    md = _content_to_markdown(OL_UNKNOWN_CONTENT)
+    assert "Alleen platte alinea's, geen bekend patroon." in md
+    assert "Nog een alinea." in md
+
+
+def test_de_openlegaldata_ecli_pattern_matches_de_rechtsprechung():
+    """Beide DE-modules moeten hetzelfde ECLI-patroon herkennen (de_openlegaldata
+    hergebruikt de_rechtsprechung.ECLI_RE bewust, i.p.v. het te dupliceren)."""
+    from mdconv.sources import de_openlegaldata as ol
+    from mdconv.sources import de_rechtsprechung as de
+    assert ol.ECLI_RE is de.ECLI_RE
+
+
+def test_de_openlegaldata_falls_back_to_de_rechtsprechung_when_not_found(monkeypatch):
+    from mdconv.sources import de_openlegaldata as ol
+
+    monkeypatch.setattr(ol, "_find_case", lambda ecli: None)
+    called = {}
+
+    def fake_fallback(query):
+        called["query"] = query
+        return "terugval-tekst", "terugval-bron"
+
+    monkeypatch.setattr(ol.de_rechtsprechung, "fetch", fake_fallback)
+    result = ol.fetch("ECLI:DE:BGH:2019:240919BVIZB39.18.0")
+    assert result == ("terugval-tekst", "terugval-bron")
+    assert called["query"] == "ECLI:DE:BGH:2019:240919BVIZB39.18.0"
+
+
+def test_de_openlegaldata_derives_court_from_ecli_when_metadata_is_unhelpful():
+    """Bekend gegevenskwaliteitsgat bij OpenLegalData: court.name = "Unknown
+    court" voor sommige (vooral oudere) zaken, terwijl het gerecht wél in de
+    ECLI zelf staat."""
+    from mdconv.sources.de_openlegaldata import _case_to_markdown
+    case = {
+        "court": {"name": "Unknown court"},
+        "file_number": "VI ZB 39/18",
+        "ecli": "ECLI:DE:BGH:2019:240919BVIZB39.18.0",
+        "content": "",
+    }
+    md = _case_to_markdown(case)
+    assert md.startswith("# BGH VI ZB 39/18")
+
+
+def test_juris_markup_has_rspdl_structure():
+    from mdconv.sources.juris_markup import has_rspdl_structure
+    assert has_rspdl_structure('<dl class="RspDL">')
+    assert not has_rspdl_structure("<p>gewone tekst</p>")
+
+
 def test_formex_produces_expected_structure():
     from mdconv.sources.formex import convert_formex
     md = convert_formex(FORMEX_SAMPLE)

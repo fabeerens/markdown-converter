@@ -16,7 +16,7 @@ from dataclasses import dataclass
 
 from . import (
     be_juportal,
-    de_rechtsprechung,
+    de_openlegaldata,
     eurlex,
     files,
     formex,
@@ -29,8 +29,11 @@ from . import (
 # Nationale rechtspraak buiten NL/EU/EHRM, per ECLI-landcode. Uitbreidbaar: voeg
 # een module met dezelfde vorm toe (`ECLI_RE` + `fetch(query) -> (markdown, bron)`)
 # en registreer hem hier — de rest van de routering werkt dan automatisch mee.
+# DE: de_openlegaldata is de primaire bron en valt intern terug op
+# de_rechtsprechung (rechtsprechung-im-internet.de) als een ECLI daar niet
+# gevonden wordt.
 _NATIONAL_SOURCES = {
-    "DE": de_rechtsprechung,
+    "DE": de_openlegaldata,
     "BE": be_juportal,
     "FR": fr_conseil_constitutionnel,
 }

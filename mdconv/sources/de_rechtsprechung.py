@@ -23,10 +23,13 @@ tussenstaat kunnen overschrijven.
 **De uitspraaktekst.** Elke gevonden `doc.id` heeft een vaste
 `.../docs/bsjrs/{doc.id}.zip` met daarin één XML-bestand. De secties
 (`leitsatz`, `tenor`, `tatbestand`, `entscheidungsgruende`, `gruende`,
-`abwmeinung`) bestaan uit `<dl class="RspDL"><dt>…</dt><dd>…</dd></dl>`-
-paren: `<dt>` bevat het randnummer (als `<a name="rd_N">N</a>`, net als
-Rechtspraak.nl's `<nr>`), `<dd>` de bijbehorende alinea of een `<table>`
-(bv. het handtekeningenblok). Dit is fetchable zonder sessie/cookies.
+`abwmeinung`) volgen de "RspDL"-alineaconventie die `juris_markup.py`
+parseert — zie die module voor de details. Dit is fetchable zonder
+sessie/cookies.
+
+Deze bron is inmiddels **terugval**: `de_openlegaldata.py` is de primaire
+DE-bron (geen sessie/tokendans nodig, bredere dekking incl. deelstaten) en
+valt hierop terug als een ECLI daar niet gevonden wordt.
 """
 
 from __future__ import annotations
@@ -41,7 +44,8 @@ from lxml import etree
 
 from .. import net
 from ..errors import ConversionError
-from ..render import collapse_ws, tidy
+from ..render import tidy
+from .juris_markup import first, text_of, walk_dl_section
 
 ECLI_RE = re.compile(r"ECLI:DE:[A-Za-z0-9.]+:\d{4}:[A-Za-z0-9.]+", re.I)
 
@@ -187,98 +191,23 @@ def _xml_to_markdown(xml_bytes: bytes) -> str:
 
     blocks: list[str] = []
 
-    gertyp = _text(_first(root, "gertyp"))
-    spruchkoerper = _text(_first(root, "spruchkoerper"))
-    aktenzeichen = _text(_first(root, "aktenzeichen"))
+    gertyp = text_of(first(root, "gertyp"))
+    spruchkoerper = text_of(first(root, "spruchkoerper"))
+    aktenzeichen = text_of(first(root, "aktenzeichen"))
     heading = " ".join(p for p in (gertyp, spruchkoerper) if p) or "Uitspraak"
     blocks.append(f"# {heading}" + (f" — {aktenzeichen}" if aktenzeichen else ""))
 
-    titel = _text(_first(root, "titelzeile"))
+    titel = text_of(first(root, "titelzeile"))
     if titel:
         blocks.append(f"## {titel}")
 
     for tag, label in _SECTION_LABELS.items():
-        section = _first(root, tag)
+        section = first(root, tag)
         if section is None or len(section) == 0:
             continue
-        rendered = _walk_section(section)
+        rendered = walk_dl_section(section)
         if rendered:
             blocks.append(f"## {label}")
             blocks.extend(rendered)
 
     return tidy("\n\n".join(blocks))
-
-
-def _first(el, name: str):
-    if el is None:
-        return None
-    for child in el:
-        if child.tag == name:
-            return child
-    return None
-
-
-def _text(el) -> str:
-    return collapse_ws("".join(el.itertext())) if el is not None else ""
-
-
-def _walk_section(section) -> list[str]:
-    """Elke `<dl>` is één genummerde alinea (`<dt>`) met inhoud (`<dd>`)."""
-    blocks: list[str] = []
-    for dl in section.iter("dl"):
-        dt, dd = _first(dl, "dt"), _first(dl, "dd")
-        if dd is None:
-            continue
-        content = _render_dd(dd)
-        if not content:
-            continue
-        num = _text(dt)
-        blocks.append(f"{num}. {content}" if num else content)
-    return blocks
-
-
-def _render_dd(dd) -> str:
-    parts = []
-    for child in dd:
-        if child.tag == "p":
-            text = _inline(child)
-            if text:
-                parts.append(text)
-        elif child.tag == "table":
-            table_md = _table_to_markdown(child)
-            if table_md:
-                parts.append(table_md)
-    return "\n\n".join(parts)
-
-
-def _inline(el) -> str:
-    parts: list[str] = []
-    if el.text:
-        parts.append(el.text)
-    for child in el:
-        if child.tag == "em":
-            inner = _inline(child)
-            parts.append(f"*{inner}*" if inner.strip() else inner)
-        elif child.tag == "br":
-            parts.append(" ")
-        else:
-            parts.append(_inline(child))
-        if child.tail:
-            parts.append(child.tail)
-    return collapse_ws("".join(parts))
-
-
-def _table_to_markdown(table) -> str:
-    rows = []
-    for tr in table.iter("tr"):
-        cells = [_text(td).replace("|", "\\|") for td in tr if td.tag == "td"]
-        if any(c.strip() for c in cells):
-            rows.append(cells)
-    if not rows:
-        return ""
-    width = max(len(r) for r in rows)
-    rows = [r + [""] * (width - len(r)) for r in rows]
-    lines = ["| " + " | ".join(rows[0]) + " |", "| " + " | ".join(["---"] * width) + " |"]
-    for r in rows[1:]:
-        lines.append("| " + " | ".join(r) + " |")
-    return "\n".join(lines)
