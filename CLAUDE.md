@@ -66,11 +66,16 @@ soort), zodat de route niets over engines of classificatie hoeft te weten.
 | HUDOC-link, item-id (`001-…`), **`ECLI:CE:ECHR:…`** | HUDOC (EHRM) |
 | wetten.overheid.nl-link of **BWB-nummer** (`BWBR0040940`) | wetten.overheid.nl |
 | **`ECLI:DE:…`** (Duitse federale rechtspraak) | rechtsprechung-im-internet.de |
+| **`ECLI:BE:…`** (Belgische rechtspraak) | Juportal |
 
 **Buitenlandse rechtspraak** (`_NATIONAL_SOURCES` in `mdconv/sources/__init__.py`): per
-ECLI-landcode een eigen module. Nu alleen `DE` → `sources/de_rechtsprechung.py`; uitbreidbaar
-door een module met dezelfde vorm (`ECLI_RE` + `fetch(query) -> (markdown, bron)`) toe te
-voegen en te registreren in `_NATIONAL_SOURCES`. Gepland: BE, FR, AT, ES.
+ECLI-landcode een eigen module. Nu `DE` → `sources/de_rechtsprechung.py` en `BE` →
+`sources/be_juportal.py`; uitbreidbaar door een module met dezelfde vorm (`ECLI_RE` +
+`fetch(query) -> (markdown, bron)`) toe te voegen en te registreren in `_NATIONAL_SOURCES`.
+Onderzocht maar (nog) niet haalbaar met plain HTTP: **ES** (CENDOJ zet een verplichte,
+interactieve CAPTCHA vóór elke volledige-tekst-download — geen sessie/cookie-truc zoals bij
+Duitsland, een échte afbeelding-CAPTCHA; gebruikers kunnen zo'n PDF wel gewoon handmatig
+uploaden via het bestaande PDF-pad). Frankrijk is gemengd, zie de opmerking bij `FR` hieronder.
 
 ## Belangrijke, niet-voor-de-hand-liggende details
 
@@ -123,7 +128,23 @@ voegen en te registreren in `_NATIONAL_SOURCES`. Gepland: BE, FR, AT, ES.
   sessie). De secties (`leitsatz`/`tenor`/`tatbestand`/`entscheidungsgruende`/`gruende`/
   `abwmeinung`) bestaan uit `<dl class="RspDL"><dt>…</dt><dd>…</dd></dl>`-paren: `<dt>` het
   randnummer (`<a name="rd_N">N</a>`), `<dd>` de alinea of een `<table>` (bv. het
-  handtekeningenblok).
+  handtekeningenblok). `_resolve_doc_id()` onderscheidt een bevestigde "0 Treffer"-melding
+  (échte lege uitkomst, geen nieuwe poging) van een technische hapering zonder die melding
+  (bv. een gewijzigd formulierveld) — dat laatste wordt één keer opnieuw geprobeerd
+  (`_SEARCH_ATTEMPTS`) voordat de tool concludeert dat de uitspraak niet gevonden is.
+- **Belgische rechtspraak** (`be_juportal.py`): in tegenstelling tot Duitsland een **stateloze,
+  directe** route — `GET https://juportal.be/content/{ECLI}`, geen sessie/tokens nodig. Een
+  geldige ECLI geeft 200 met statische HTML (geen JS-rendering); een onbekende geeft **HTTP
+  400**. Is een uitspraak later gerectificeerd, dan toont Juportal gewoon 200 met de
+  **vervangende** tekst — geen HTTP-redirect — en staat de oorspronkelijke ECLI in het veld
+  "Vervangt nummer:" van de metadatatabel; de canonieke ECLI in de bronvermelding komt daaruit,
+  niet uit de aangevraagde URL. De volledige tekst staat in het `<fieldset>` met
+  `<legend>Tekst van de beslissing</legend>`, als één doorlopend `<p>` met `<br>`-regeleinden
+  (geen aparte structuurelementen) — **let op**: de omringende `<div>` bevat bij sommige
+  documenten óók een losse, gelekte serverregel (`ERROR JUPORTARobotRecordLienECLI …`) als
+  tekstnode vóór de `<p>`; daarom wordt specifiek de `<p>` geselecteerd, niet de hele `<div>`.
+  Romeinse-cijfer sectiekoppen ("I. RECHTSPLEGING VOOR HET HOF") worden gepromoveerd; genummerde
+  overwegingen ("1.", "2.") blijven bewust gewone alinea's, net als bij de andere bronnen.
 - **PDF-conversie** (`mdconv/sources/files.py`): een geüploade/gelinkte `.pdf` gaat eerst door
   **pdf-inspector** (Rust-library van Firecrawl, `process_pdf_bytes()`) — layout-aware Markdown
   (koppen/lijsten/tabellen) zonder de losse-regeleinde-reflow-hack die MarkItDown nodig heeft.

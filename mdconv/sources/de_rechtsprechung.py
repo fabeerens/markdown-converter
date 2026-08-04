@@ -94,17 +94,54 @@ def fetch(query: str) -> tuple[str, str]:
 # Zoeken: ECLI -> doc.id
 # --------------------------------------------------------------------------
 
+# Letterlijke "0 resultaten"-melding van de site: dat is een échte lege
+# uitkomst, geen technische hapering — dan is een nieuwe poging zinloos.
+_NO_RESULTS_MARKER = "0 Treffer"
+
+# De sessie/tokendans (zie moduledocstring) is één keer meegemaakt te falen
+# door een tijdelijke hapering bij de site zelf, zonder dat de zoekopdracht
+# echt niets opleverde. Eén nieuwe poging onderscheidt dat van een genuine
+# "geen resultaten", zonder de gebruiker bij elke kleine hapering al een
+# harde foutmelding te geven.
+_SEARCH_ATTEMPTS = 2
+
+
 def _resolve_doc_id(ecli: str) -> str | None:
+    last_error: Exception | None = None
+    for attempt in range(_SEARCH_ATTEMPTS):
+        try:
+            result = _search_once(ecli)
+        except requests.exceptions.RequestException as e:
+            last_error = e
+            continue
+        if result is not _RETRY:
+            return result
+    if last_error is not None:
+        raise ConversionError(
+            f"Kon rechtsprechung-im-internet.de niet bereiken om {ecli} op te zoeken "
+            f"(verbindingsfout): {last_error}"
+        )
+    return None
+
+
+# Sentinel: de zoekpoging leverde geen bruikbaar antwoord op, maar zonder de
+# expliciete "0 Treffer"-melding — dus mogelijk een technische hapering
+# (bv. een ontbrekend/gewijzigd formulierveld) in plaats van een echt lege
+# uitkomst. Dat verdient een nieuwe poging, anders dan een bevestigde 0 Treffer.
+_RETRY = object()
+
+
+def _search_once(ecli: str):
     # Eigen sessie (zie moduledocstring) — niet de gedeelde net.documents().
     session = requests.Session()
     session.headers["User-Agent"] = net.USER_AGENT
     try:
         r0 = session.get(_SEARCH_URL, timeout=_SEARCH_TIMEOUT)
         if r0.status_code != 200:
-            return None
+            return _RETRY
         form = BeautifulSoup(r0.text, "lxml").find("form")
         if form is None:
-            return None
+            return _RETRY
         hidden = {
             i.get("name"): i.get("value", "")
             for i in form.find_all("input")
@@ -115,14 +152,14 @@ def _resolve_doc_id(ecli: str) -> str | None:
         params.update({"query": ecli, "standardsuche": "suchen"})
         r1 = session.get(_SEARCH_URL, params=params, timeout=_SEARCH_TIMEOUT)
         if r1.status_code != 200:
-            return None
-    except requests.exceptions.RequestException:
-        return None
+            return _RETRY
     finally:
         session.close()
 
     m = re.search(r"doc\.id=([\w-]+)", r1.text)
-    return m.group(1) if m else None
+    if m:
+        return m.group(1)
+    return None if _NO_RESULTS_MARKER in r1.text else _RETRY
 
 
 # --------------------------------------------------------------------------

@@ -296,6 +296,70 @@ DE_SAMPLE = b"""<?xml version="1.0" encoding="UTF-8"?>
 """
 
 
+BE_SAMPLE_HTML = """
+<html><body>
+<fieldset>
+  <table>
+    <tr><td><p>ECLI nr:</p></td><td><p>ECLI:BE:CASS:2021:ARR.20211019.2N.25</p></td></tr>
+    <tr><td><p>Vervangt nummer:</p></td><td><p>ECLI:BE:CASS:2021:ARR.20211012.2N.21 </p></td></tr>
+  </table>
+</fieldset>
+<fieldset>
+  <legend title="Vonnis/arrest van 19 oktober 2021">Tekst van de beslissing</legend>
+  <div>
+    ERROR JUPORTARobotRecordLienECLI WARNING ECLI:BE:CASS:2021:ARR.20211019.2N.25 no lien 1 identiques <br>
+    <p>
+      Nr. P.21.1235.N<br>
+      I.\tRECHTSPLEGING VOOR HET HOF<br>
+      Het cassatieberoep is gericht tegen het arrest.<br>
+      1.\tDe eiser voert een grief aan.<br>
+      Dictum<br>
+      Verwerpt het cassatieberoep.
+    </p>
+  </div>
+</fieldset>
+</body></html>
+"""
+
+
+def test_be_juportal_produces_expected_structure():
+    from mdconv.sources.be_juportal import _html_to_markdown
+    md, canonical_ecli = _html_to_markdown(BE_SAMPLE_HTML)
+    assert canonical_ecli == "ECLI:BE:CASS:2021:ARR.20211019.2N.25"
+    assert "# Vonnis/arrest van 19 oktober 2021" in md
+    assert "## I. RECHTSPLEGING VOOR HET HOF" in md
+    assert "1. De eiser voert een grief aan." in md  # collapse_ws normaliseert de tab naar één spatie
+    assert "Dictum" in md
+    assert "ERROR JUPORTA" not in md  # gelekte serverregel moet eruit gefilterd zijn
+
+
+def test_be_juportal_ecli_pattern():
+    from mdconv.sources.be_juportal import ECLI_RE
+    assert ECLI_RE.search("ECLI:BE:CASS:2021:ARR.20211019.2N.25")
+    assert not ECLI_RE.search("ECLI:DE:BGH:2019:240919BVIZB39.18.0")
+
+
+def test_be_juportal_rejects_input_without_a_belgian_ecli():
+    from mdconv.sources import be_juportal as be
+    from mdconv.errors import ConversionError
+
+    with pytest.raises(ConversionError, match="Belgisch ECLI-nummer"):
+        be.fetch("dit is geen ECLI")
+
+
+def test_be_juportal_reports_a_clear_error_on_http_400(monkeypatch):
+    from mdconv.sources import be_juportal as be
+    from mdconv.errors import ConversionError
+
+    class FakeResp:
+        status_code = 400
+
+    monkeypatch.setattr(be.net, "documents",
+                         lambda: type("S", (), {"get": staticmethod(lambda *a, **k: FakeResp())})())
+    with pytest.raises(ConversionError, match="Juportal"):
+        be.fetch("ECLI:BE:CASS:2099:ARR.99999999.9N.99")
+
+
 def test_de_rechtsprechung_produces_expected_structure():
     from mdconv.sources.de_rechtsprechung import _xml_to_markdown
     md = _xml_to_markdown(DE_SAMPLE)
@@ -327,6 +391,50 @@ def test_de_rechtsprechung_reports_a_clear_error_when_not_found(monkeypatch):
     monkeypatch.setattr(de, "_resolve_doc_id", lambda ecli: None)
     with pytest.raises(ConversionError, match="rechtsprechung-im-internet.de"):
         de.fetch("ECLI:DE:BGH:1999:999999ZZZZ99.99.9")
+
+
+def test_de_rechtsprechung_distinguishes_zero_results_from_a_glitch(monkeypatch):
+    """Een echte '0 Treffer' geeft direct None; een technische hapering
+    (bv. een ontbrekend formulierveld, zonder die expliciete melding) wordt
+    eerst opnieuw geprobeerd voordat de conclusie 'niet gevonden' wordt."""
+    from mdconv.sources import de_rechtsprechung as de
+
+    calls = []
+
+    def fake_search_once(ecli):
+        calls.append(ecli)
+        return de._RETRY if len(calls) == 1 else "jb-GEVONDEN"
+
+    monkeypatch.setattr(de, "_search_once", fake_search_once)
+    assert de._resolve_doc_id("ECLI:DE:BGH:2019:X") == "jb-GEVONDEN"
+    assert len(calls) == 2  # eerste poging was een glitch, tweede vond het
+
+
+def test_de_rechtsprechung_zero_results_does_not_retry(monkeypatch):
+    from mdconv.sources import de_rechtsprechung as de
+
+    calls = []
+
+    def fake_search_once(ecli):
+        calls.append(ecli)
+        return None  # echte "0 Treffer"
+
+    monkeypatch.setattr(de, "_search_once", fake_search_once)
+    assert de._resolve_doc_id("ECLI:DE:BGH:2019:X") is None
+    assert len(calls) == 1  # geen zinloze herhaling bij een bevestigd lege uitkomst
+
+
+def test_de_rechtsprechung_reports_connection_errors_distinctly(monkeypatch):
+    from mdconv.sources import de_rechtsprechung as de
+    from mdconv.errors import ConversionError
+    import requests
+
+    def fake_search_once(ecli):
+        raise requests.exceptions.ConnectionError("netwerk onbereikbaar")
+
+    monkeypatch.setattr(de, "_search_once", fake_search_once)
+    with pytest.raises(ConversionError, match="verbindingsfout"):
+        de._resolve_doc_id("ECLI:DE:BGH:2019:X")
 
 
 def test_de_rechtsprechung_rejects_input_without_a_german_ecli():

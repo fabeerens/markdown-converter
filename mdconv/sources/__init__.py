@@ -14,13 +14,14 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from . import de_rechtsprechung, eurlex, files, formex, hudoc, rechtspraak, wetten
+from . import be_juportal, de_rechtsprechung, eurlex, files, formex, hudoc, rechtspraak, wetten
 
 # Nationale rechtspraak buiten NL/EU/EHRM, per ECLI-landcode. Uitbreidbaar: voeg
 # een module met dezelfde vorm toe (`ECLI_RE` + `fetch(query) -> (markdown, bron)`)
 # en registreer hem hier — de rest van de routering werkt dan automatisch mee.
 _NATIONAL_SOURCES = {
     "DE": de_rechtsprechung,
+    "BE": be_juportal,
 }
 
 
