@@ -360,6 +360,57 @@ def test_be_juportal_reports_a_clear_error_on_http_400(monkeypatch):
         be.fetch("ECLI:BE:CASS:2099:ARR.99999999.9N.99")
 
 
+def test_fr_cc_derives_the_url_from_the_ecli():
+    """ECLI:FR:CC:{jaar}:{jaar}.{nummer}.{type} -> .../decision/{jaar}/{jaar}{nummer}{type}.htm
+    (het jaar is het 4e ECLI-onderdeel, de rest is het 5e onderdeel zonder punten) —
+    geverifieerd tegen echte pagina's op conseil-constitutionnel.fr (QPC en DC)."""
+    from mdconv.sources.fr_conseil_constitutionnel import _CC_ECLI_RE
+
+    m = _CC_ECLI_RE.search("ECLI:FR:CC:2021:2021.931.QPC")
+    assert m.group(1) == "2021"
+    assert m.group(2).replace(".", "") == "2021931QPC"
+
+
+def test_fr_cc_html_to_markdown():
+    from mdconv.sources.fr_conseil_constitutionnel import _html_to_markdown
+
+    html = """
+    <html><body>
+    <h1 class="title">Décision n° 2021-931 QPC du 23 septembre 2021</h1>
+    <div class="field field--name-field-titre-complet field__item"><p>Une affaire</p></div>
+    <div class="field field--name-field-contenu-original field__item">
+      <p class="considerant"><span class="numero-considerant">1.</span> Premier considérant.</p>
+      <blockquote><p><strong>LE CONSEIL CONSTITUTIONNEL DÉCIDE&nbsp;:</strong></p></blockquote>
+    </div>
+    </body></html>
+    """
+    md = _html_to_markdown(html)
+    assert "# Décision n° 2021-931 QPC du 23 septembre 2021" in md
+    assert "## Une affaire" in md
+    assert "1. Premier considérant." in md
+    assert "LE CONSEIL CONSTITUTIONNEL DÉCIDE" in md
+
+
+def test_fr_cc_rejects_other_french_courts_with_a_clear_message():
+    """Alleen ECLI:FR:CC:... wordt ondersteund; andere Franse gerechten
+    (Cour de cassation, Conseil d'État) zitten achter een bot-blokkade en/of
+    vereisen verplichte API-registratie (Judilibre/PISTE) — geen stille
+    misser, maar een uitleg waarom."""
+    from mdconv.sources import fr_conseil_constitutionnel as fr
+    from mdconv.errors import ConversionError
+
+    with pytest.raises(ConversionError, match="Conseil constitutionnel"):
+        fr.fetch("ECLI:FR:CCASS:2021:12345")
+
+
+def test_fr_cc_rejects_input_without_a_french_ecli():
+    from mdconv.sources import fr_conseil_constitutionnel as fr
+    from mdconv.errors import ConversionError
+
+    with pytest.raises(ConversionError, match="Frans ECLI-nummer"):
+        fr.fetch("dit is geen ECLI")
+
+
 def test_de_rechtsprechung_produces_expected_structure():
     from mdconv.sources.de_rechtsprechung import _xml_to_markdown
     md = _xml_to_markdown(DE_SAMPLE)

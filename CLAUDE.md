@@ -67,15 +67,30 @@ soort), zodat de route niets over engines of classificatie hoeft te weten.
 | wetten.overheid.nl-link of **BWB-nummer** (`BWBR0040940`) | wetten.overheid.nl |
 | **`ECLI:DE:…`** (Duitse federale rechtspraak) | rechtsprechung-im-internet.de |
 | **`ECLI:BE:…`** (Belgische rechtspraak) | Juportal |
+| **`ECLI:FR:CC:…`** (Frans Conseil constitutionnel; overige FR-gerechten: nette foutmelding) | conseil-constitutionnel.fr |
 
 **Buitenlandse rechtspraak** (`_NATIONAL_SOURCES` in `mdconv/sources/__init__.py`): per
-ECLI-landcode een eigen module. Nu `DE` → `sources/de_rechtsprechung.py` en `BE` →
-`sources/be_juportal.py`; uitbreidbaar door een module met dezelfde vorm (`ECLI_RE` +
-`fetch(query) -> (markdown, bron)`) toe te voegen en te registreren in `_NATIONAL_SOURCES`.
-Onderzocht maar (nog) niet haalbaar met plain HTTP: **ES** (CENDOJ zet een verplichte,
-interactieve CAPTCHA vóór elke volledige-tekst-download — geen sessie/cookie-truc zoals bij
-Duitsland, een échte afbeelding-CAPTCHA; gebruikers kunnen zo'n PDF wel gewoon handmatig
-uploaden via het bestaande PDF-pad). Frankrijk is gemengd, zie de opmerking bij `FR` hieronder.
+ECLI-landcode een eigen module. Nu `DE` → `sources/de_rechtsprechung.py`, `BE` →
+`sources/be_juportal.py`, `FR` → `sources/fr_conseil_constitutionnel.py`; uitbreidbaar door
+een module met dezelfde vorm (`ECLI_RE` + `fetch(query) -> (markdown, bron)`) toe te voegen
+en te registreren in `_NATIONAL_SOURCES`.
+
+**Onderzocht maar niet haalbaar met plain HTTP** (geen browserautomatisering, geen verplichte
+accountregistratie namens de gebruiker):
+- **ES** (CENDOJ) — een verplichte, interactieve afbeelding-CAPTCHA vóór elke
+  volledige-tekst-download (geen sessie/cookie-truc zoals bij Duitsland, een échte CAPTCHA).
+  Gebruikers kunnen zo'n PDF wel gewoon handmatig uploaden via het bestaande PDF-pad.
+- **AT** (RIS) heeft wél een gratis, sleutelloze JSON-API (`data.bka.gv.at/ris/api/v2.6`),
+  maar géén gedocumenteerde ECLI-zoekparameter (bevestigd: nul treffers voor "ECLI" in de
+  60 pagina's officiële API-documentatie). Vrije-tekstzoeken op de ECLI-string (`Suchworte`)
+  werkte één keer bij toeval en faalde daarna consequent bij herhaling — niet betrouwbaar
+  genoeg om te bouwen. De wél betrouwbare route (zoeken op `Geschaeftszahl`) vereist het
+  terugrekenen van die Geschäftszahl uit de ECLI, en dat encoderingsschema is nergens
+  gedocumenteerd; één reverse-engineerpoging op een OGH-voorbeeld klopte niet (verwachte
+  senaatsnummer "3", afgeleid "30"). Niet gebouwd op basis van onzekere gok-logica.
+- **FR** (Cour de cassation/Conseil d'État) — Légifrance zit achter een Cloudflare-JS-
+  challenge; de officiële Judilibre-API van de Cour de cassation vereist verplichte
+  PISTE-accountregistratie én heeft geen ECLI-zoekparameter (alleen een intern MongoDB-`id`).
 
 ## Belangrijke, niet-voor-de-hand-liggende details
 
@@ -145,6 +160,16 @@ uploaden via het bestaande PDF-pad). Frankrijk is gemengd, zie de opmerking bij 
   tekstnode vóór de `<p>`; daarom wordt specifiek de `<p>` geselecteerd, niet de hele `<div>`.
   Romeinse-cijfer sectiekoppen ("I. RECHTSPLEGING VOOR HET HOF") worden gepromoveerd; genummerde
   overwegingen ("1.", "2.") blijven bewust gewone alinea's, net als bij de andere bronnen.
+- **Frans Conseil constitutionnel** (`fr_conseil_constitutionnel.py`): publiceert op zijn
+  **eigen site** (niet Légifrance, dus geen Cloudflare-blokkade), met een **deterministische
+  URL** rechtstreeks uit de ECLI — analoog aan `eli_to_celex()`: `ECLI:FR:CC:{jaar}:{jaar}.
+  {nummer}.{type}` → `.../decision/{jaar}/{jaar}{nummer}{type}.htm` (het 5e ECLI-onderdeel
+  met de punten eraf). Geverifieerd op twee besluittypes (QPC en DC): de pagina bevestigt de
+  aangevraagde ECLI letterlijk in de tekst. De pagina is verder gewone semantische HTML
+  (p/ul/li/blockquote/strong) — geen bespoke walker nodig, gewoon `container_to_markdown()`
+  (dezelfde markdownify-route als `wetten.py`) op de container met class
+  `field--name-field-contenu-original`. Andere Franse gerechten (Cour de cassation, Conseil
+  d'État) geven een expliciete, uitleggende foutmelding in plaats van een gok — zie hierboven.
 - **PDF-conversie** (`mdconv/sources/files.py`): een geüploade/gelinkte `.pdf` gaat eerst door
   **pdf-inspector** (Rust-library van Firecrawl, `process_pdf_bytes()`) — layout-aware Markdown
   (koppen/lijsten/tabellen) zonder de losse-regeleinde-reflow-hack die MarkItDown nodig heeft.

@@ -14,7 +14,17 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from . import be_juportal, de_rechtsprechung, eurlex, files, formex, hudoc, rechtspraak, wetten
+from . import (
+    be_juportal,
+    de_rechtsprechung,
+    eurlex,
+    files,
+    formex,
+    fr_conseil_constitutionnel,
+    hudoc,
+    rechtspraak,
+    wetten,
+)
 
 # Nationale rechtspraak buiten NL/EU/EHRM, per ECLI-landcode. Uitbreidbaar: voeg
 # een module met dezelfde vorm toe (`ECLI_RE` + `fetch(query) -> (markdown, bron)`)
@@ -22,6 +32,7 @@ from . import be_juportal, de_rechtsprechung, eurlex, files, formex, hudoc, rech
 _NATIONAL_SOURCES = {
     "DE": de_rechtsprechung,
     "BE": be_juportal,
+    "FR": fr_conseil_constitutionnel,
 }
 
 
