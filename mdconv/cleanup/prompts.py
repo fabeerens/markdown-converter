@@ -227,7 +227,9 @@ Rechtbank Midden-Nederland, Rechtbank Noord-Holland, Rechtbank Noord-Nederland,
 Rechtbank Oost-Brabant, Rechtbank Overijssel, Rechtbank Rotterdam,
 Rechtbank Zeeland-West-Brabant, Bundesgerichtshof (BGH), Bundesverfassungsgericht (BVerfG),
 Bundesverwaltungsgericht (BVerwG), Bundesfinanzhof (BFH), Bundesarbeitsgericht (BAG),
-Bundessozialgericht (BSG), Bundespatentgericht (BPatG).
+Bundessozialgericht (BSG), Bundespatentgericht (BPatG), Hof van Cassatie (BE),
+Grondwettelijk Hof (BE), Raad van State (BE), Conseil constitutionnel (FR),
+Cour de cassation (FR).
 
 ### 3. Inhoudsopgave-callout
 Direct na de frontmatter, vóór `## Samenvatting`. Gebruik wikilinks naar de **inhoudelijke

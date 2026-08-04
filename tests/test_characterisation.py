@@ -392,15 +392,27 @@ def test_fr_cc_html_to_markdown():
 
 
 def test_fr_cc_rejects_other_french_courts_with_a_clear_message():
-    """Alleen ECLI:FR:CC:... wordt ondersteund; andere Franse gerechten
-    (Cour de cassation, Conseil d'État) zitten achter een bot-blokkade en/of
-    vereisen verplichte API-registratie (Judilibre/PISTE) — geen stille
-    misser, maar een uitleg waarom."""
+    """Alleen ECLI:FR:CC:... en ECLI:FR:CCASS:... worden ondersteund; overige
+    Franse gerechten (Conseil d'État, cours d'appel) zitten achter een
+    Légifrance-bot-blokkade — geen stille misser, maar een uitleg waarom."""
     from mdconv.sources import fr_conseil_constitutionnel as fr
     from mdconv.errors import ConversionError
 
     with pytest.raises(ConversionError, match="Conseil constitutionnel"):
-        fr.fetch("ECLI:FR:CCASS:2021:12345")
+        fr.fetch("ECLI:FR:CE:2021:12345")
+
+
+def test_fr_dispatches_ccass_ecli_to_judilibre(monkeypatch):
+    from mdconv.sources import fr_conseil_constitutionnel as fr
+    from mdconv.sources import fr_judilibre
+
+    called = {}
+    monkeypatch.setattr(
+        fr_judilibre, "fetch", lambda q: called.setdefault("query", q) and ("md", "bron")
+    )
+    result = fr.fetch("ECLI:FR:CCASS:2019:C100589")
+    assert result == ("md", "bron")
+    assert called["query"] == "ECLI:FR:CCASS:2019:C100589"
 
 
 def test_fr_cc_rejects_input_without_a_french_ecli():

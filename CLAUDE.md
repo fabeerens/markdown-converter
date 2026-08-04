@@ -67,12 +67,13 @@ soort), zodat de route niets over engines of classificatie hoeft te weten.
 | wetten.overheid.nl-link of **BWB-nummer** (`BWBR0040940`) | wetten.overheid.nl |
 | **`ECLI:DE:…`** (Duitse rechtspraak) | OpenLegalData (terugval: rechtsprechung-im-internet.de) |
 | **`ECLI:BE:…`** (Belgische rechtspraak) | Juportal |
-| **`ECLI:FR:CC:…`** (Frans Conseil constitutionnel; overige FR-gerechten: nette foutmelding) | conseil-constitutionnel.fr |
+| **`ECLI:FR:CC:…`** (Conseil constitutionnel) of **`ECLI:FR:CCASS:…`** (Cour de cassation); overige FR-gerechten: nette foutmelding | conseil-constitutionnel.fr resp. Judilibre |
 
 **Buitenlandse rechtspraak** (`_NATIONAL_SOURCES` in `mdconv/sources/__init__.py`): per
 ECLI-landcode een eigen module. Nu `DE` → `sources/de_openlegaldata.py` (valt intern terug
 op `sources/de_rechtsprechung.py`), `BE` → `sources/be_juportal.py`, `FR` →
-`sources/fr_conseil_constitutionnel.py`; uitbreidbaar door een module met dezelfde vorm
+`sources/fr_conseil_constitutionnel.py` (dispatcht intern naar `sources/fr_judilibre.py`
+voor de Cour de cassation); uitbreidbaar door een module met dezelfde vorm
 (`ECLI_RE` + `fetch(query) -> (markdown, bron)`) toe te voegen en te registreren in
 `_NATIONAL_SOURCES`.
 
@@ -80,18 +81,20 @@ op `sources/de_rechtsprechung.py`), `BE` → `sources/be_juportal.py`, `FR` →
 accountregistratie namens de gebruiker):
 - **ES** (CENDOJ) — een verplichte, interactieve afbeelding-CAPTCHA vóór elke
   volledige-tekst-download (geen sessie/cookie-truc zoals bij Duitsland, een échte CAPTCHA).
-  Gebruikers kunnen zo'n PDF wel gewoon handmatig uploaden via het bestaande PDF-pad.
+  Ook een browserautomatiserings-tool (`computingvictor/mcp-cendoj`, onderzocht) bootst alleen
+  de interactieve zoek-UI met Playwright na en garandeert niet dat het downloadpad zonder
+  CAPTCHA blijft — niet ingezet, want dat is precies het soort anti-bot-omzeiling die dit
+  project bewust vermijdt. Gebruikers kunnen zo'n PDF wel gewoon handmatig uploaden via het
+  bestaande PDF-pad.
 - **AT** (RIS) heeft wél een gratis, sleutelloze JSON-API (`data.bka.gv.at/ris/api/v2.6`),
   maar géén gedocumenteerde ECLI-zoekparameter (bevestigd: nul treffers voor "ECLI" in de
-  60 pagina's officiële API-documentatie). Vrije-tekstzoeken op de ECLI-string (`Suchworte`)
-  werkte één keer bij toeval en faalde daarna consequent bij herhaling — niet betrouwbaar
-  genoeg om te bouwen. De wél betrouwbare route (zoeken op `Geschaeftszahl`) vereist het
-  terugrekenen van die Geschäftszahl uit de ECLI, en dat encoderingsschema is nergens
-  gedocumenteerd; één reverse-engineerpoging op een OGH-voorbeeld klopte niet (verwachte
-  senaatsnummer "3", afgeleid "30"). Niet gebouwd op basis van onzekere gok-logica.
-- **FR** (Cour de cassation/Conseil d'État) — Légifrance zit achter een Cloudflare-JS-
-  challenge; de officiële Judilibre-API van de Cour de cassation vereist verplichte
-  PISTE-accountregistratie én heeft geen ECLI-zoekparameter (alleen een intern MongoDB-`id`).
+  60 pagina's officiële API-documentatie; een `Ecli=`-parameter wordt genegeerd, niet als
+  filter toegepast). Vrije-tekstzoeken op de ECLI-string (`Suchworte`) werkte één keer bij
+  toeval en gaf bij hertesten (ook later, met dezelfde ECLI) telkens 0 treffers — niet
+  betrouwbaar genoeg om te bouwen. De wél betrouwbare route (zoeken op `Geschaeftszahl`)
+  vereist het terugrekenen van die Geschäftszahl uit de ECLI, en dat encoderingsschema is
+  nergens gedocumenteerd; één reverse-engineerpoging op een OGH-voorbeeld klopte niet
+  (verwachte senaatsnummer "3", afgeleid "30"). Niet gebouwd op basis van onzekere gok-logica.
 
 ## Belangrijke, niet-voor-de-hand-liggende details
 
@@ -182,16 +185,34 @@ accountregistratie namens de gebruiker):
   tekstnode vóór de `<p>`; daarom wordt specifiek de `<p>` geselecteerd, niet de hele `<div>`.
   Romeinse-cijfer sectiekoppen ("I. RECHTSPLEGING VOOR HET HOF") worden gepromoveerd; genummerde
   overwegingen ("1.", "2.") blijven bewust gewone alinea's, net als bij de andere bronnen.
-- **Frans Conseil constitutionnel** (`fr_conseil_constitutionnel.py`): publiceert op zijn
-  **eigen site** (niet Légifrance, dus geen Cloudflare-blokkade), met een **deterministische
-  URL** rechtstreeks uit de ECLI — analoog aan `eli_to_celex()`: `ECLI:FR:CC:{jaar}:{jaar}.
-  {nummer}.{type}` → `.../decision/{jaar}/{jaar}{nummer}{type}.htm` (het 5e ECLI-onderdeel
-  met de punten eraf). Geverifieerd op twee besluittypes (QPC en DC): de pagina bevestigt de
-  aangevraagde ECLI letterlijk in de tekst. De pagina is verder gewone semantische HTML
-  (p/ul/li/blockquote/strong) — geen bespoke walker nodig, gewoon `container_to_markdown()`
-  (dezelfde markdownify-route als `wetten.py`) op de container met class
-  `field--name-field-contenu-original`. Andere Franse gerechten (Cour de cassation, Conseil
-  d'État) geven een expliciete, uitleggende foutmelding in plaats van een gok — zie hierboven.
+- **Franse rechtspraak** — `fr_conseil_constitutionnel.py` is het registratiepunt voor `FR` en
+  routeert op het gerecht-onderdeel van de ECLI:
+  - **Conseil constitutionnel**: publiceert op zijn **eigen site** (niet Légifrance, dus geen
+    Cloudflare-blokkade), met een **deterministische URL** rechtstreeks uit de ECLI — analoog
+    aan `eli_to_celex()`: `ECLI:FR:CC:{jaar}:{jaar}.{nummer}.{type}` →
+    `.../decision/{jaar}/{jaar}{nummer}{type}.htm` (het 5e ECLI-onderdeel met de punten eraf).
+    Geverifieerd op twee besluittypes (QPC en DC): de pagina bevestigt de aangevraagde ECLI
+    letterlijk in de tekst. De pagina is verder gewone semantische HTML (p/ul/li/blockquote/
+    strong) — geen bespoke walker nodig, gewoon `container_to_markdown()` (dezelfde
+    markdownify-route als `wetten.py`) op de container met class
+    `field--name-field-contenu-original`.
+  - **Cour de cassation** (`fr_judilibre.py`): via de officiële **Judilibre**-API op het
+    PISTE-portaal (`piste.gouv.fr`) — vereist een geregistreerde applicatie mét een
+    goedgekeurde **souscriptie** op de Judilibre-API (los van het aanmaken van de OAuth-
+    credentials zelf; zonder die souscriptie authenticeert de app wel, maar geeft de API
+    consequent **403** terug op elk endpoint). OAuth2 `client_credentials`-token via
+    `oauth.piste.gouv.fr` (production; **sandbox-Judilibre bevat alleen demodata**, dus
+    productie-toegang is voor echte opzoekingen sowieso vereist). Elke API-aanroep gaat met
+    zowel `Authorization: Bearer <token>` als `KeyId: <client_id>`; `_get_token()` cachet het
+    token (1 uur geldig) client-side. **ECLI-zoeken werkt wél**, in weerspraak met eerdere
+    aanname: geeft `/search` een `query`-parameter die exact een ECLI-string is, dan herkent
+    Judilibre dat intern en herschrijft het naar een exacte `terms`-filter op het `ecli`-veld
+    (zichtbaar in de `searchQuery`-debugkey van de respons) — geen apart ECLI-parameter nodig.
+    `/decision?id=<id>` geeft platte tekst (`text`-veld, geen HTML) terug, dus geen
+    structuurwalker nodig — alleen op lege regels in alinea's splitsen.
+  - Overige Franse gerechten (Conseil d'État, cours d'appel) geven een expliciete, uitleggende
+    foutmelding in plaats van een gok — die staan (ook) op Légifrance, achter de
+    Cloudflare-blokkade, zonder een vergelijkbare eigen-site- of API-route.
 - **PDF-conversie** (`mdconv/sources/files.py`): een geüploade/gelinkte `.pdf` gaat eerst door
   **pdf-inspector** (Rust-library van Firecrawl, `process_pdf_bytes()`) — layout-aware Markdown
   (koppen/lijsten/tabellen) zonder de losse-regeleinde-reflow-hack die MarkItDown nodig heeft.
