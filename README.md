@@ -11,6 +11,7 @@ Plak een ECLI of link; de tool herkent de bron automatisch:
 - **Hof van Justitie EU** — EU-ECLI (bv. `ECLI:EU:C:2025:645`). Via het **Cellar**-archief van de Publicatiebureau.
 - **EHRM (ECtHR)** — een HUDOC-link, item-id (bv. `001-210077`) of een EHRM-ECLI (bv. `ECLI:CE:ECHR:2021:0525JUD005817013`). Via de HUDOC-zoek-API en document-export. De taalkeuze bepaalt de versie/vertaling (Engels/Frans origineel, of een vertaling indien als HTML beschikbaar — anders terugval op het origineel).
 - **Nederlandse rechtspraak** — een ECLI (bv. `ECLI:NL:HR:2012:BQ9251`) of een rechtspraak.nl-link. Via de officiële Open Data API van de Rechtspraak.
+- **Duitse rechtspraak** — een Duitse ECLI (bv. `ECLI:DE:BGH:2019:240919BVIZB39.18.0`). Via rechtsprechung-im-internet.de (BGH, BVerfG, BVerwG, BFH, BAG, BSG, BPatG). Overige landen (België, Frankrijk, Oostenrijk, Spanje) volgen.
 
 ### 2. Wetgeving
 - **EU-wetgeving** — CELEX-nummer (bv. `32016R0679`, de AVG), een link, of een ELI-link (bv. `https://eur-lex.europa.eu/eli/reg/2016/679/oj`). Officiële tekst uit het Cellar-archief (met terugval op de EUR-Lex portal).
@@ -80,10 +81,13 @@ Er zijn twee opmaak-profielen die automatisch worden gekozen (los van het model)
 Bij **Jurisprudentie** verschijnt daarnaast een vinkje **"Opmaken voor Obsidian"**.
 Die levert één complete Obsidian-notitie op — YAML-frontmatter, een inhoudsopgave-callout,
 een gestructureerde juridische analyse (feiten, rechtsvragen, argumenten, conclusie, impact)
-én de volledige uitspraak verbatim — volgens een vast sjabloon. Dit profiel verwerkt de hele
+én de volledige uitspraak verbatim — volgens een vast sjabloon. Bij een **anderstalige**
+uitspraak (bv. Duits) wordt de volledige uitspraak als tweekolomstabel opgeleverd: links het
+origineel per rechtsoverweging, rechts de Nederlandse vertaling. Dit profiel verwerkt de hele
 uitspraak in **één** verzoek (niet in delen, want frontmatter/analyse mag maar één keer
 voorkomen); bij een zeer lang arrest kan de output daardoor tegen het model-uitvoerplafond
-aanlopen en afgekapt worden.
+aanlopen — de tool geeft dan een duidelijke foutmelding (gebruik in dat geval het
+standaardprofiel) in plaats van een stilletjes afgekapt resultaat.
 
 **Let op bij de kostenraming:** het getoonde aantal tokens is de **invoergrootte** van het
 document (niet invoer+uitvoer opgeteld). Het aantal delen (chunks) hangt af van die

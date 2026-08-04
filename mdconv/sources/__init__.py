@@ -14,7 +14,19 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from . import eurlex, files, formex, hudoc, rechtspraak, wetten
+from . import de_rechtsprechung, eurlex, files, formex, hudoc, rechtspraak, wetten
+
+# Nationale rechtspraak buiten NL/EU/EHRM, per ECLI-landcode. Uitbreidbaar: voeg
+# een module met dezelfde vorm toe (`ECLI_RE` + `fetch(query) -> (markdown, bron)`)
+# en registreer hem hier — de rest van de routering werkt dan automatisch mee.
+_NATIONAL_SOURCES = {
+    "DE": de_rechtsprechung,
+}
+
+
+def _national_source(query: str):
+    m = re.search(r"ECLI:([A-Z]{2}):", query, re.I)
+    return _NATIONAL_SOURCES.get(m.group(1).upper()) if m else None
 
 KIND_CASELAW = "caselaw"
 KIND_DOCUMENT = "document"
@@ -59,6 +71,8 @@ def detect_source(query: str) -> str | None:
     # gaan naar EUR-Lex; overige ECLI's vallen ook door.
     if "rechtspraak.nl" in low or re.search(r"ECLI:NL:", q, re.I):
         return "rechtspraak"
+    if _national_source(q):
+        return "national"
     return None
 
 
@@ -71,6 +85,8 @@ def from_link(query: str, lang: str = "NL") -> Document:
         markdown, note = hudoc.fetch(query, lang)
     elif source == "wetten":
         markdown, note = wetten.fetch(query)
+    elif source == "national":
+        markdown, note = _national_source(query).fetch(query)
     else:
         markdown, note = eurlex.fetch_and_convert(query, lang)
     return Document(markdown=markdown, source=note, kind=kind_for_source(note))
@@ -127,5 +143,9 @@ def kind_for_source(source: str) -> str:
     if s.startswith("Rechtspraak.nl") or s.startswith("HUDOC"):
         return KIND_CASELAW
     if "ECLI:EU:" in s or "CELEX:6" in s:
+        return KIND_CASELAW
+    # Nationale bronnen (bv. rechtsprechung-im-internet.de voor Duitsland) leveren
+    # altijd rechtspraak; hun bronvermelding bevat de ECLI van het betreffende land.
+    if re.search(r"ECLI:[A-Z]{2}:", s, re.I):
         return KIND_CASELAW
     return KIND_DOCUMENT

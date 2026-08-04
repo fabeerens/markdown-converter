@@ -40,6 +40,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     ("ECLI:EU:C:2025:645", None),
     ("32016R0679", None),
     ("https://eur-lex.europa.eu/eli/reg/2016/679/oj", None),
+    # Nationale rechtspraak (buiten NL/EU/EHRM), per ECLI-landcode.
+    ("ECLI:DE:BGH:2019:240919BVIZB39.18.0", "national"),
 ])
 def test_detect_source(query, expected):
     from mdconv.sources import detect_source
@@ -255,6 +257,84 @@ FORMEX_SAMPLE = b"""<?xml version="1.0" encoding="UTF-8"?>
   </ENACTING.TERMS>
 </ACT>
 """
+
+
+DE_SAMPLE = b"""<?xml version="1.0" encoding="UTF-8"?>
+<dokument>
+   <doknr>TEST123</doknr>
+   <ecli>ECLI:DE:BGH:2019:240919BVIZB39.18.0</ecli>
+   <gertyp>BGH</gertyp>
+   <spruchkoerper>6. Zivilsenat</spruchkoerper>
+   <aktenzeichen>VI ZB 39/18</aktenzeichen>
+   <titelzeile><dl class="RspDL"><dt/><dd><p>Testtitel van de zaak</p></dd></dl></titelzeile>
+   <leitsatz>
+      <div>
+         <dl class="RspDL"><dt/><dd><p>1. Eerste rechtsregel met <em>nadruk</em>.</p></dd></dl>
+      </div>
+   </leitsatz>
+   <tenor>
+      <div>
+         <dl class="RspDL"><dt/><dd><p>De beslissing van het hof.</p></dd></dl>
+      </div>
+   </tenor>
+   <tatbestand/>
+   <entscheidungsgruende/>
+   <gruende>
+      <div>
+         <dl class="RspDL"><dt><a name="rd_1">1</a></dt><dd><p>Eerste overweging.</p></dd></dl>
+         <dl class="RspDL"><dt/><dd><p/></dd></dl>
+         <dl class="RspDL"><dt><a name="rd_2">2</a></dt><dd><p>Tweede overweging.</p></dd></dl>
+         <dl class="RspDL"><dt/><dd>
+            <table>
+               <tr><td><p>Naam A</p></td><td><p>Naam B</p></td></tr>
+            </table>
+         </dd></dl>
+      </div>
+   </gruende>
+   <abwmeinung/>
+</dokument>
+"""
+
+
+def test_de_rechtsprechung_produces_expected_structure():
+    from mdconv.sources.de_rechtsprechung import _xml_to_markdown
+    md = _xml_to_markdown(DE_SAMPLE)
+    assert "# BGH 6. Zivilsenat — VI ZB 39/18" in md
+    assert "## Testtitel van de zaak" in md
+    assert "## Leitsatz" in md
+    assert "1. Eerste rechtsregel met *nadruk*." in md
+    assert "## Tenor" in md
+    assert "De beslissing van het hof." in md
+    assert "## Gründe" in md
+    assert "1. Eerste overweging." in md
+    assert "2. Tweede overweging." in md
+    assert "| Naam A | Naam B |" in md
+    # tatbestand/entscheidungsgruende zijn leeg: geen lege koppen in de uitvoer.
+    assert "Tatbestand" not in md
+    assert "Entscheidungsgründe" not in md
+
+
+def test_de_rechtsprechung_ecli_pattern():
+    from mdconv.sources.de_rechtsprechung import ECLI_RE
+    assert ECLI_RE.search("ECLI:DE:BGH:2019:240919BVIZB39.18.0")
+    assert not ECLI_RE.search("ECLI:NL:HR:2012:BQ9251")
+
+
+def test_de_rechtsprechung_reports_a_clear_error_when_not_found(monkeypatch):
+    from mdconv.sources import de_rechtsprechung as de
+    from mdconv.errors import ConversionError
+
+    monkeypatch.setattr(de, "_resolve_doc_id", lambda ecli: None)
+    with pytest.raises(ConversionError, match="rechtsprechung-im-internet.de"):
+        de.fetch("ECLI:DE:BGH:1999:999999ZZZZ99.99.9")
+
+
+def test_de_rechtsprechung_rejects_input_without_a_german_ecli():
+    from mdconv.sources import de_rechtsprechung as de
+    from mdconv.errors import ConversionError
+
+    with pytest.raises(ConversionError, match="Duits ECLI-nummer"):
+        de.fetch("dit is geen ECLI")
 
 
 def test_formex_produces_expected_structure():

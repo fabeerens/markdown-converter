@@ -65,6 +65,12 @@ soort), zodat de route niets over engines of classificatie hoeft te weten.
 | **`ECLI:NL:…`** of rechtspraak.nl-link | Rechtspraak.nl |
 | HUDOC-link, item-id (`001-…`), **`ECLI:CE:ECHR:…`** | HUDOC (EHRM) |
 | wetten.overheid.nl-link of **BWB-nummer** (`BWBR0040940`) | wetten.overheid.nl |
+| **`ECLI:DE:…`** (Duitse federale rechtspraak) | rechtsprechung-im-internet.de |
+
+**Buitenlandse rechtspraak** (`_NATIONAL_SOURCES` in `mdconv/sources/__init__.py`): per
+ECLI-landcode een eigen module. Nu alleen `DE` → `sources/de_rechtsprechung.py`; uitbreidbaar
+door een module met dezelfde vorm (`ECLI_RE` + `fetch(query) -> (markdown, bron)`) toe te
+voegen en te registreren in `_NATIONAL_SOURCES`. Gepland: BE, FR, AT, ES.
 
 ## Belangrijke, niet-voor-de-hand-liggende details
 
@@ -101,6 +107,23 @@ soort), zodat de route niets over engines of classificatie hoeft te weten.
   en bevat de volledige tekst in `#regeling` (h1 titel, h3 hoofdstuk, h4 artikel). `wetten.py` pakt
   die container, strip't werkbalk-ruis (`[class*=action--]`, `.visually-hidden`) en markdownify't.
   URL wordt herbouwd uit BWB-id + optionele versiedatum (`/{jjjj-mm-dd}`).
+- **Duitse rechtspraak** (`de_rechtsprechung.py`): rechtsprechung-im-internet.de (BMJ)
+  publiceert geselecteerde uitspraken van BGH/BVerfG/BVerwG/BFH/BAG/BSG/BPatG sinds 2010, als
+  schone XML met een eigen DTD — maar zonder directe "haal-op-met-ECLI"-URL. Het is een
+  Java-portlet-app die eerst doorzocht moet worden: (1) GET het zoekfragment
+  (`/js_pane/Suchportlet1/media-type/html`) en lees de verborgen formuliervelden
+  (`sugportal`/`sughashcode`/…) uit — die zijn **sessiegebonden** en server-gegenereerd; zonder
+  exact die velden geeft de site alleen het lege formulier terug. (2) GET hetzelfde fragment,
+  nu met die velden + `query=<ECLI>`, **in dezelfde sessie** (cookies) → de HTML bevat
+  `doc.id=<ID>` (of "0 Treffer"). Dit gebeurt met een **eigen `requests.Session`**, niet de
+  gedeelde `net.documents()` — die wordt gelijktijdig door andere documenten gebruikt (de tool
+  haalt meerdere documenten parallel op) en twee gelijktijdige zoekopdrachten op dezelfde
+  JSESSIONID zouden elkaars tussenstaat overschrijven. Elke gevonden `doc.id` heeft daarna een
+  vaste, **stateloze** `.../docs/bsjrs/{doc.id}.zip` met één XML erin (dus wél via de gedeelde
+  sessie). De secties (`leitsatz`/`tenor`/`tatbestand`/`entscheidungsgruende`/`gruende`/
+  `abwmeinung`) bestaan uit `<dl class="RspDL"><dt>…</dt><dd>…</dd></dl>`-paren: `<dt>` het
+  randnummer (`<a name="rd_N">N</a>`), `<dd>` de alinea of een `<table>` (bv. het
+  handtekeningenblok).
 - **PDF-conversie** (`mdconv/sources/files.py`): een geüploade/gelinkte `.pdf` gaat eerst door
   **pdf-inspector** (Rust-library van Firecrawl, `process_pdf_bytes()`) — layout-aware Markdown
   (koppen/lijsten/tabellen) zonder de losse-regeleinde-reflow-hack die MarkItDown nodig heeft.
@@ -138,6 +161,16 @@ soort), zodat de route niets over engines of classificatie hoeft te weten.
   `config.MAX_OUTPUT_TOKENS` aanlopen. `config.OUTPUT_RATIO["obsidian"] = 1.35` compenseert de
   kostenraming voor de extra analyse-tekst bovenop de verbatim-tekst (output > input,
   anders dan bij `generic`/`caselaw` waar output ≈ input).
+- **Anderstalige uitspraak → tweetalige tabel.** Bij een niet-Nederlandse uitspraak (Duits,
+  Frans, Spaans, …) instrueert het obsidian-profiel het model om onder `## Volledige
+  uitspraak` elke rechtsoverweging/randnummer als tabelrij te zetten: links het origineel
+  (letterlijk), rechts een Nederlandse vertaling. Bij een al-Nederlandse uitspraak (bv.
+  rechtspraak.nl) blijft de oude opmaak (lopende genummerde alinea's) gewoon gelden — de
+  prompt maakt dit expliciet conditioneel, anders zou "vertaal niet" (voor de verbatim-eis)
+  in de weg staan van de vertaaltabel die de gebruiker net daar wél wil. De `Instantie`-
+  YAML-lijst is uitgebreid met de Duitse federale gerechten (BGH, BVerfG, BVerwG, BFH, BAG,
+  BSG, BPatG); bij toekomstige landen (BE/FR/AT/ES) moeten hun gerechten er ook bij, anders
+  kan het model geen geldige waarde uit de gesloten lijst kiezen.
 - **Afkapping wordt niet stilletjes geaccepteerd.** Zowel `clean_chunk()` als
   `stream_chunk()` controleren `choice["finish_reason"]`; is die `"length"`, dan gooien ze
   een `ConversionError` in plaats van de afgekapte tekst terug te geven. Dit was een echte,
