@@ -387,11 +387,36 @@ document zelf stonden en uit elkaar liepen bij het wisselen van tabblad.
 
 ## Designsysteem (`static/app.css`)
 
-De opmaak volgt **Radix Themes**, met de hand in platte CSS (geen React/npm). De
-12-stapsschalen van `@radix-ui/colors` staan letterlijk in `:root`, met de vaste
-betekenis per stap: 1 paginablad · 2 subtiel blad · 3 vulling · 4 hover ·
-5 actief · 6 zachte rand · 7 rand/ring · 8 hover-rand **en de focusring** ·
-9 volvlak · 10 volvlak-hover · 11 secundaire tekst · 12 primaire tekst.
+De opmaak is **"liquid glass"**: het navigatie-chrome (kop, tabbalk, dialoog,
+statusregel, opschoonpaneel, documentchips, sleepzone) is vertaald glas —
+`backdrop-filter` + een lichtrand boven + een zachte specular highlight —
+dat drijft over een zacht gekleurde achtergrondgloed (`body::before`, drie
+vaste `radial-gradient`-vlekken). Het onderliggende kleurenpalet blijft de
+12-stapsschaal van Radix Themes, met de hand in platte CSS (geen React/npm),
+met de vaste betekenis per stap: 1 paginablad · 2 subtiel blad · 3 vulling ·
+4 hover · 5 actief · 6 zachte rand · 7 rand/ring · 8 hover-rand **en de
+focusring** · 9 volvlak · 10 volvlak-hover · 11 secundaire tekst ·
+12 primaire tekst.
+
+**Glas versus vlak — nooit stapelen.** De `.glass`-klasse (blur + lichtrand +
+specular-`::before`) staat alleen op drijvend chrome dat direct op de gloed
+zit. Inhoudspanelen (`.card`, invoervelden, de editor) blijven bewust
+**ondoorzichtig**: twee doorzichtige lagen op elkaar (bv. een glazen knop
+binnen een al glazen dialoog) laat de leesbaarheid instorten — exact de
+reden dat knoppen zelf geen `backdrop-filter` hebben, alleen een niet-
+doorzichtige gradient-"sheen" (`.btn-solid::before`/`.btn-soft::before`) voor
+het glanzende effect zonder een tweede blur-laag.
+
+**De tabbalk is het enige echt "liquid" moment.** `.tabs-indicator` is een
+tweede, accent-getinte glazen pil die achter het actieve tabblad naar de
+juiste breedte/positie toe **vloeit** — met een klein beetje overshoot
+(`cubic-bezier(0.34, 1.56, 0.64, 1)`), bewust de enige plek met bounce.
+Overal elders is de beweging overshoot-vrij (`--ease-standard`), want
+overshoot op bv. een dialoog-intro leest als een fout, niet als vloeibaar.
+JS (`moveTabsIndicator()` in `app.js`) meet de `getBoundingClientRect()` van
+het geselecteerde tabblad en zet dat om in een `transform: translateX()` +
+`width` op de indicator — compositor-vriendelijk, werkt vanzelf mee bij elke
+schermbreedte.
 
 Dark/light volgt `prefers-color-scheme`; er is bewust **geen** knop. Drie dingen
 kantelen van betekenis tussen de modi — zonder die omkering leest het niet als Radix:
@@ -402,6 +427,13 @@ kantelen van betekenis tussen de modi — zonder die omkering leest het niet als
    translucent **zwart** (verzonken vlak).
 3. Stap 9 is identiek in beide modi, maar stap 10 beweegt tegengesteld (donkerder in
    licht, lichter in donker) — daardoor werkt "hover = stap 10" zonder conditionele CSS.
+
+**Toegankelijkheid is geen ander thema, maar dezelfde schakelaar.**
+`prefers-reduced-transparency: reduce` maakt elk `.glass`-element ondoorzichtig
+(geen blur, geen specular) en verbergt de achtergrondgloed helemaal — die
+bestaat immers alleen om door glas heen gezien te worden. `prefers-reduced-
+motion: reduce` zet alle transitie-/animatieduur op nagenoeg 0 (één globale
+regel), inclusief de vloeiende tabbalk-indicator.
 
 ## Prestaties — waar de winst zit (en waarom)
 - **Lui laden.** `import markitdown` kost honderden ms; die gebeurt nu pas bij de eerste

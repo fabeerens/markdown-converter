@@ -1,9 +1,17 @@
 /* ==========================================================================
-   Markdown converter — opmaak in de stijl van Radix Themes.
+   Markdown converter — "liquid glass"-opmaak, met de Radix-kleurschalen als
+   onderliggend palet.
 
-   Geen build-stap en geen React: dit zijn de echte kleurschalen, radii en
-   maten van Radix Themes, met de hand in platte CSS gezet. De 12-stapsschaal
-   heeft een vaste betekenis en die wordt hier consequent gevolgd:
+   Geen build-stap en geen React: dit is met de hand geschreven platte CSS.
+   De kleuren/maten komen uit Radix Themes (12-stapsschaal, vaste betekenis
+   per stap — zie hieronder), maar het materiaal zelf is niet vlak: het
+   navigatie-"chrome" (kop, tabbalk, dialoog, statusregel, documentchips,
+   sleepzone) is vertaald glas — `backdrop-filter`, een lichtrand boven en
+   een zachte specular highlight — dat over een zacht gekleurde achtergrond-
+   gloed (`body::before`) drijft. Inhoudspanelen (kaarten, invoervelden, de
+   editor) blijven bewust ondoorzichtig: nooit twee doorzichtige lagen op
+   elkaar stapelen (leesbaarheid + prestaties), en tekst-zware vlakken lezen
+   beter op een vast vlak dan door blur heen.
 
      1 paginablad · 2 subtiel blad · 3 vulling · 4 hover · 5 actief/geselecteerd
      6 zachte rand · 7 randen en 1px-ringen · 8 hover-rand + focusring
@@ -12,6 +20,8 @@
 
    Dark/light volgt de systeeminstelling via prefers-color-scheme; er is
    bewust geen knop, want de gebruiker heeft dat op OS-niveau al gekozen.
+   `prefers-reduced-transparency` maakt het glas ondoorzichtig; de gloed
+   verdwijnt dan ook (die bestaat alleen om door glas heen gezien te worden).
    ========================================================================== */
 
 /* --------------------------------------------------------------------------
@@ -69,11 +79,21 @@
               0 16px 64px var(--gray-a2), 0 16px 36px -20px var(--gray-a7);
   --card-ring: 0 0 0 1px var(--gray-a5);
 
+  /* Glas: een lichtrand bovenaan (het "licht dat op het materiaal valt"),
+     een dunne randlijn rondom, en een zachte drijf-schaduw. In licht is de
+     rand zelf donker (anders onzichtbaar op een lichte gloed); de bovenrand
+     blijft in beide standen wit-achtig, want die simuleert een lichtbron. */
+  --glass-tint: #ffffffb3;
+  --glass-rim-top: #ffffffcc;
+  --glass-rim-edge: #00000014;
+  --glass-specular: linear-gradient(135deg, #ffffff59, #ffffff00 45%);
+  --glass-shadow: 0 12px 40px -12px var(--gray-a7), 0 2px 8px -2px var(--black-a2);
+
   /* Maatvoering */
   --space-1: 4px;  --space-2: 8px;  --space-3: 12px; --space-4: 16px;
   --space-5: 24px; --space-6: 32px; --space-7: 40px; --space-8: 48px;
-  --radius-1: 3px; --radius-2: 4px; --radius-3: 6px; --radius-4: 8px;
-  --radius-5: 12px;
+  --radius-1: 3px; --radius-2: 8px; --radius-3: 10px; --radius-4: 20px;
+  --radius-5: 28px; --radius-pill: 999px;
 
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     "Helvetica Neue", system-ui, sans-serif, "Apple Color Emoji";
@@ -89,6 +109,14 @@
      gegarandeerd identiek meet aan het tekstvak. */
   --editor-font: 13px/1.6 var(--font-mono);
   --editor-padding: 16px;
+
+  /* Eén bewegingstaal voor de hele app: een "critically damped"-achtige
+     ease-out (geen overshoot — past bij statische UI, geen sleep/flick-
+     gebaren) en twee tijden: kort voor knop-feedback, iets langer voor
+     panelen die in/uit beeld komen. */
+  --ease-standard: cubic-bezier(0.32, 0.72, 0, 1);
+  --dur-fast: 120ms;
+  --dur-standard: 220ms;
 }
 
 /* --------------------------------------------------------------------------
@@ -138,6 +166,16 @@
     --shadow-6: 0 0 0 1px var(--gray-a6), 0 12px 60px var(--black-a3),
                 0 16px 64px var(--black-a2);
     --card-ring: 0 0 0 1px var(--gray-a6);
+
+    /* In donker is het glas zelf een licht-getint, doorschijnend vlak op een
+       donkere gloed — de bovenrand blijft wit-achtig (lichtbron-highlight),
+       de ronde rand wordt licht i.p.v. donker, anders verdwijnt hij tegen de
+       donkere achtergrond. */
+    --glass-tint: #ffffff14;
+    --glass-rim-top: #ffffff40;
+    --glass-rim-edge: #ffffff1a;
+    --glass-specular: linear-gradient(135deg, #ffffff21, #ffffff00 45%);
+    --glass-shadow: 0 12px 40px -12px #00000080, 0 2px 10px -2px #00000066;
   }
 }
 
@@ -152,6 +190,50 @@ body {
   color: var(--text);
   font: var(--fw-regular) var(--fs-3)/var(--lh-3) var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  position: relative;
+}
+
+/* De gloed waar het glas doorheen kijkt. Vast (blijft staan tijdens scrollen,
+   zodat het glas dat erover drijft altijd iets te vertalen heeft), ver
+   achter alle inhoud, en zacht genoeg om nooit met tekst te concurreren. */
+body::before {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(560px 420px at 8% -6%, var(--accent-a5), transparent 60%),
+    radial-gradient(520px 420px at 96% 8%, var(--green-a6), transparent 60%),
+    radial-gradient(640px 520px at 50% 108%, var(--accent-a4), transparent 65%);
+}
+@media (prefers-reduced-transparency: reduce) { body::before { display: none; } }
+
+/* --------------------------------------------------------------------------
+   Glas: gedeelde basis voor drijvend chrome (kop, tabbalk, dialoog,
+   statusregel, opschoonpaneel, documentchips, sleepzone). Nooit op
+   inhoudspanelen (kaart, invoerveld, editor) — dat zou twee doorzichtige
+   lagen stapelen, en tekst leest slechter door blur heen.
+   -------------------------------------------------------------------------- */
+.glass {
+  position: relative; overflow: hidden;
+  background: color-mix(in srgb, var(--panel) 62%, var(--glass-tint) 38%);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  box-shadow:
+    inset 0 1px 0 0 var(--glass-rim-top),
+    inset 0 0 0 1px var(--glass-rim-edge),
+    var(--glass-shadow);
+}
+/* De specular highlight: licht dat schuin op het glas valt. Geknipt op de
+   vorm van het element (overflow op de host), dus altijd op `border-radius:
+   inherit` en los van de eigen padding/inhoud. */
+.glass::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit;
+  background: var(--glass-specular);
+  pointer-events: none; mix-blend-mode: overlay;
+}
+@media (prefers-reduced-transparency: reduce) {
+  .glass {
+    background: var(--panel); backdrop-filter: none; -webkit-backdrop-filter: none;
+  }
+  .glass::before { display: none; }
 }
 
 /* Het hidden-attribuut moet altijd winnen. De UA-stijl ([hidden] → display:none)
@@ -165,6 +247,17 @@ body {
 :focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 :focus:not(:focus-visible) { outline: none; }
 
+/* Reduced motion/transparency: minder beweging, geen doorzichtigheid — niet
+   géén feedback. Vervangt schaal/verschuiving door een korte fade en zet
+   vertaalde panelen terug naar een ondoorzichtig vlak. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important; animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important; scroll-behavior: auto !important;
+  }
+  .dialog, .status, .clean-panel, .tabs-indicator { transform: none !important; }
+}
+
 .wrap { max-width: 1040px; margin: 0 auto; padding: var(--space-5) var(--space-4) var(--space-8); }
 .visually-hidden {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
@@ -176,13 +269,18 @@ body {
    -------------------------------------------------------------------------- */
 .app-header {
   display: flex; align-items: center; gap: var(--space-3);
-  max-width: 1040px; margin: 0 auto;
-  padding: var(--space-5) var(--space-4) 0;
+  /* Zelfde effectieve breedte als de inhoud in `.wrap` (1040px minus diens
+     eigen zijpadding), zodat de glasrand van de kop precies boven de rand
+     van de kaarten eronder drijft in plaats van erover heen te hangen. */
+  max-width: calc(1040px - 2 * var(--space-4));
+  margin: var(--space-5) auto 0;
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-5);
 }
 .app-header .titles { flex: 1; min-width: 0; }
 .app-header h1 {
   margin: 0; font-size: var(--fs-6); line-height: var(--lh-6);
-  font-weight: var(--fw-bold); letter-spacing: -0.00625em;
+  font-weight: var(--fw-bold); letter-spacing: -0.02em;
 }
 .app-header p {
   margin: var(--space-1) 0 0; color: var(--muted);
@@ -194,14 +292,30 @@ body {
    -------------------------------------------------------------------------- */
 .btn {
   display: inline-flex; align-items: center; justify-content: center;
-  gap: var(--space-2); flex-shrink: 0;
-  height: var(--space-6); padding: 0 var(--space-3);
-  border: 0; border-radius: var(--radius-2);
+  gap: var(--space-2); flex-shrink: 0; position: relative; overflow: hidden;
+  height: var(--space-6); padding: 0 var(--space-4);
+  border: 0; border-radius: var(--radius-pill);
   font: var(--fw-medium) var(--fs-2)/1 var(--font-sans);
   cursor: pointer; user-select: none;
-  transition: background-color 80ms, box-shadow 80ms, color 80ms;
+  transition: background-color var(--dur-fast) var(--ease-standard),
+              box-shadow var(--dur-fast) var(--ease-standard),
+              color var(--dur-fast) var(--ease-standard),
+              transform var(--dur-fast) var(--ease-standard);
+}
+/* Glanzend, geen glas: knoppen zitten al binnen kaarten/dialogen die zelf
+   het enige doorzichtige laagje zijn — een tweede blur erbovenop zou
+   stapelen. Dit is puur een gradient-sheen, en alleen op knoppen met een
+   echt vlak (solid/soft) — een ghost/outline/dashed-knop heeft geen vulling
+   voor het licht om op te vangen. */
+.btn-solid::before, .btn-soft::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit;
+  background: linear-gradient(180deg, #ffffff3d, #ffffff00 55%);
+  pointer-events: none; mix-blend-mode: overlay;
 }
 .btn:disabled { cursor: not-allowed; opacity: 1; }
+/* Feedback op indrukken, niet pas bij loslaten — en continu tijdens de klik,
+   niet alleen erna. */
+.btn:not(:disabled):active { transform: scale(.97); }
 
 .btn-solid { background: var(--accent); color: var(--accent-contrast); }
 .btn-solid:hover:not(:disabled) { background: var(--accent-hover); }
@@ -230,32 +344,43 @@ body {
 .btn-dashed {
   background: transparent; color: var(--muted);
   box-shadow: inset 0 0 0 1px var(--border-subtle);
-  border-radius: var(--radius-2);
 }
 .btn-dashed:hover:not(:disabled) { color: var(--text); box-shadow: inset 0 0 0 1px var(--accent-a7); }
 
 /* --------------------------------------------------------------------------
    Brontabs — een tablist met onderliggende indicator (stap 9)
    -------------------------------------------------------------------------- */
+/* Segmented control: een glazen pil met daarbinnen een tweede, getinte
+   glazen pil (".tabs-indicator") die naar het actieve tabblad toe vloeit —
+   het meest "liquid" moment in de hele opmaak. */
 .tabs {
-  display: flex; gap: var(--space-1);
-  box-shadow: inset 0 -1px 0 0 var(--gray-a6);
+  display: flex; gap: 2px; padding: 3px;
+  border-radius: var(--radius-pill);
   margin-bottom: var(--space-5);
 }
+.tabs-indicator {
+  position: absolute; top: 3px; left: 0; bottom: 3px; z-index: 0;
+  width: 0; border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--accent-9) 22%, var(--glass-tint) 78%);
+  box-shadow: inset 0 1px 0 0 var(--glass-rim-top), inset 0 0 0 1px var(--accent-a6);
+  /* Een klein beetje overshoot bij het verschuiven — dit ís de vloeibare
+     beweging; elders in de app blijft alles bewust overshoot-vrij. */
+  transition: transform 420ms cubic-bezier(0.34, 1.56, 0.64, 1),
+              width 420ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
 .tab {
-  position: relative; flex: 1;
+  position: relative; z-index: 1; flex: 1;
   height: var(--space-7); padding: 0 var(--space-3);
   display: inline-flex; align-items: center; justify-content: center;
   background: none; border: 0; cursor: pointer;
   color: var(--muted); font: var(--fw-medium) var(--fs-2)/1 var(--font-sans);
-  border-radius: var(--radius-2) var(--radius-2) 0 0;
+  border-radius: var(--radius-pill);
+  transition: color var(--dur-fast) var(--ease-standard),
+              transform var(--dur-fast) var(--ease-standard);
 }
-.tab:hover { color: var(--text); background: var(--gray-a3); }
+.tab:hover { color: var(--text); }
+.tab:active { transform: scale(.97); }
 .tab[aria-selected="true"] { color: var(--text); font-weight: var(--fw-bold); }
-.tab[aria-selected="true"]::after {
-  content: ""; position: absolute; inset-inline: 0; bottom: 0;
-  height: 2px; background: var(--accent-9);
-}
 
 /* --------------------------------------------------------------------------
    Panelen en kaarten
@@ -337,7 +462,8 @@ body {
   background: var(--surface);
   box-shadow: inset 0 0 0 1px var(--border);
   cursor: pointer;
-  transition: background-color 80ms, box-shadow 80ms;
+  transition: background-color var(--dur-fast) var(--ease-standard),
+              box-shadow var(--dur-fast) var(--ease-standard);
 }
 .checkbox input:hover { box-shadow: inset 0 0 0 1px var(--gray-a8); }
 .checkbox input:checked {
@@ -361,7 +487,14 @@ body {
   border-radius: var(--radius-4);
   font-size: var(--fs-2); line-height: var(--lh-2);
 }
-.status.show { display: flex; }
+/* Keyframes i.p.v. een transition: een transition kan niet animeren vanaf
+   `display:none`, een animation begint gewoon opnieuw zodra de klasse (en
+   daarmee de flex-weergave) verschijnt. */
+.status.show { display: flex; animation: panel-in var(--dur-standard) var(--ease-standard); }
+@keyframes panel-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 .status.info { background: var(--accent-a3); color: var(--accent-text); }
 .status.ok { background: var(--green-a3); color: var(--green-a11); }
 .status.err { background: var(--red-a3); color: var(--red-a11); }
@@ -385,14 +518,18 @@ body {
 .doc-tab {
   display: inline-flex; align-items: center; gap: var(--space-1);
   max-width: 260px; height: var(--space-6); padding: 0 var(--space-1) 0 var(--space-3);
-  background: var(--gray-a3); border: 0; border-radius: var(--radius-2);
+  border: 0; border-radius: var(--radius-pill);
   color: var(--muted); font: var(--fw-medium) var(--fs-2)/1 var(--font-sans);
   cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-standard),
+              transform var(--dur-fast) var(--ease-standard);
 }
-.doc-tab:hover { background: var(--gray-a4); color: var(--text); }
+.doc-tab:hover { color: var(--text); }
+.doc-tab:active { transform: scale(.97); }
 .doc-tab[aria-current="true"] {
-  background: var(--accent-a3); color: var(--accent-text);
-  box-shadow: inset 0 0 0 1px var(--accent-a6);
+  background: color-mix(in srgb, var(--accent-9) 22%, var(--glass-tint) 78%);
+  color: var(--accent-text);
+  box-shadow: inset 0 1px 0 0 var(--glass-rim-top), inset 0 0 0 1px var(--accent-a6);
 }
 .doc-tab .label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .doc-tab .close {
@@ -415,11 +552,12 @@ body {
   display: none; align-items: center; gap: var(--space-4); flex-wrap: wrap;
   margin-bottom: var(--space-3);
   padding: var(--space-3) var(--space-4);
-  background: var(--accent-a2);
-  box-shadow: inset 0 0 0 1px var(--accent-a6);
+  /* Licht getint glas (accentkleur) i.p.v. neutraal — dit paneel is altijd
+     AI-opschoning, dus mag er als zodanig uitzien. */
+  background: color-mix(in srgb, var(--accent-9) 10%, var(--glass-tint) 90%);
   border-radius: var(--radius-4);
 }
-.clean-panel.show { display: flex; }
+.clean-panel.show { display: flex; animation: panel-in var(--dur-standard) var(--ease-standard); }
 .clean-info { flex: 1 1 260px; min-width: 0; }
 .clean-info strong {
   display: block; font-size: var(--fs-2); line-height: var(--lh-2);
@@ -446,6 +584,7 @@ body {
 .out-bar .src {
   flex: 1 1 auto; min-width: 0; margin-right: auto;
   color: var(--muted); font-size: var(--fs-1); line-height: var(--lh-2);
+  letter-spacing: .01em;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
@@ -506,14 +645,17 @@ body {
 .drop {
   display: flex; flex-direction: column; align-items: center; gap: var(--space-1);
   padding: var(--space-8) var(--space-4);
-  background: var(--gray-a2);
   border-radius: var(--radius-4);
-  box-shadow: inset 0 0 0 1px var(--border-subtle);
   cursor: pointer; text-align: center;
-  transition: background-color 100ms, box-shadow 100ms;
+  transition: background-color var(--dur-fast) var(--ease-standard),
+              box-shadow var(--dur-fast) var(--ease-standard);
 }
-.drop:hover { background: var(--gray-a3); }
-.drop.over { background: var(--accent-a3); box-shadow: inset 0 0 0 2px var(--accent-8); }
+.drop:hover { background: color-mix(in srgb, var(--panel) 50%, var(--glass-tint) 50%); }
+.drop.over {
+  background: color-mix(in srgb, var(--accent-9) 16%, var(--glass-tint) 84%);
+  box-shadow: inset 0 1px 0 0 var(--glass-rim-top), inset 0 0 0 1px var(--accent-a6),
+              inset 0 0 0 2px var(--accent-8), var(--glass-shadow);
+}
 .drop strong { font-size: var(--fs-2); font-weight: var(--fw-medium); }
 .drop span { color: var(--muted); font-size: var(--fs-1); line-height: var(--lh-2); }
 .or {
@@ -532,15 +674,26 @@ body {
   background: var(--overlay);
   overflow-y: auto;
 }
-.overlay.show { display: flex; }
+.overlay.show { display: flex; animation: overlay-in var(--dur-standard) var(--ease-standard); }
+@keyframes overlay-in { from { opacity: 0; } to { opacity: 1; } }
 .dialog {
   width: 100%; max-width: 680px;
-  background: var(--panel);
+  /* Glas (achtergrond/blur/rand/specular) komt van .glass; hier alleen wat
+     dialoogspecifiek is: maat, binnenruimte en het ankerpunt voor de
+     intro-animatie (boven, waar hij ook vandaan "komt"). */
   border-radius: var(--radius-5);
-  box-shadow: var(--shadow-6);
   padding: var(--space-5);
+  transform-origin: top center;
 }
-.dialog h2 { margin: 0; font-size: var(--fs-5); line-height: var(--lh-5); font-weight: var(--fw-bold); }
+.overlay.show .dialog { animation: dialog-in var(--dur-standard) var(--ease-standard); }
+@keyframes dialog-in {
+  from { opacity: 0; transform: scale(.96) translateY(-6px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.dialog h2 {
+  margin: 0; font-size: var(--fs-5); line-height: var(--lh-5);
+  font-weight: var(--fw-bold); letter-spacing: -0.012em;
+}
 .dialog .sub {
   margin: var(--space-1) 0 var(--space-5);
   color: var(--muted); font-size: var(--fs-2); line-height: var(--lh-2);
@@ -581,12 +734,12 @@ body {
 .dialog-actions .msg { margin-right: auto; font-size: var(--fs-2); }
 .dialog-actions .msg.ok { color: var(--green-a11); }
 .dialog-actions .msg.err { color: var(--red-a11); }
-.unit { color: var(--muted); font-size: var(--fs-1); }
+.unit { color: var(--muted); font-size: var(--fs-1); letter-spacing: .01em; }
 
 .app-footer {
   max-width: 1040px; margin: 0 auto;
   padding: 0 var(--space-4) var(--space-6);
-  color: var(--gray-9); font-size: var(--fs-1); text-align: center;
+  color: var(--gray-9); font-size: var(--fs-1); letter-spacing: .01em; text-align: center;
 }
 
 /* --------------------------------------------------------------------------

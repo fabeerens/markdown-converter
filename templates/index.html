@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
 </head>
 <body>
-  <header class="app-header">
+  <header class="app-header glass">
     <div class="titles">
       <h1>Markdown converter</h1>
       <p>Zet jurisprudentie, wetgeving of documenten om naar markdown.</p>
@@ -17,7 +17,8 @@
   </header>
 
   <main class="wrap">
-    <div class="tabs" role="tablist" aria-label="Bron kiezen">
+    <div class="tabs glass" role="tablist" aria-label="Bron kiezen">
+      <span class="tabs-indicator" id="tabs-indicator" aria-hidden="true"></span>
       <button type="button" class="tab" role="tab" data-tab="jur"
               aria-selected="true" aria-controls="pane-jur">Jurisprudentie</button>
       <button type="button" class="tab" role="tab" data-tab="wet"
@@ -64,7 +65,7 @@
     <!-- Documentupload -->
     <section class="pane" data-pane="doc" id="pane-doc" role="tabpanel" aria-label="Documentupload" hidden>
       <div class="card">
-        <div class="drop" id="drop" role="button" tabindex="0"
+        <div class="drop glass" id="drop" role="button" tabindex="0"
              aria-label="Bestanden kiezen of hierheen slepen">
           <strong>Sleep bestanden hierheen</strong>
           <span>of klik om te bladeren — meerdere tegelijk kan</span>
@@ -86,13 +87,13 @@
       </p>
     </section>
 
-    <div class="status" id="status" role="status" aria-live="polite"></div>
+    <div class="status glass" id="status" role="status" aria-live="polite"></div>
 
     <!-- Uitvoer -->
     <section id="output" aria-label="Resultaat" hidden>
       <div class="doc-tabs" id="doc-tabs" aria-label="Opgehaalde documenten" hidden></div>
 
-      <div class="clean-panel" id="clean-panel">
+      <div class="clean-panel glass" id="clean-panel">
         <div class="clean-info">
           <strong id="clean-title">Opschonen met AI</strong>
           <span class="est" id="estimate">Koppen naar markdown, losse regels samenvoegen, kop-/voetteksten verwijderen.</span>
@@ -124,7 +125,7 @@
 
   <!-- Instellingen -->
   <div class="overlay" id="settings" role="dialog" aria-modal="true" aria-labelledby="settings-title">
-    <div class="dialog">
+    <div class="dialog glass">
       <div style="display:flex;align-items:flex-start;gap:12px">
         <div style="flex:1">
           <h2 id="settings-title">Instellingen</h2>

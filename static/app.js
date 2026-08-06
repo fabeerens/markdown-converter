@@ -143,14 +143,30 @@ const postJSON = (url, body) =>
    -------------------------------------------------------------------------- */
 
 function renderTabs() {
+  let selectedTab = null;
   $$(".tab").forEach((tab) => {
     const selected = tab.dataset.tab === state.tab;
     tab.setAttribute("aria-selected", String(selected));
     tab.tabIndex = selected ? 0 : -1;
+    if (selected) selectedTab = tab;
   });
   $$(".pane").forEach((pane) => {
     pane.hidden = pane.dataset.pane !== state.tab;
   });
+  moveTabsIndicator(selectedTab);
+}
+
+// De glazen indicator vloeit naar het actieve tabblad toe (transform, geen
+// left/top — dat blijft compositor-vriendelijk). Berekend uit de eigen
+// afmetingen van het tabblad, dus werkt bij elke schermbreedte vanzelf mee.
+function moveTabsIndicator(selectedTab) {
+  const indicator = $("#tabs-indicator");
+  const container = $(".tabs");
+  if (!indicator || !container || !selectedTab) return;
+  const cRect = container.getBoundingClientRect();
+  const tRect = selectedTab.getBoundingClientRect();
+  indicator.style.width = `${tRect.width}px`;
+  indicator.style.transform = `translateX(${tRect.left - cRect.left}px)`;
 }
 
 function initTabs() {
@@ -175,6 +191,11 @@ function initTabs() {
     });
   });
   renderTabs();
+  // Lettertype/lay-out kan na de eerste render nog verschuiven (webfont,
+  // scrollbar); positioneer de indicator dan één keer opnieuw. Bij een
+  // schermbreedte-wijziging (bv. device-rotatie) idem.
+  window.addEventListener("load", () => renderTabs());
+  window.addEventListener("resize", () => renderTabs());
 }
 
 /* --------------------------------------------------------------------------
@@ -384,7 +405,7 @@ function renderDocTabs() {
   wrap.replaceChildren(
     ...state.docs.map((doc) => {
       const tab = document.createElement("div");
-      tab.className = "doc-tab";
+      tab.className = "doc-tab glass";
       tab.setAttribute("aria-current", String(doc.id === state.activeId));
 
       const label = document.createElement("button");
