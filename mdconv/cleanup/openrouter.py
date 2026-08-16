@@ -207,6 +207,11 @@ def stream_chunk(chunk: str, *, model: str, system: str, profile: str) -> Iterat
         )
 
     piece = None
+    # OpenRouter streamt als text/event-stream zonder expliciete charset; requests
+    # valt dan voor text/* terug op ISO-8859-1 (HTTP-standaard). De SSE-payload is
+    # echter UTF-8 (JSON met daarin de brontekst), dus zonder deze correctie worden
+    # bytes als 0xE2 0x80 0x98 ('U+2018') als latin-1 gelezen → mojibake ('â€˜').
+    resp.encoding = "utf-8"
     for line in resp.iter_lines(decode_unicode=True):
         if not line or not line.startswith("data:"):
             continue
