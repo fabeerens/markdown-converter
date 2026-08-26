@@ -18,7 +18,7 @@ const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
    -------------------------------------------------------------------------- */
 
 const state = {
-  /** Welk bron-tabblad actief is: "jur" | "wet" | "doc". */
+  /** Welk bron-tabblad actief is: "jur" | "wet" | "doc" | "tekst". */
   tab: "jur",
   /** Is er een OpenRouter-sleutel? Bepaalt of het opschoonpaneel zin heeft. */
   llmAvailable: false,
@@ -375,6 +375,36 @@ async function uploadFiles(fileList) {
       addDoc({ title: base, filenameBase: base, ...data });
     },
     "geconverteerd"
+  );
+}
+
+/* --------------------------------------------------------------------------
+   Tekst plakken — één contenteditable vak i.p.v. herhaalbare rijen: de
+   gebruiker plakt of typt hier zelf, dus een batch van meerdere rijen past
+   niet bij deze invoervorm. `innerHTML` (verrijkt) én `innerText` (kaal)
+   gaan beide mee; de server kiest welke bruikbaar is.
+   -------------------------------------------------------------------------- */
+
+async function fetchPastedText() {
+  const el = $("#paste-area");
+  const html = el.innerHTML.trim();
+  const text = el.innerText.trim();
+  if (!html && !text) {
+    setStatus("Plak eerst tekst in het vak.", "err");
+    return;
+  }
+  await withBusyButton($("#fetch-tekst"), () =>
+    runBatch(
+      [{ html, text }],
+      () => "geplakte tekst",
+      async (item) => {
+        const data = await postJSON("/api/convert/text", item);
+        const name = deriveName(item.text);
+        addDoc({ title: name, filenameBase: name, ...data });
+        el.innerHTML = "";
+      },
+      "opgemaakt"
+    )
   );
 }
 
@@ -917,6 +947,11 @@ function init() {
   $("#fetch-jur").addEventListener("click", () => fetchLinks("jur"));
   $("#fetch-wet").addEventListener("click", () => fetchLinks("wet"));
   $("#fetch-doc").addEventListener("click", fetchFileUrls);
+  $("#fetch-tekst").addEventListener("click", fetchPastedText);
+  $("#clear-tekst").addEventListener("click", () => {
+    $("#paste-area").innerHTML = "";
+    $("#paste-area").focus();
+  });
 
   $("#clean").addEventListener("click", cleanActiveDoc);
   $("#copy").addEventListener("click", copyActive);

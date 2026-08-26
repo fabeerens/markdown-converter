@@ -22,6 +22,7 @@ from . import (
     formex,
     fr_conseil_constitutionnel,
     hudoc,
+    pasted_text,
     rechtspraak,
     wetten,
 )
@@ -142,6 +143,16 @@ def from_file_bytes(data: bytes, filename: str, label: str) -> Document:
     doc = from_file(data, filename)
     engine = doc.source.split(" • ", 1)[0]
     return Document(markdown=doc.markdown, source=f"{engine} • {label}", kind=doc.kind)
+
+
+# --------------------------------------------------------------------------
+# Handmatig geplakte tekst
+# --------------------------------------------------------------------------
+
+def from_pasted_text(html: str | None, text: str | None) -> Document:
+    """Zet handmatig geplakte tekst (kaal of verrijkt) om naar een document."""
+    markdown, note = pasted_text.convert(html, text)
+    return Document(markdown=markdown, source=note, kind=kind_for_source(note))
 
 
 # --------------------------------------------------------------------------

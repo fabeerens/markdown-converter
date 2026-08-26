@@ -25,6 +25,8 @@
               aria-selected="false" aria-controls="pane-wet">Wetgeving</button>
       <button type="button" class="tab" role="tab" data-tab="doc"
               aria-selected="false" aria-controls="pane-doc">Documentupload</button>
+      <button type="button" class="tab" role="tab" data-tab="tekst"
+              aria-selected="false" aria-controls="pane-tekst">Tekst plakken</button>
     </div>
 
     <!-- Jurisprudentie -->
@@ -84,6 +86,25 @@
         PDF's gaan via <strong>pdf-inspector</strong> (layout-bewust: koppen, lijsten en
         tabellen). Heeft een PDF geen tekstlaag, bijvoorbeeld een scan, dan valt de conversie
         terug op MarkItDown. Alle overige formaten gaan altijd via MarkItDown.
+      </p>
+    </section>
+
+    <!-- Tekst plakken -->
+    <section class="pane" data-pane="tekst" id="pane-tekst" role="tabpanel" aria-label="Tekst plakken" hidden>
+      <div class="card">
+        <div class="paste-area" id="paste-area" contenteditable="true"
+             role="textbox" aria-multiline="true" aria-label="Plak hier tekst"
+             data-placeholder="Plak hier tekst — kaal of verrijkt (bv. uit Word, een PDF-viewer of een webpagina)…"></div>
+        <div class="row-actions">
+          <button type="button" class="btn btn-ghost" id="clear-tekst">Wissen</button>
+          <button type="button" class="btn btn-solid btn-lg" id="fetch-tekst">Opmaken</button>
+        </div>
+      </div>
+      <p class="hint">
+        Plak <strong>kale tekst</strong> (bv. uit een PDF-viewer) of <strong>verrijkte tekst</strong>
+        met koppen, vetgedrukt of lijsten (bv. uit Word of een webpagina) — opmaak uit het
+        klembord wordt zo veel mogelijk overgenomen. Staat er een ECLI in de tekst, dan wordt
+        die herkend als rechtspraak (met de Obsidian-optie erbij).
       </p>
     </section>
 

@@ -102,6 +102,17 @@ def convert_link():
     return jsonify(sources.from_link(query, lang).as_json())
 
 
+@bp.post("/api/convert/text")
+def convert_text():
+    """Handmatig geplakte tekst (kaal of verrijkt) omzetten."""
+    data = _payload()
+    html = data.get("html") or ""
+    text = data.get("text") or ""
+    if not html.strip() and not text.strip():
+        raise ConversionError("Plak eerst tekst in het vak.")
+    return jsonify(sources.from_pasted_text(html, text).as_json())
+
+
 @bp.post("/api/convert/file")
 def convert_file():
     """Een geüpload bestand omzetten."""

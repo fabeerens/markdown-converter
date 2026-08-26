@@ -4,11 +4,14 @@ Lokale web-tool (Python/Flask) die jurisprudentie, wetgeving en documenten omzet
 Markdown, met optionele AI-opschoning. Draait volledig lokaal op de Mac van de gebruiker.
 De projectmap heet nog "EUR-lex naar md" (historisch); de tool zelf heet "Markdown converter".
 
-De UI heeft drie tabbladen: **Jurisprudentie** (HvJ EU / EHRM / NL via ECLI of link),
-**Wetgeving** (EU via CELEX/ELI/link, NL via wetten.overheid.nl/BWB) en **Documentupload**
-(bestand(en) slepen óf link(s) naar een bestand plakken). Tabs 1 en 2 posten beide naar
-`/api/convert/link` (auto-detectie); tab 3 naar `/api/convert/file` of `/api/convert/file-url`.
-Elk tabblad ondersteunt **meerdere documenten tegelijk** (zie "Meerdere documenten" hieronder).
+De UI heeft vier tabbladen: **Jurisprudentie** (HvJ EU / EHRM / NL via ECLI of link),
+**Wetgeving** (EU via CELEX/ELI/link, NL via wetten.overheid.nl/BWB), **Documentupload**
+(bestand(en) slepen óf link(s) naar een bestand plakken) en **Tekst plakken** (kale of
+verrijkte tekst rechtstreeks in een `contenteditable`-vak plakken/typen). Tabs 1 en 2
+posten beide naar `/api/convert/link` (auto-detectie); tab 3 naar `/api/convert/file` of
+`/api/convert/file-url`; tab 4 naar `/api/convert/text`. Tabs 1–3 ondersteunen **meerdere
+documenten tegelijk** (zie "Meerdere documenten" hieronder); tab 4 is één plakvak per keer
+— een batch van tekstvakken past niet bij hoe je knipt-en-plakt.
 
 ## Starten
 
@@ -40,6 +43,7 @@ mdconv/
     wetten.py              BWB/wetten.overheid.nl portal-HTML → markdown
     formex.py              Formex-XML → markdown (context expliciet, dus thread-safe)
     files.py               PDF via pdf-inspector, rest via MarkItDown (beide lui geladen)
+    pasted_text.py         handmatig geplakte tekst (kaal of verrijkte HTML) → markdown
   cleanup/
     __init__.py            publieke ingangen: estimate() en clean()
     config.py              standaarden + instellingen (modellen/deelgrootte/prompts)
@@ -223,6 +227,20 @@ accountregistratie namens de gebruiker):
   pdf-inspector kent alleen PDF. `files.convert()` geeft `(markdown, engine)`
   terug zodat de UI kan tonen welke engine het document daadwerkelijk verwerkte
   (`"pdf-inspector"` of `"MarkItDown"` in het bronveld).
+- **Tekst plakken** (`pasted_text.py`, endpoint `/api/convert/text`): de front-end stuurt
+  zowel `html` (`element.innerHTML` van het `contenteditable`-vak, dus de klembord-opmaak
+  zoals de browser die bij plakken invoegt) als `text` (`element.innerText`, kaal) mee.
+  `_has_structure()` beslist welke wordt gebruikt: alleen als de HTML échte structuurtags
+  bevat (koppen, lijsten, tabellen, nadruk, `<br>`) is ze de moeite waard — anders is de kale
+  tekst betrouwbaarder. **Waarom niet altijd de HTML gebruiken**: sommige plak-bronnen leveren
+  voor kale tekst een klembord-HTML die niet meer is dan één `<span>`/`<div>` om de hele tekst
+  heen, met regeleindes als kale `\n`-tekens i.p.v. `<br>`/`<p>` — `markdownify` normaliseert
+  witruimte binnen zo'n inline-element en zou dan de eigen regelindeling van de gebruiker
+  laten verdwijnen. Bevat de geplakte tekst een ECLI, dan komt die in de bronvermelding
+  terecht (`"Geplakte tekst • ECLI:…"`) zodat `kind_for_source()` — dat al op ECLI-patronen in
+  de bronvermelding matcht — dit automatisch als rechtspraak herkent (met de Obsidian-optie).
+  Dit tabblad heeft geen herhaalbare rijen zoals de andere drie: één `contenteditable`-vak,
+  één document per klik op "Opmaken".
 
 ## AI-opschoning (`mdconv/cleanup/`)
 

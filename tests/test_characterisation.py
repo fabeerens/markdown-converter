@@ -1110,6 +1110,81 @@ def test_editor_mirror_and_textarea_share_one_font_and_padding():
         assert "var(--editor-padding)" in body, f"{block} gebruikt niet --editor-padding"
 
 
+def test_pasted_text_uses_plain_text_when_html_has_no_structure():
+    from mdconv.sources import pasted_text as pt
+
+    md, source = pt.convert("<span>Regel 1\nRegel 2</span>", "Regel 1\nRegel 2")
+    assert md == "Regel 1\nRegel 2\n"
+    assert source == "Geplakte tekst"
+
+
+def test_pasted_text_uses_html_when_it_has_real_structure():
+    from mdconv.sources import pasted_text as pt
+
+    html = "<h2>Kop</h2><p>Een <strong>vette</strong> alinea.</p><ul><li>Punt 1</li></ul>"
+    md, _ = pt.convert(html, "Kop\nEen vette alinea.\nPunt 1")
+    assert "## Kop" in md
+    assert "**vette**" in md
+    assert "- Punt 1" in md
+
+
+def test_pasted_text_falls_back_to_plain_text_when_html_is_empty_of_content():
+    from mdconv.sources import pasted_text as pt
+
+    md, _ = pt.convert("<p></p>", "De echte tekst staat hier.")
+    assert md == "De echte tekst staat hier.\n"
+
+
+def test_pasted_text_tags_source_with_a_found_ecli():
+    from mdconv.sources import pasted_text as pt
+
+    _, source = pt.convert(None, "Zie ECLI:NL:HR:2020:123 voor het oordeel.")
+    assert source == "Geplakte tekst • ECLI:NL:HR:2020:123"
+
+
+def test_pasted_text_rejects_empty_input():
+    from mdconv.sources import pasted_text as pt
+    from mdconv.errors import ConversionError
+
+    with pytest.raises(ConversionError, match="Plak eerst tekst"):
+        pt.convert("", "   ")
+
+
+def test_from_pasted_text_marks_ecli_content_as_caselaw():
+    from mdconv.sources import from_pasted_text
+
+    doc = from_pasted_text(None, "Overweging bij ECLI:NL:HR:2020:123.")
+    assert doc.kind == "caselaw"
+
+
+def test_from_pasted_text_defaults_to_document_kind():
+    from mdconv.sources import from_pasted_text
+
+    doc = from_pasted_text(None, "Zomaar een stuk tekst zonder ECLI.")
+    assert doc.kind == "document"
+
+
+def test_convert_text_endpoint_requires_content():
+    from mdconv import create_app
+
+    client = create_app().test_client()
+    r = client.post("/api/convert/text", json={"html": "", "text": ""})
+    assert r.status_code == 400
+    assert "Plak eerst tekst" in r.get_json()["error"]
+
+
+def test_convert_text_endpoint_converts_plain_text():
+    from mdconv import create_app
+
+    client = create_app().test_client()
+    r = client.post("/api/convert/text", json={"text": "Hallo wereld."})
+    assert r.status_code == 200
+    data = r.get_json()
+    assert data["markdown"] == "Hallo wereld.\n"
+    assert data["source"] == "Geplakte tekst"
+    assert data["kind"] == "document"
+
+
 def _minimal_text_pdf() -> bytes:
     """Een handgeschreven, geldige PDF met één tekstregel."""
     body = (
