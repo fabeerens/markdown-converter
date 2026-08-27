@@ -66,6 +66,7 @@ function addDoc({ title, filenameBase, source, kind, markdown, allowObsidian }) 
     model: $("#model").value || null,
     markdown,
     cleaned: false,
+    translated: false,
   };
   state.docs.push(doc);
   setActive(doc.id);
@@ -505,6 +506,10 @@ function renderEditor() {
   button.disabled = doc.cleaned;
   button.textContent = doc.cleaned ? "Opgeschoond ✓" : "Opschonen";
 
+  const translateButton = $("#translate-nl");
+  translateButton.disabled = doc.translated;
+  translateButton.textContent = doc.translated ? "Vertaald ✓" : "Vertalen naar het Nederlands";
+
   $("#clean-title").textContent =
     doc.obsidian ? "Opmaken voor Obsidian"
     : doc.kind === "caselaw" ? "Opschonen met AI — uitspraak-opmaak"
@@ -554,23 +559,29 @@ async function refreshEstimate() {
 // gemeld worden.
 const STREAM_ERROR_SENTINEL = "\x00CLEAN_ERROR\x00";
 
-async function cleanActiveDoc() {
-  const doc = activeDoc();
-  if (!doc || doc.cleaned) return;
+/**
+ * Kern van zowel "Opschonen" als "Vertalen naar het Nederlands": stream een
+ * `/api/clean/stream`-aanroep in het tekstvak en schrijf het resultaat terug
+ * naar het document. `guardField` voorkomt dubbel werk (bv. `cleaned` of
+ * `translated`) en is per actie apart, zodat opschonen en vertalen elkaar
+ * niet blokkeren — je kunt een document eerst vertalen én daarna nog
+ * opschonen, of andersom.
+ */
+async function runClean(doc, profile, { guardField, button, busyText, doneText, sourceSuffix, failMessage }) {
+  if (!doc || doc[guardField]) return;
   saveEdits();
 
   const docId = doc.id;
   const isLive = () => state.activeId === docId; // gebruiker kan tijdens het wachten wisselen
 
-  const button = $("#clean");
   button.disabled = true;
-  setStatus(`"${doc.title}" opschonen met AI… dit kan enkele minuten duren.`, "info", { busy: true });
+  setStatus(busyText, "info", { busy: true });
 
   try {
     const response = await fetch("/api/clean/stream", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ markdown: doc.markdown, profile: profileFor(doc), model: $("#model").value }),
+      body: JSON.stringify({ markdown: doc.markdown, profile, model: $("#model").value }),
     });
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));
@@ -592,7 +603,7 @@ async function cleanActiveDoc() {
       const errAt = text.indexOf(STREAM_ERROR_SENTINEL);
       if (errAt !== -1) {
         acc += text.slice(0, errAt);
-        throw new Error(text.slice(errAt + STREAM_ERROR_SENTINEL.length) || "AI-opschoning mislukt.");
+        throw new Error(text.slice(errAt + STREAM_ERROR_SENTINEL.length) || failMessage);
       }
       acc += text;
       if (isLive()) {
@@ -602,11 +613,11 @@ async function cleanActiveDoc() {
     }
 
     doc.markdown = acc.trim() + "\n";
-    doc.source += " • AI-opgeschoond";
-    doc.cleaned = true;
+    doc.source += sourceSuffix;
+    doc[guardField] = true;
     if (isLive()) renderEditor();
     renderDocTabs();
-    setStatus(`"${doc.title}" is opgeschoond.`, "ok");
+    setStatus(doneText, "ok");
   } catch (e) {
     setStatus(e.message, "err");
     if (isLive()) {
@@ -617,6 +628,32 @@ async function cleanActiveDoc() {
       button.disabled = false;
     }
   }
+}
+
+async function cleanActiveDoc() {
+  const doc = activeDoc();
+  if (!doc) return;
+  await runClean(doc, profileFor(doc), {
+    guardField: "cleaned",
+    button: $("#clean"),
+    busyText: `"${doc.title}" opschonen met AI… dit kan enkele minuten duren.`,
+    doneText: `"${doc.title}" is opgeschoond.`,
+    sourceSuffix: " • AI-opgeschoond",
+    failMessage: "AI-opschoning mislukt.",
+  });
+}
+
+async function translateActiveDoc() {
+  const doc = activeDoc();
+  if (!doc) return;
+  await runClean(doc, "translate_nl", {
+    guardField: "translated",
+    button: $("#translate-nl"),
+    busyText: `"${doc.title}" vertalen naar het Nederlands… dit kan enkele minuten duren.`,
+    doneText: `"${doc.title}" is vertaald naar het Nederlands.`,
+    sourceSuffix: " • vertaald naar NL",
+    failMessage: "Vertalen mislukt.",
+  });
 }
 
 /* --------------------------------------------------------------------------
@@ -808,6 +845,7 @@ async function openSettings() {
   $("#prompt-generic").value = s.prompts.generic;
   $("#prompt-caselaw").value = s.prompts.caselaw;
   $("#prompt-obsidian").value = s.prompts.obsidian;
+  $("#prompt-translate_nl").value = s.prompts.translate_nl;
   $("#settings-msg").textContent = "";
 
   dialog.lastFocus = document.activeElement;
@@ -858,6 +896,7 @@ async function saveSettings() {
         generic: $("#prompt-generic").value,
         caselaw: $("#prompt-caselaw").value,
         obsidian: $("#prompt-obsidian").value,
+        translate_nl: $("#prompt-translate_nl").value,
       },
     });
     await loadConfig();
@@ -903,6 +942,9 @@ function initSettings() {
     "reset-generic": () => { $("#prompt-generic").value = state.settings.defaults.prompts.generic; },
     "reset-caselaw": () => { $("#prompt-caselaw").value = state.settings.defaults.prompts.caselaw; },
     "reset-obsidian": () => { $("#prompt-obsidian").value = state.settings.defaults.prompts.obsidian; },
+    "reset-translate_nl": () => {
+      $("#prompt-translate_nl").value = state.settings.defaults.prompts.translate_nl;
+    },
   };
   Object.entries(resets).forEach(([id, fn]) => $(`#${id}`).addEventListener("click", fn));
 }
@@ -962,6 +1004,7 @@ function init() {
   });
 
   $("#clean").addEventListener("click", cleanActiveDoc);
+  $("#translate-nl").addEventListener("click", translateActiveDoc);
   $("#copy").addEventListener("click", copyActive);
   $("#download").addEventListener("click", downloadActive);
 

@@ -1,6 +1,6 @@
 """De systeemprompts voor de AI-opschoning — de ingebouwde standaardwaarden.
 
-Drie profielen:
+Vier profielen:
 
 - `generic`  — documenten en PDF's: sectietitels worden koppen, zacht
   afgebroken regels worden weer alinea's, kop-/voetteksten verdwijnen.
@@ -12,6 +12,11 @@ Drie profielen:
   uitspraak verbatim. Letterlijk overgenomen uit de skill van de gebruiker
   (zonder de skill-frontmatter, want dat is Claude Code-metadata en geen
   modelinstructie).
+- `translate_nl` — "Vertalen naar het Nederlands": zuivere vertaling, met
+  behoud van de Markdown-structuur (koppen/lijsten/tabellen/citaten/
+  voetnoten/nadruk). Geen reformattering zoals `generic`/`caselaw` doen
+  (geen regels samenvoegen, geen kop-/voetteksten verwijderen) — dat is een
+  losse, onafhankelijke knop naast "Opschonen", niet een vervanging ervan.
 
 Twee dingen die bewust zo zijn en niet "verbeterd" moeten worden:
 
@@ -286,10 +291,31 @@ Onder `## Volledige uitspraak` de integrale tekst, omgezet naar nette Markdown:
 - Output is **één** `markdown`-codeblok, verder niets."""
 
 
+TRANSLATE_NL = """\
+You translate a Markdown document into Dutch. Your ONLY job is to translate —
+never summarise, shorten, paraphrase away detail, or add anything that is not
+in the source.
+
+Rules:
+- Translate all running text into fluent, natural Dutch.
+- Preserve the Markdown structure exactly as given: the same headings (same
+  level and wording structure), paragraphs, lists (ordered/unordered), tables,
+  blockquotes, code spans/blocks, footnotes, links, and emphasis
+  (bold/italic). Do not add, remove, merge, reorder, or reformat structural
+  elements — this is a translation, not a reformat.
+- Keep numbers, dates, citations, case/statute references, ECLI's, and proper
+  names unchanged unless they have an established Dutch form.
+- If a passage is already in Dutch, leave it exactly as is.
+- Do NOT correct the underlying content, and do NOT add commentary, notes, or
+  a preamble of your own.
+- Output ONLY the translated Markdown. No preamble, no explanation, no code
+  fences."""
+
 DEFAULTS: dict[str, str] = {
     "generic": GENERIC,
     "caselaw": CASELAW,
     "obsidian": OBSIDIAN,
+    "translate_nl": TRANSLATE_NL,
 }
 
 PROFILES = tuple(DEFAULTS)
@@ -299,5 +325,6 @@ USER_PROMPTS = {
     'obsidian': (
         'Hieronder staat de volledige, al naar Markdown omgezette tekst van de uitspraak. Verwerk die exact volgens de systeeminstructies en lever de complete Obsidian-notitie op.\n\n{chunk}'
     ),
+    'translate_nl': 'Translate this Markdown fragment into Dutch:\n\n{chunk}',
 }
 DEFAULT_USER_PROMPT = 'Clean up this Markdown fragment:\n\n{chunk}'

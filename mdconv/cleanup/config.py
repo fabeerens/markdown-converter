@@ -41,8 +41,9 @@ NO_CHUNK_PROFILES = frozenset({"obsidian"})
 
 # Verhouding uitvoer/invoer per profiel, voor de kostenraming. De reformat-
 # profielen houden de lengte ongeveer gelijk; "obsidian" zet frontmatter, een
-# inhoudsopgave en een uitgebreide analyse bóven de volledige verbatim tekst.
-OUTPUT_RATIO = {"obsidian": 1.35}
+# inhoudsopgave en een uitgebreide analyse bóven de volledige verbatim tekst;
+# een Nederlandse vertaling is doorgaans iets langer dan de brontekst.
+OUTPUT_RATIO = {"obsidian": 1.35, "translate_nl": 1.15}
 
 # Selecteerbare modellen, allemaal via dezelfde OpenRouter-sleutel. ":nitro"
 # kiest de snelste provider. De prijzen in de labels zijn indicatief — de UI

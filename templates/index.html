@@ -125,6 +125,7 @@
             <span>Opmaken voor Obsidian</span>
           </label>
           <select class="select" id="model" aria-label="Model voor de AI-opschoning"></select>
+          <button type="button" class="btn btn-outline" id="translate-nl">Vertalen naar het Nederlands</button>
           <button type="button" class="btn btn-solid" id="clean">Opschonen</button>
         </div>
       </div>
@@ -189,6 +190,10 @@
         <h3 style="margin-top:16px">Prompt — Opmaken voor Obsidian <button type="button" class="reset" id="reset-obsidian">Standaard</button></h3>
         <label class="visually-hidden" for="prompt-obsidian">Prompt voor de Obsidian-notitie</label>
         <textarea id="prompt-obsidian"></textarea>
+
+        <h3 style="margin-top:16px">Prompt — Vertalen naar het Nederlands <button type="button" class="reset" id="reset-translate_nl">Standaard</button></h3>
+        <label class="visually-hidden" for="prompt-translate_nl">Prompt voor de vertaling</label>
+        <textarea id="prompt-translate_nl"></textarea>
       </section>
 
       <div class="dialog-actions">

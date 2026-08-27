@@ -706,8 +706,22 @@ def test_formex_footnotes_survive_concurrent_conversions():
 
 def test_profiles_exist_and_obsidian_runs_unsplit():
     from mdconv.cleanup import config, prompts
-    assert set(prompts.DEFAULTS) == {"generic", "caselaw", "obsidian"}
+    assert set(prompts.DEFAULTS) == {"generic", "caselaw", "obsidian", "translate_nl"}
     assert "obsidian" in config.NO_CHUNK_PROFILES
+
+
+def test_translate_nl_prompt_is_chunked_and_translation_only():
+    from mdconv.cleanup import config
+    assert "translate_nl" not in config.NO_CHUNK_PROFILES
+    prompt = config.get_prompt("translate_nl")
+    assert "dutch" in prompt.lower()
+    assert "translate" in prompt.lower()
+
+
+def test_translate_nl_has_its_own_user_prompt_template():
+    from mdconv.cleanup import prompts
+    assert "translate_nl" in prompts.USER_PROMPTS
+    assert "{chunk}" in prompts.USER_PROMPTS["translate_nl"]
 
 
 def test_caselaw_prompt_forbids_promoting_paragraph_numbers():
@@ -972,9 +986,9 @@ def test_looks_like_formex():
     assert not looks_like_formex(b"<html><body>gewoon html</body></html>")
 
 
-def test_valid_profiles_are_the_three_known_ones():
+def test_valid_profiles_are_the_known_ones():
     import mdconv.cleanup as cleanup
-    assert set(cleanup.PROFILES) == {"generic", "caselaw", "obsidian"}
+    assert set(cleanup.PROFILES) == {"generic", "caselaw", "obsidian", "translate_nl"}
 
 
 # ---------------------------------------------------------------------------
@@ -1011,6 +1025,11 @@ def test_clean_rejects_empty_markdown(client):
     r = client.post("/api/clean", json={"markdown": "   ", "profile": "generic"})
     assert r.status_code == 400
     assert "Niets om op te schonen" in r.get_json()["error"]
+
+
+def test_profile_validator_accepts_translate_nl():
+    from mdconv.api import _profile
+    assert _profile("translate_nl") == "translate_nl"
 
 
 def test_estimate_falls_back_to_generic_for_unknown_profile(client, monkeypatch):

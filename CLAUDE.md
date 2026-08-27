@@ -249,15 +249,19 @@ accountregistratie namens de gebruiker):
 - Standaardmodel: **`~anthropic/claude-haiku-latest`** — de **tilde `~` hoort erbij** (OpenRouter's
   auto-updating "latest"-alias). Niet "corrigeren" naar de versie zonder tilde.
 - `config.base_url()` normaliseert (strip een eventuele `/chat/completions`), want de code plakt dat pad zelf.
-- **Drie profielen** (`cleanup/prompts.py` → `DEFAULTS`): `generic` (documenten/PDF), `caselaw` (uitspraken/arresten:
+- **Vier profielen** (`cleanup/prompts.py` → `DEFAULTS`): `generic` (documenten/PDF), `caselaw` (uitspraken/arresten:
   koppen vanaf `##`, rechtsoverwegingen behouden, citaten→`>`, lijsten→markdownlijsten,
-  voetnoten→`[^n]`) en `obsidian` (complete Obsidian-notitie). De UI kiest `generic`/`caselaw`
+  voetnoten→`[^n]`), `obsidian` (complete Obsidian-notitie) en `translate_nl` (zuivere
+  vertaling naar het Nederlands, structuur ongewijzigd). De UI kiest `generic`/`caselaw`
   automatisch via het `kind`-veld (`sources.kind_for_source`: Rechtspraak/HUDOC/
   `ECLI:EU:`/`CELEX:6…` = caselaw). `obsidian` is een **handmatige extra keuze**
   (checkbox `#obsidian`, zichtbaar bij `doc.allowObsidian` — automatisch bij herkende
   rechtspraak, en ook op Documentupload/Tekst plakken: daar kan de tool niet zien of het
   om een uitspraak gaat, dus mag de gebruiker dat zelf aangeven) die het automatische
-  profiel overschrijft.
+  profiel overschrijft. `translate_nl` is geen keuze in die dropdown maar een **eigen
+  knop** (`#translate-nl`, "Vertalen naar het Nederlands") naast "Opschonen", op elk
+  tabblad — een losse, onafhankelijke actie die je vóór of ná het opschonen kunt draaien
+  (eigen `doc.translated`-vlag, blokkeert `doc.cleaned` niet en andersom).
 - **`obsidian`-profiel**: system-prompt is verbatim gekopieerd uit de skill
   `~/Downloads/SKILL jurisprudentie.md` (zonder de skill-YAML-frontmatter — dat is
   Claude Code-metadata, geen model-instructie). Levert YAML-frontmatter + inhoudsopgave-
@@ -270,6 +274,14 @@ accountregistratie namens de gebruiker):
   `config.MAX_OUTPUT_TOKENS` aanlopen. `config.OUTPUT_RATIO["obsidian"] = 1.35` compenseert de
   kostenraming voor de extra analyse-tekst bovenop de verbatim-tekst (output > input,
   anders dan bij `generic`/`caselaw` waar output ≈ input).
+- **`translate_nl`-profiel**: draait wél gechunkt (niet in `NO_CHUNK_PROFILES`) — elk deel
+  wordt onafhankelijk vertaald, net als `generic`/`caselaw`. Eigen user-prompt-template
+  (`prompts.USER_PROMPTS["translate_nl"]`, "Translate this Markdown fragment into
+  Dutch:") in plaats van de generieke `DEFAULT_USER_PROMPT` ("Clean up…"), en een eigen
+  `OUTPUT_RATIO` van 1,15 voor de kostenraming (een Nederlandse vertaling is doorgaans
+  iets langer dan de brontekst). De front-end (`runClean()` in `app.js`) deelt dezelfde
+  streaming-implementatie als "Opschonen" — alleen het profiel, de knop en het
+  guard-veld (`doc.translated` i.p.v. `doc.cleaned`) verschillen.
 - **Anderstalige uitspraak → tweetalige tabel.** Bij een niet-Nederlandse uitspraak (Duits,
   Frans, Spaans, …) instrueert het obsidian-profiel het model om onder `## Volledige
   uitspraak` elke rechtsoverweging/randnummer als tabelrij te zetten: links het origineel
