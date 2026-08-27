@@ -50,13 +50,18 @@ function profileFor(doc) {
   return doc.obsidian ? "obsidian" : doc.kind;
 }
 
-function addDoc({ title, filenameBase, source, kind, markdown }) {
+function addDoc({ title, filenameBase, source, kind, markdown, allowObsidian }) {
   const doc = {
     id: state.nextId++,
     title,
     filenameBase: filenameBase || title,
     source,
     kind: kind === "caselaw" ? "caselaw" : "generic",
+    // Bij automatisch herkende rechtspraak (bv. een ECLI) is opmaken voor
+    // Obsidian altijd zinvol. Bij een geüpload document of geplakte tekst
+    // weet de tool niet of het om een uitspraak gaat — de gebruiker mag dat
+    // daar zelf aangeven (`allowObsidian`, meegegeven vanuit die tabbladen).
+    allowObsidian: kind === "caselaw" || Boolean(allowObsidian),
     obsidian: false,
     model: $("#model").value || null,
     markdown,
@@ -354,7 +359,7 @@ async function fetchFileUrls() {
       async (item) => {
         const data = await postJSON("/api/convert/file-url", { url: item.query });
         const base = basename(item.query);
-        addDoc({ title: base, filenameBase: base, ...data });
+        addDoc({ title: base, filenameBase: base, ...data, allowObsidian: true });
       },
       "opgehaald"
     )
@@ -372,7 +377,7 @@ async function uploadFiles(fileList) {
       form.append("file", file);
       const data = await api("/api/convert/file", { method: "POST", body: form });
       const base = file.name.replace(/\.[^.]+$/, "") || "document";
-      addDoc({ title: base, filenameBase: base, ...data });
+      addDoc({ title: base, filenameBase: base, ...data, allowObsidian: true });
     },
     "geconverteerd"
   );
@@ -400,7 +405,7 @@ async function fetchPastedText() {
       async (item) => {
         const data = await postJSON("/api/convert/text", item);
         const name = deriveName(item.text);
-        addDoc({ title: name, filenameBase: name, ...data });
+        addDoc({ title: name, filenameBase: name, ...data, allowObsidian: true });
         el.innerHTML = "";
       },
       "opgemaakt"
@@ -485,9 +490,12 @@ function renderEditor() {
   $("#src").title = doc.source;
   updateLineNumbers();
 
-  // "Opmaken voor Obsidian" is alleen zinvol bij rechtspraak.
+  // "Opmaken voor Obsidian" staat altijd bij automatisch herkende rechtspraak,
+  // en ook bij Documentupload/Tekst plakken — daar kán het een uitspraak zijn
+  // die de tool niet automatisch als zodanig herkent (bv. handmatig gevonden
+  // omdat er nog geen bron voor dat land is).
   const obsidianWrap = $("#obsidian-wrap");
-  obsidianWrap.hidden = doc.kind !== "caselaw";
+  obsidianWrap.hidden = !doc.allowObsidian;
   $("#obsidian").checked = doc.obsidian;
 
   const model = $("#model");

@@ -254,8 +254,10 @@ accountregistratie namens de gebruiker):
   voetnoten→`[^n]`) en `obsidian` (complete Obsidian-notitie). De UI kiest `generic`/`caselaw`
   automatisch via het `kind`-veld (`sources.kind_for_source`: Rechtspraak/HUDOC/
   `ECLI:EU:`/`CELEX:6…` = caselaw). `obsidian` is een **handmatige extra keuze**
-  (`#profile-choice`, alleen zichtbaar bij `currentKind === "caselaw"`, dus alleen op het
-  Jurisprudentie-tabblad) die het automatische profiel overschrijft.
+  (checkbox `#obsidian`, zichtbaar bij `doc.allowObsidian` — automatisch bij herkende
+  rechtspraak, en ook op Documentupload/Tekst plakken: daar kan de tool niet zien of het
+  om een uitspraak gaat, dus mag de gebruiker dat zelf aangeven) die het automatische
+  profiel overschrijft.
 - **`obsidian`-profiel**: system-prompt is verbatim gekopieerd uit de skill
   `~/Downloads/SKILL jurisprudentie.md` (zonder de skill-YAML-frontmatter — dat is
   Claude Code-metadata, geen model-instructie). Levert YAML-frontmatter + inhoudsopgave-
@@ -377,14 +379,19 @@ document zelf stonden en uit elkaar liepen bij het wisselen van tabblad.
   toont voortgang (`3/5 opgehaald…`) en meldt per mislukte rij precies wat faalde —
   één fout blokkeert de rest niet. `#file` heeft `multiple`; slepen en de bestandskiezer
   lopen over alle bestanden.
-- **State per document**: `{id, title, filenameBase, source, kind, obsidian, model,
-  markdown, cleaned}` in `state.docs`. `obsidian`/`model` zijn **per document**, dus je
-  kunt het ene document als Obsidian-notitie opschonen en het andere met het standaard-
-  profiel. `setActive()` bewaart eerst de live-bewerkte tekst (`saveEdits()`) voordat het
-  volgende document wordt geladen.
-- **"Opmaken voor Obsidian" is een checkbox** (`#obsidian`), geen dropdown, en alleen
-  zichtbaar bij `kind === "caselaw"`. Aanvinken zet `doc.obsidian` en zet `cleaned` terug
-  op false (ander profiel = opnieuw opschonen mag), en vernieuwt de kostenraming.
+- **State per document**: `{id, title, filenameBase, source, kind, allowObsidian,
+  obsidian, model, markdown, cleaned}` in `state.docs`. `obsidian`/`model` zijn **per
+  document**, dus je kunt het ene document als Obsidian-notitie opschonen en het andere
+  met het standaardprofiel. `setActive()` bewaart eerst de live-bewerkte tekst
+  (`saveEdits()`) voordat het volgende document wordt geladen.
+- **"Opmaken voor Obsidian" is een checkbox** (`#obsidian`), geen dropdown. Zichtbaar bij
+  `doc.allowObsidian`, dat `addDoc()` zet op `kind === "caselaw"` (automatisch herkende
+  rechtspraak) **of** een expliciete `allowObsidian: true` vanuit de aanroep — die geven
+  `fetchFileUrls()`, `uploadFiles()` en `fetchPastedText()` altijd mee, want een geüpload
+  document of geplakte tekst kán een uitspraak zijn zonder dat de tool dat automatisch
+  herkent (bv. een land zonder eigen bron, handmatig gevonden). Aanvinken zet
+  `doc.obsidian` en zet `cleaned` terug op false (ander profiel = opnieuw opschonen mag),
+  en vernieuwt de kostenraming.
 - **`[hidden]` moet in CSS geforceerd worden.** De UI regelt zichtbaarheid via het
   hidden-attribuut, maar de UA-stijl (`[hidden] { display: none }`) heeft de laagste
   specificiteit: `.checkbox { display: inline-flex }` verslaat hem. Zonder de regel
