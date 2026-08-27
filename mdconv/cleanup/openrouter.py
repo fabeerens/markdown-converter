@@ -16,7 +16,21 @@ import requests
 
 from .. import net
 from ..errors import ConfigError, ConversionError
-from . import config, prompts
+from . import cancel, config, prompts
+
+# Markers die te midden van tekstdelen door een streaming-generator kunnen
+# worden ge-yield — de aanroeper (cleanup.clean_stream / mdconv.api) herkent
+# ze via isinstance() en behandelt ze anders dan platte tekst. `dict`
+# onderklassen zodat de payload zich als een gewoon dict-object gedraagt.
+class Usage(dict):
+    """Tokengebruik + kosten, zoals OpenRouter die in de laatste SSE-regel
+    van een streaming-respons meestuurt (`prompt_tokens`/`completion_tokens`/
+    `total_tokens`/`cost`)."""
+
+
+class Progress(dict):
+    """Voortgang tijdens het genereren: `produced_tokens` (dit deel, tot nu
+    toe) t.o.v. `expected_tokens` (geschat op basis van de invoergrootte)."""
 
 # Het obsidian-profiel levert zijn antwoord in één ```markdown-codeblok; dat
 # eraf halen zodat de editor platte Markdown toont en geen codeblok.
@@ -97,8 +111,8 @@ def _truncation_message(profile: str) -> str:
     )
 
 
-def clean_chunk(chunk: str, *, model: str, system: str, profile: str) -> str:
-    """Laat één deel opschonen en geef de opgeschoonde Markdown terug."""
+def clean_chunk(chunk: str, *, model: str, system: str, profile: str) -> tuple[str, dict]:
+    """Laat één deel opschonen; geeft (opgeschoonde Markdown, tokengebruik) terug."""
     key = config.api_key()
     if not key:
         raise ConfigError(
@@ -158,12 +172,18 @@ def clean_chunk(chunk: str, *, model: str, system: str, profile: str) -> str:
 
     if profile == "obsidian":
         content = strip_markdown_fence(content)
-    return content
+    return content, (data.get("usage") or {})
 
 
-def stream_chunk(chunk: str, *, model: str, system: str, profile: str) -> Iterator[str]:
+def stream_chunk(
+    chunk: str, *, model: str, system: str, profile: str, request_id: str | None = None
+) -> Iterator[str | Usage]:
     """Als `clean_chunk`, maar levert de tekst als een reeks stukjes op, zoals
-    OpenRouter ze genereert (Server-Sent Events, `stream: true`)."""
+    OpenRouter ze genereert (Server-Sent Events, `stream: true`), met een
+    `Usage`-marker zodra OpenRouter die meestuurt (de laatste SSE-regel).
+
+    Stopt vroegtijdig (stil, geen fout) zodra `request_id` als geannuleerd is
+    gemarkeerd — gecheckt per binnenkomende SSE-regel."""
     key = config.api_key()
     if not key:
         raise ConfigError(
@@ -212,25 +232,35 @@ def stream_chunk(chunk: str, *, model: str, system: str, profile: str) -> Iterat
     # echter UTF-8 (JSON met daarin de brontekst), dus zonder deze correctie worden
     # bytes als 0xE2 0x80 0x98 ('U+2018') als latin-1 gelezen → mojibake ('â€˜').
     resp.encoding = "utf-8"
-    for line in resp.iter_lines(decode_unicode=True):
-        if not line or not line.startswith("data:"):
-            continue
-        payload = line[len("data:"):].strip()
-        if payload == "[DONE]":
-            break
-        try:
-            event = json.loads(payload)
-        except ValueError:
-            continue
-        choice = (event.get("choices") or [{}])[0]
-        delta_piece = choice.get("delta", {}).get("content")
-        if delta_piece:
-            piece = delta_piece
-            yield piece
-        # Zie de toelichting bij dezelfde check in clean_chunk() — hier komt
-        # finish_reason binnen als aparte SSE-event, los van de laatste delta.
-        if choice.get("finish_reason") == "length":
-            raise ConversionError(_truncation_message(profile))
+    try:
+        for line in resp.iter_lines(decode_unicode=True):
+            if cancel.is_cancelled(request_id):
+                return  # stil stoppen; de aanroeper checkt dit ook, geen fout
+            if not line or not line.startswith("data:"):
+                continue
+            payload = line[len("data:"):].strip()
+            if payload == "[DONE]":
+                break
+            try:
+                event = json.loads(payload)
+            except ValueError:
+                continue
+            choice = (event.get("choices") or [{}])[0]
+            delta_piece = choice.get("delta", {}).get("content")
+            if delta_piece:
+                piece = delta_piece
+                yield piece
+            # Zie de toelichting bij dezelfde check in clean_chunk() — hier komt
+            # finish_reason binnen als aparte SSE-event, los van de laatste delta.
+            if choice.get("finish_reason") == "length":
+                raise ConversionError(_truncation_message(profile))
+            usage = event.get("usage")
+            if usage:
+                yield Usage(usage)
+    finally:
+        # Verbinding meteen vrijgeven — met name bij annulering blijft hij
+        # anders openstaan tot de garbage collector 'm opruimt.
+        resp.close()
     if piece is None:
         # Geen enkele delta binnengekomen: OpenRouter stuurde een lege stream
         # zonder foutstatus. Zonder deze check zou dat stilletjes "niets"
@@ -253,6 +283,9 @@ def strip_fence_stream(pieces: Iterator[str]) -> Iterator[str]:
     started = False
     tail = ""
     for piece in pieces:
+        if not isinstance(piece, str):
+            yield piece  # Usage/Progress-markers ongemoeid doorgeven
+            continue
         if not started:
             buf += piece
             if "\n" not in buf and len(buf) < 20:

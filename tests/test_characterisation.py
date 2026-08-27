@@ -856,6 +856,7 @@ def test_stream_chunk_rejects_a_truncated_response(monkeypatch):
 
     class FakeStreamResp:
         status_code = 200
+        close = staticmethod(lambda: None)
 
         @staticmethod
         def iter_lines(decode_unicode=True):
@@ -871,6 +872,146 @@ def test_stream_chunk_rejects_a_truncated_response(monkeypatch):
 
     with pytest.raises(ConversionError, match="afgekapt"):
         list(openrouter.stream_chunk("tekst", model="x", system="y", profile="generic"))
+
+
+def test_clean_chunk_returns_usage_alongside_the_text(monkeypatch):
+    from mdconv.cleanup import openrouter
+
+    class FakeResp:
+        status_code = 200
+
+        @staticmethod
+        def json():
+            return {
+                "choices": [{"message": {"content": "opgeschoonde tekst"}, "finish_reason": "stop"}],
+                "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15, "cost": 0.002},
+            }
+
+    monkeypatch.setattr(openrouter.config, "api_key", lambda: "sk-test")
+    monkeypatch.setattr(openrouter.net, "llm",
+                         lambda: type("S", (), {"post": staticmethod(lambda *a, **k: FakeResp())})())
+
+    content, usage = openrouter.clean_chunk("tekst", model="x", system="y", profile="generic")
+    assert content == "opgeschoonde tekst"
+    assert usage == {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15, "cost": 0.002}
+
+
+def test_stream_chunk_yields_a_usage_marker_from_the_final_sse_line(monkeypatch):
+    from mdconv.cleanup import openrouter
+
+    class FakeStreamResp:
+        status_code = 200
+        close = staticmethod(lambda: None)
+
+        @staticmethod
+        def iter_lines(decode_unicode=True):
+            return iter([
+                'data: {"choices":[{"delta":{"content":"stuk 1"}}]}',
+                'data: {"choices":[{"delta":{}}],"usage":{"prompt_tokens":10,"completion_tokens":5,'
+                '"total_tokens":15,"cost":0.002}}',
+                "data: [DONE]",
+            ])
+
+    monkeypatch.setattr(openrouter.config, "api_key", lambda: "sk-test")
+    monkeypatch.setattr(openrouter.net, "llm",
+                         lambda: type("S", (), {"post": staticmethod(lambda *a, **k: FakeStreamResp())})())
+
+    items = list(openrouter.stream_chunk("tekst", model="x", system="y", profile="generic"))
+    text = [i for i in items if isinstance(i, str)]
+    usages = [i for i in items if isinstance(i, openrouter.Usage)]
+    assert text == ["stuk 1"]
+    assert len(usages) == 1
+    assert usages[0]["total_tokens"] == 15
+
+
+def test_stream_chunk_stops_silently_when_cancelled(monkeypatch):
+    """Annuleren mag geen ConversionError geven — dat zou als foutmelding in
+    de UI belanden, terwijl de gebruiker het zelf heeft stopgezet."""
+    from mdconv.cleanup import cancel, openrouter
+
+    class FakeStreamResp:
+        status_code = 200
+        close = staticmethod(lambda: None)
+
+        @staticmethod
+        def iter_lines(decode_unicode=True):
+            return iter([
+                'data: {"choices":[{"delta":{"content":"stuk 1"}}]}',
+                'data: {"choices":[{"delta":{"content":"stuk 2"}}]}',
+            ])
+
+    monkeypatch.setattr(openrouter.config, "api_key", lambda: "sk-test")
+    monkeypatch.setattr(openrouter.net, "llm",
+                         lambda: type("S", (), {"post": staticmethod(lambda *a, **k: FakeStreamResp())})())
+
+    cancel.request("req-1")
+    try:
+        items = list(
+            openrouter.stream_chunk("tekst", model="x", system="y", profile="generic", request_id="req-1")
+        )
+    finally:
+        cancel.clear("req-1")
+    assert items == []
+
+
+def test_clean_stream_yields_progress_and_a_final_usage_marker(monkeypatch):
+    import mdconv.cleanup as cleanup
+    from mdconv.cleanup import config, openrouter
+
+    monkeypatch.setattr(config, "is_available", lambda: True)
+    monkeypatch.setattr(config, "get_chunk_tokens", lambda: 5_000)
+
+    def fake_stream_chunk(chunk, *, model, system, profile, request_id=None):
+        yield "a" * 500
+        yield openrouter.Usage({"prompt_tokens": 10, "completion_tokens": 20,
+                                 "total_tokens": 30, "cost": 0.001})
+
+    monkeypatch.setattr(openrouter, "stream_chunk", fake_stream_chunk)
+
+    items = list(cleanup.clean_stream("brontekst " * 50, profile="generic"))
+    progress = [i for i in items if isinstance(i, cleanup.Progress)]
+    usage = [i for i in items if isinstance(i, cleanup.Usage)]
+    assert progress, "geen enkele voortgangsmarker ontvangen"
+    assert progress[0]["expected_tokens"] > 0
+    assert usage == [{"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30, "cost": 0.001}]
+
+
+def test_clean_stream_stops_when_cancelled_between_chunks(monkeypatch):
+    import mdconv.cleanup as cleanup
+    from mdconv.cleanup import cancel, config
+
+    monkeypatch.setattr(config, "is_available", lambda: True)
+
+    def fake_stream_chunk(chunk, *, model, system, profile, request_id=None):
+        cancel.request(request_id)
+        yield "nooit gezien na annuleren"
+
+    monkeypatch.setattr(cleanup.openrouter, "stream_chunk", fake_stream_chunk)
+
+    items = list(cleanup.clean_stream("tekst deel een\n\ntekst deel twee", profile="generic",
+                                       request_id="req-2"))
+    # Het eerste deel loopt nog (de annulering wordt pas vóór het volgende
+    # deel gecheckt), maar er komt geen Usage-marker na een annulering.
+    assert not any(isinstance(i, cleanup.Usage) for i in items)
+    assert not cancel.is_cancelled("req-2")  # clean_stream ruimt zelf op
+
+
+def test_clean_cancel_endpoint_marks_the_request(client):
+    from mdconv.cleanup import cancel
+
+    r = client.post("/api/clean/cancel", json={"request_id": "abc-123"})
+    assert r.status_code == 200
+    assert cancel.is_cancelled("abc-123")
+    cancel.clear("abc-123")
+
+
+def test_stream_frame_format_is_null_delimited_json():
+    """CLEAN_PROGRESS/CLEAN_USAGE-frames zijn \\x00CLEAN_<KIND>\\x00<json>\\x00
+    — precies wat de front-end parser (makeStreamParser in app.js) verwacht."""
+    import mdconv.api as api_module
+
+    frame = api_module._frame("PROGRESS", {"produced_tokens": 1, "expected_tokens": 2})
+    assert frame == '\x00CLEAN_PROGRESS\x00{"produced_tokens": 1, "expected_tokens": 2}\x00'
 
 
 # ---------------------------------------------------------------------------

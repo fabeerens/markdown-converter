@@ -9,6 +9,7 @@ de errorhandler hieronder maakt daar één keer `{"error": …}` van.
 from __future__ import annotations
 
 import io
+import json
 import os
 import re
 from urllib.parse import unquote, urlparse
@@ -185,8 +186,8 @@ def clean():
     markdown = data.get("markdown", "")
     if not markdown.strip():
         raise ConversionError("Niets om op te schonen.")
-    cleaned = cleanup.clean(markdown, _profile(data.get("profile")), data.get("model") or None)
-    return jsonify(markdown=cleaned)
+    cleaned, usage = cleanup.clean(markdown, _profile(data.get("profile")), data.get("model") or None)
+    return jsonify(markdown=cleaned, usage=usage)
 
 
 # Scheidingsteken voor een fout die halverwege een stream optreedt (bv. een
@@ -194,7 +195,17 @@ def clean():
 # op dat moment al 200 verzonden, dus een fout kan alleen nog ín de body
 # gemeld worden. \x00 komt niet in echte Markdown voor; de front-end herkent
 # dit teken en toont de rest als foutmelding in plaats van als tekst.
+#
+# Twee andere frametypes gebruiken hetzelfde \x00-teken, maar wél afgesloten
+# (in tegenstelling tot CLEAN_ERROR, dat altijd het allerlaatste in de stream
+# is): `\x00CLEAN_PROGRESS\x00{...json...}\x00` en
+# `\x00CLEAN_USAGE\x00{...json...}\x00`. Zie `_frame()` en, aan de andere
+# kant, de gelijknamige parser in static/app.js.
 STREAM_ERROR_SENTINEL = "\x00CLEAN_ERROR\x00"
+
+
+def _frame(kind: str, payload: dict) -> str:
+    return f"\x00CLEAN_{kind}\x00{json.dumps(payload, ensure_ascii=False)}\x00"
 
 
 @bp.post("/api/clean/stream")
@@ -206,6 +217,10 @@ def clean_stream():
     /api/clean. Alleen een fout die pas ontstaat ná de eerste bytes (een
     verbindingsstoring bij een later deel) kan niet meer als HTTP-statuscode
     gemeld worden en verschijnt in de body achter STREAM_ERROR_SENTINEL.
+
+    `request_id` (optioneel, van de front-end) is het aangrijpingspunt voor
+    `/api/clean/cancel` — zonder `request_id` kan dit verzoek niet vroegtijdig
+    gestopt worden.
     """
     data = _payload()
     markdown = data.get("markdown", "")
@@ -218,10 +233,17 @@ def clean_stream():
         )
     profile = _profile(data.get("profile"))
     model = data.get("model") or None
+    request_id = (data.get("request_id") or "").strip() or None
 
     def generate():
         try:
-            yield from cleanup.clean_stream(markdown, profile, model)
+            for item in cleanup.clean_stream(markdown, profile, model, request_id=request_id):
+                if isinstance(item, cleanup.Progress):
+                    yield _frame("PROGRESS", dict(item))
+                elif isinstance(item, cleanup.Usage):
+                    yield _frame("USAGE", dict(item))
+                else:
+                    yield item
         except ConversionError as e:
             yield STREAM_ERROR_SENTINEL + e.message
         except Exception as e:  # noqa: BLE001 — moet als leesbare melding aankomen, niet als kapotte stream
@@ -233,6 +255,17 @@ def clean_stream():
     response.headers["X-Accel-Buffering"] = "no"
     response.headers["Cache-Control"] = "no-cache"
     return response
+
+
+@bp.post("/api/clean/cancel")
+def clean_cancel():
+    """Markeer een lopend /api/clean/stream-verzoek (zelfde `request_id`) als
+    geannuleerd. Best-effort en stil: een onbekende of al voltooide
+    `request_id` is geen fout — er is dan gewoon niets meer te annuleren."""
+    request_id = (_payload().get("request_id") or "").strip()
+    if request_id:
+        cleanup.cancel_request(request_id)
+    return jsonify(ok=True)
 
 
 # --------------------------------------------------------------------------

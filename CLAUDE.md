@@ -45,11 +45,12 @@ mdconv/
     files.py               PDF via pdf-inspector, rest via MarkItDown (beide lui geladen)
     pasted_text.py         handmatig geplakte tekst (kaal of verrijkte HTML) → markdown
   cleanup/
-    __init__.py            publieke ingangen: estimate() en clean()
+    __init__.py            publieke ingangen: estimate(), clean(), clean_stream()
     config.py              standaarden + instellingen (modellen/deelgrootte/prompts)
-    prompts.py             de drie systeemprompts
+    prompts.py             de vier systeemprompts
     chunking.py            de splits-ladder (alinea → regel → woord → harde knip)
     openrouter.py          chat-completions + prijscatalogus met TTL-cache
+    cancel.py              in-memory annuleervlaggen voor /api/clean/stream
 templates/index.html       één pagina, alleen markup
 static/app.css             designsysteem (Radix-tokens) + componenten
 static/app.js              front-end: één state + render-functies per gebied
@@ -241,6 +242,13 @@ accountregistratie namens de gebruiker):
   de bronvermelding matcht — dit automatisch als rechtspraak herkent (met de Obsidian-optie).
   Dit tabblad heeft geen herhaalbare rijen zoals de andere drie: één `contenteditable`-vak,
   één document per klik op "Opmaken".
+  **"Plakken"-knop** (`pasteFromClipboard()`): leest rechtstreeks van het systeemklembord via
+  de Clipboard API, zodat de gebruiker niet zelf Cmd/Ctrl+V hoeft te doen. Probeert eerst
+  `clipboard.read()` voor zowel `text/html` (verrijkt) als `text/plain`; zonder HTML-variant
+  valt de methode terug op `clipboard.readText()`. Vereist een secure context (https/
+  localhost) en kan de browser om toestemming laten vragen; weigert de browser (of geen
+  toestemming), dan een duidelijke foutmelding met het advies handmatig te plakken — nooit
+  een stille misser.
 
 ## AI-opschoning (`mdconv/cleanup/`)
 
@@ -316,9 +324,36 @@ accountregistratie namens de gebruiker):
   (`\x00CLEAN_ERROR\x00`, identiek gedefinieerd in `mdconv/api.py` en `static/app.js`) — de
   front-end herkent dat teken, toont de rest als foutmelding, en zet het tekstvak terug naar
   de laatst bewaarde tekst i.p.v. de afgebroken streaming-tekst te laten staan.
-  `cleanActiveDoc()` in `app.js` bewaakt met `isLive()` of de gebruiker tijdens het streamen
+  `runClean()` in `app.js` bewaakt met `isLive()` of de gebruiker tijdens het streamen
   naar een ander documenttabblad is gewisseld: dan wordt `doc.markdown` wel bijgewerkt, maar
   niet het zichtbare tekstvak — pas bij terugschakelen toont de editor het complete resultaat.
+- **Voortgang, tokengebruik/kosten en annuleren.** Naast platte tekst kan de stream twee
+  afgesloten control-frames bevatten — anders dan `CLEAN_ERROR` (dat altijd het allerlaatste
+  in de stream is, dus zonder sluiting): `\x00CLEAN_PROGRESS\x00{...json...}\x00` en
+  `\x00CLEAN_USAGE\x00{...json...}\x00` (gebouwd door `_frame()` in `mdconv/api.py`).
+  `openrouter.stream_chunk()` yieldt tussen de tekst-stukjes een `Usage`-marker zodra
+  OpenRouter die in de laatste SSE-regel van een deel meestuurt (`prompt_tokens`/
+  `completion_tokens`/`total_tokens`/`cost` — automatisch aanwezig, geen extra requestveld
+  nodig); `cleanup.clean_stream()` telt dat op over alle delen en yieldt zelf `Progress`-
+  markers (geproduceerde tekens ÷ 4 vs. de verwachte totale uitvoer — invoergrootte ×
+  `OUTPUT_RATIO`, dezelfde schatting als `estimate()`) telkens na `_PROGRESS_STEP_CHARS`
+  (400) nieuwe tekens. De front-end-tegenhanger (`makeStreamParser()` in `app.js`) ontleedt
+  dit met een kleine buffer die over de grenzen van losse `reader.read()`-happen heen werkt,
+  want een frame kan best halverwege een netwerkhap doorlopen.
+  **Annuleren** loopt via een `request_id` (door de front-end gegenereerd,
+  `Date.now()-Math.random()`) die meegaat in het `/api/clean/stream`-verzoek.
+  `mdconv/cleanup/cancel.py` is een proces-brede, thread-safe set van geannuleerde
+  `request_id`'s; `/api/clean/cancel` (POST, alleen `request_id`) zet 'm erin,
+  `stream_chunk()` checkt 'm per binnenkomende SSE-regel (en sluit dan meteen de
+  OpenRouter-verbinding) en `clean_stream()` checkt 'm ook tussen delen — beide stoppen dan
+  stil (geen `ConversionError`, dat zou als foutmelding in de UI belanden). De front-end
+  (`cancelActiveClean()`) breekt tegelijk zijn eigen `fetch()` af via een `AbortController`
+  — dat is wat de gebruiker meteen ziet; de servercheck is vooral bedoeld om te voorkomen dat
+  een groot document op de achtergrond dooronline blijft genereren (en dus geld kost) nadat
+  de gebruiker al is gestopt met wachten. Er loopt **één** opschoon-/vertaalactie tegelijk,
+  app-breed (`activeClean` in `app.js`) — één gedeelde voortgangsbalk en Annuleren-knop in
+  het opschoonpaneel, ongeacht welk tabblad of document; een tweede poging terwijl er al een
+  loopt geeft een duidelijke foutmelding i.p.v. twee streams door elkaar.
 - **Beide reformat-prompts** (`generic`/`caselaw`) maken alléén echte sectietitels koppen;
   genummerde overwegingen/randnummers blijven alinea's (uitdrukkelijke wens gebruiker —
   niet terugdraaien).
@@ -518,7 +553,7 @@ regel), inclusief de vloeiende tabbalk-indicator.
   weggeschreven bestand nooit als geldige staat gelezen kan worden.
 
 ## Tests
-`.venv/bin/python -m pytest tests/ -q` — 83 karakteriseringstests die het gedrag
+`.venv/bin/python -m pytest tests/ -q` — 133 karakteriseringstests die het gedrag
 vastleggen in plaats van het te beschrijven: `detect_source`-precedentie, ELI→CELEX,
 de chunking-ladder (ook zonder witregels en met één te lang woord), de PDF-reflow, de
 Formex-parser, de settings-semantiek (leeg wist terug naar standaard) en de Nederlandse

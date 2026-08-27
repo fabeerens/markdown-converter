@@ -67,6 +67,7 @@ function addDoc({ title, filenameBase, source, kind, markdown, allowObsidian }) 
     markdown,
     cleaned: false,
     translated: false,
+    lastUsage: null,
   };
   state.docs.push(doc);
   setActive(doc.id);
@@ -391,6 +392,46 @@ async function uploadFiles(fileList) {
    gaan beide mee; de server kiest welke bruikbaar is.
    -------------------------------------------------------------------------- */
 
+/**
+ * Plakt rechtstreeks vanaf het systeemklembord, zonder dat de gebruiker zelf
+ * Cmd/Ctrl+V hoeft te doen. `clipboard.read()` geeft — als de browser en de
+ * herkomst van de tekst dat aanbieden — zowel `text/html` (verrijkt) als
+ * `text/plain`; is er geen HTML-variant, dan valt de methode terug op
+ * `clipboard.readText()`. Vereist een secure context (https/localhost) en
+ * kan door de browser om toestemming vragen bij het eerste gebruik.
+ */
+async function pasteFromClipboard() {
+  const el = $("#paste-area");
+  try {
+    let html = "";
+    let text = "";
+    if (navigator.clipboard.read) {
+      const items = await navigator.clipboard.read();
+      for (const item of items) {
+        if (!html && item.types.includes("text/html")) {
+          html = await (await item.getType("text/html")).text();
+        }
+        if (!text && item.types.includes("text/plain")) {
+          text = await (await item.getType("text/plain")).text();
+        }
+      }
+    }
+    if (!html && !text) text = await navigator.clipboard.readText();
+    if (!html && !text) {
+      setStatus("Het klembord bevat geen tekst.", "err");
+      return;
+    }
+    el.innerHTML = html || "";
+    if (!html) el.textContent = text;
+    el.focus();
+  } catch {
+    setStatus(
+      "Kon niet bij het klembord (browser weigerde toegang) — plak handmatig met Cmd/Ctrl+V.",
+      "err"
+    );
+  }
+}
+
 async function fetchPastedText() {
   const el = $("#paste-area");
   const html = el.innerHTML.trim();
@@ -502,13 +543,21 @@ function renderEditor() {
   const model = $("#model");
   if (doc.model && [...model.options].some((o) => o.value === doc.model)) model.value = doc.model;
 
+  // Eén opschoon-/vertaalactie tegelijk, app-breed (zie runClean()): terwijl
+  // die loopt staan beide knoppen uit en de Annuleren-knop aan, ongeacht welk
+  // document nu getoond wordt.
+  const busyHere = Boolean(activeClean) && activeClean.docId === doc.id;
   const button = $("#clean");
-  button.disabled = doc.cleaned;
+  button.disabled = doc.cleaned || Boolean(activeClean);
   button.textContent = doc.cleaned ? "Opgeschoond ✓" : "Opschonen";
 
   const translateButton = $("#translate-nl");
-  translateButton.disabled = doc.translated;
+  translateButton.disabled = doc.translated || Boolean(activeClean);
   translateButton.textContent = doc.translated ? "Vertaald ✓" : "Vertalen naar het Nederlands";
+
+  $("#cancel-clean").hidden = !busyHere;
+  if (!busyHere) hideProgress();
+  renderCleanResult(doc);
 
   $("#clean-title").textContent =
     doc.obsidian ? "Opmaken voor Obsidian"
@@ -520,6 +569,41 @@ function renderEditor() {
 }
 
 const fmt = (n) => n.toLocaleString("nl-NL");
+const fmtCost = (usd) => `$${usd < 0.01 ? usd.toFixed(4) : usd.toFixed(3)}`;
+
+/* --------------------------------------------------------------------------
+   Voortgangsbalk en resultaat (tokens/kosten) van opschonen/vertalen
+   -------------------------------------------------------------------------- */
+
+/** Eén opschoon-/vertaalactie tegelijk, app-breed: {docId, requestId, controller} of null. */
+let activeClean = null;
+
+function setProgress(producedTokens, expectedTokens) {
+  $("#clean-progress").hidden = false;
+  const pct = expectedTokens > 0 ? Math.min(97, (producedTokens / expectedTokens) * 100) : 0;
+  $("#clean-progress-fill").style.width = `${pct}%`;
+}
+
+function hideProgress() {
+  $("#clean-progress").hidden = true;
+  $("#clean-progress-fill").style.width = "0%";
+}
+
+/** Toont het tokengebruik/kosten die OpenRouter voor de laatste actie op dit
+ * document teruggaf — blijft staan totdat een volgende actie het overschrijft
+ * of het document sluit, ook als je tussendoor van tabblad wisselt. */
+function renderCleanResult(doc) {
+  const el = $("#clean-result");
+  if (!doc.lastUsage || !doc.lastUsage.usage.total_tokens) {
+    el.hidden = true;
+    return;
+  }
+  const { label, usage } = doc.lastUsage;
+  const parts = [`${label}: ${fmt(usage.total_tokens)} tokens (${fmt(usage.prompt_tokens || 0)} invoer, ${fmt(usage.completion_tokens || 0)} uitvoer)`];
+  if (usage.cost) parts.push(`${fmtCost(usage.cost)} (OpenRouter)`);
+  el.textContent = parts.join(" · ");
+  el.hidden = false;
+}
 
 let estimateToken = 0;
 
@@ -556,8 +640,71 @@ async function refreshEstimate() {
 // Moet letterlijk gelijk zijn aan STREAM_ERROR_SENTINEL in mdconv/api.py: de
 // HTTP-status is op dat moment al 200, dus een fout halverwege de stream (bv.
 // een verbindingsstoring bij het tweede deel) kan alleen nog in de body zelf
-// gemeld worden.
+// gemeld worden. Twee andere frametypes delen hetzelfde `\x00`-teken, maar
+// zíjn afgesloten (zie `_frame()` in mdconv/api.py): CLEAN_PROGRESS en
+// CLEAN_USAGE, elk gevolgd door JSON en een sluitende `\x00`.
 const STREAM_ERROR_SENTINEL = "\x00CLEAN_ERROR\x00";
+const FRAME_MARK = "\x00";
+
+/**
+ * Ontleedt een streaming-respons in platte tekst en control-frames, over de
+ * grenzen van losse `reader.read()`-happen heen — een frame kan best
+ * halverwege een netwerkhap doorlopen, dus alles wat nog niet compleet is
+ * blijft in `buf` staan tot de volgende `push()`. CLEAN_ERROR is bewust de
+ * enige niet-afgesloten variant (die is altijd het allerlaatste in de
+ * stream): zodra hij gezien is, geldt de rest van elke volgende `push()` als
+ * onderdeel van de foutmelding.
+ */
+function makeStreamParser({ onText, onProgress, onUsage }) {
+  let buf = "";
+  let errorMode = false;
+  let errorMsg = null;
+  return {
+    push(chunkText) {
+      if (errorMode) {
+        errorMsg += chunkText;
+        return;
+      }
+      buf += chunkText;
+      for (;;) {
+        const at = buf.indexOf(FRAME_MARK);
+        if (at === -1) {
+          if (buf) onText(buf);
+          buf = "";
+          return;
+        }
+        if (at > 0) {
+          onText(buf.slice(0, at));
+          buf = buf.slice(at);
+        }
+        const tagEnd = buf.indexOf(FRAME_MARK, 1);
+        if (tagEnd === -1) return; // tag nog niet compleet binnen; wacht op meer
+        const tag = buf.slice(1, tagEnd);
+        if (tag === "CLEAN_ERROR") {
+          errorMode = true;
+          errorMsg = buf.slice(tagEnd + 1);
+          buf = "";
+          return;
+        }
+        const payloadEnd = buf.indexOf(FRAME_MARK, tagEnd + 1);
+        if (payloadEnd === -1) return; // payload nog niet compleet binnen; wacht op meer
+        const payload = buf.slice(tagEnd + 1, payloadEnd);
+        buf = buf.slice(payloadEnd + 1);
+        try {
+          const data = JSON.parse(payload);
+          if (tag === "CLEAN_PROGRESS") onProgress(data);
+          else if (tag === "CLEAN_USAGE") onUsage(data);
+        } catch {
+          // Een niet te ontleden frame negeren we — de inhoud (tekst) gaat voor.
+        }
+      }
+    },
+    /** null = geen fout gezien; anders de (mogelijk lege) foutmelding. */
+    finish() {
+      return errorMsg;
+    },
+  };
+}
 
 /**
  * Kern van zowel "Opschonen" als "Vertalen naar het Nederlands": stream een
@@ -565,23 +712,34 @@ const STREAM_ERROR_SENTINEL = "\x00CLEAN_ERROR\x00";
  * naar het document. `guardField` voorkomt dubbel werk (bv. `cleaned` of
  * `translated`) en is per actie apart, zodat opschonen en vertalen elkaar
  * niet blokkeren — je kunt een document eerst vertalen én daarna nog
- * opschonen, of andersom.
+ * opschonen, of andersom. Er loopt wel maar één actie tegelijk, app-breed
+ * (`activeClean`) — één voortgangsbalk en één Annuleren-knop, gedeeld door
+ * alle documenten, zoals gevraagd.
  */
-async function runClean(doc, profile, { guardField, button, busyText, doneText, sourceSuffix, failMessage }) {
-  if (!doc || doc[guardField]) return;
+async function runClean(doc, profile, { guardField, resultLabel, busyText, doneText, sourceSuffix, failMessage }) {
+  if (!doc || doc[guardField] || activeClean) {
+    if (activeClean) {
+      setStatus("Er loopt al een opschoon- of vertaalactie — wacht tot die klaar is, of annuleer eerst.", "err");
+    }
+    return;
+  }
   saveEdits();
 
   const docId = doc.id;
   const isLive = () => state.activeId === docId; // gebruiker kan tijdens het wachten wisselen
+  const requestId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const controller = new AbortController();
+  activeClean = { docId, requestId, controller };
+  if (isLive()) renderEditor(); // knoppen uit, Annuleren aan, voortgangsbalk klaarzetten
 
-  button.disabled = true;
   setStatus(busyText, "info", { busy: true });
 
   try {
     const response = await fetch("/api/clean/stream", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ markdown: doc.markdown, profile, model: $("#model").value }),
+      body: JSON.stringify({ markdown: doc.markdown, profile, model: $("#model").value, request_id: requestId }),
+      signal: controller.signal,
     });
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));
@@ -596,38 +754,60 @@ async function runClean(doc, profile, { guardField, button, busyText, doneText, 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let acc = "";
+    let usage = null;
+    const parser = makeStreamParser({
+      onText: (t) => {
+        acc += t;
+        if (isLive()) {
+          $("#md").value = acc;
+          updateLineNumbers();
+        }
+      },
+      onProgress: (p) => {
+        if (isLive()) setProgress(p.produced_tokens, p.expected_tokens);
+      },
+      onUsage: (u) => { usage = u; },
+    });
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;
-      const text = decoder.decode(value, { stream: true });
-      const errAt = text.indexOf(STREAM_ERROR_SENTINEL);
-      if (errAt !== -1) {
-        acc += text.slice(0, errAt);
-        throw new Error(text.slice(errAt + STREAM_ERROR_SENTINEL.length) || failMessage);
-      }
-      acc += text;
-      if (isLive()) {
-        $("#md").value = acc;
-        updateLineNumbers();
-      }
+      parser.push(decoder.decode(value, { stream: true }));
     }
+    const err = parser.finish();
+    if (err !== null) throw new Error(err || failMessage);
 
     doc.markdown = acc.trim() + "\n";
     doc.source += sourceSuffix;
     doc[guardField] = true;
-    if (isLive()) renderEditor();
+    doc.lastUsage = usage ? { label: resultLabel, usage } : doc.lastUsage;
     renderDocTabs();
     setStatus(doneText, "ok");
   } catch (e) {
-    setStatus(e.message, "err");
-    if (isLive()) {
-      // De halfklare tekst terugzetten naar de laatst bewaarde staat, niet de
-      // afgebroken streaming-tekst laten staan.
-      $("#md").value = doc.markdown;
-      updateLineNumbers();
-      button.disabled = false;
+    if (e.name === "AbortError") {
+      setStatus(`"${doc.title}" geannuleerd.`, "info");
+    } else {
+      setStatus(e.message, "err");
+      if (isLive()) {
+        // De halfklare tekst terugzetten naar de laatst bewaarde staat, niet de
+        // afgebroken streaming-tekst laten staan.
+        $("#md").value = doc.markdown;
+        updateLineNumbers();
+      }
     }
+  } finally {
+    activeClean = null;
+    if (isLive()) renderEditor();
   }
+}
+
+/** Annuleert de lopende opschoon-/vertaalactie (welk document dat ook is):
+ * meldt de server (best-effort, geen wachttijd) en breekt de eigen fetch
+ * meteen af. */
+function cancelActiveClean() {
+  if (!activeClean) return;
+  const { requestId, controller } = activeClean;
+  postJSON("/api/clean/cancel", { request_id: requestId }).catch(() => {});
+  controller.abort();
 }
 
 async function cleanActiveDoc() {
@@ -635,7 +815,7 @@ async function cleanActiveDoc() {
   if (!doc) return;
   await runClean(doc, profileFor(doc), {
     guardField: "cleaned",
-    button: $("#clean"),
+    resultLabel: "Opschonen",
     busyText: `"${doc.title}" opschonen met AI… dit kan enkele minuten duren.`,
     doneText: `"${doc.title}" is opgeschoond.`,
     sourceSuffix: " • AI-opgeschoond",
@@ -648,7 +828,7 @@ async function translateActiveDoc() {
   if (!doc) return;
   await runClean(doc, "translate_nl", {
     guardField: "translated",
-    button: $("#translate-nl"),
+    resultLabel: "Vertalen",
     busyText: `"${doc.title}" vertalen naar het Nederlands… dit kan enkele minuten duren.`,
     doneText: `"${doc.title}" is vertaald naar het Nederlands.`,
     sourceSuffix: " • vertaald naar NL",
@@ -998,6 +1178,7 @@ function init() {
   $("#fetch-wet").addEventListener("click", () => fetchLinks("wet"));
   $("#fetch-doc").addEventListener("click", fetchFileUrls);
   $("#fetch-tekst").addEventListener("click", fetchPastedText);
+  $("#paste-clipboard").addEventListener("click", pasteFromClipboard);
   $("#clear-tekst").addEventListener("click", () => {
     $("#paste-area").innerHTML = "";
     $("#paste-area").focus();
@@ -1005,6 +1186,7 @@ function init() {
 
   $("#clean").addEventListener("click", cleanActiveDoc);
   $("#translate-nl").addEventListener("click", translateActiveDoc);
+  $("#cancel-clean").addEventListener("click", cancelActiveClean);
   $("#copy").addEventListener("click", copyActive);
   $("#download").addEventListener("click", downloadActive);
 

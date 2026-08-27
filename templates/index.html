@@ -96,6 +96,7 @@
              role="textbox" aria-multiline="true" aria-label="Plak hier tekst"
              data-placeholder="Plak hier tekst — kaal of verrijkt (bv. uit Word, een PDF-viewer of een webpagina)…"></div>
         <div class="row-actions">
+          <button type="button" class="btn btn-outline" id="paste-clipboard">Plakken</button>
           <button type="button" class="btn btn-ghost" id="clear-tekst">Wissen</button>
           <button type="button" class="btn btn-solid btn-lg" id="fetch-tekst">Opmaken</button>
         </div>
@@ -118,6 +119,10 @@
         <div class="clean-info">
           <strong id="clean-title">Opschonen met AI</strong>
           <span class="est" id="estimate">Koppen naar markdown, losse regels samenvoegen, kop-/voetteksten verwijderen.</span>
+          <div class="progress-track" id="clean-progress" hidden>
+            <div class="progress-fill" id="clean-progress-fill"></div>
+          </div>
+          <span class="est" id="clean-result" hidden></span>
         </div>
         <div class="clean-controls">
           <label class="checkbox" id="obsidian-wrap" hidden>
@@ -125,6 +130,7 @@
             <span>Opmaken voor Obsidian</span>
           </label>
           <select class="select" id="model" aria-label="Model voor de AI-opschoning"></select>
+          <button type="button" class="btn btn-outline btn-danger" id="cancel-clean" hidden>Annuleren</button>
           <button type="button" class="btn btn-outline" id="translate-nl">Vertalen naar het Nederlands</button>
           <button type="button" class="btn btn-solid" id="clean">Opschonen</button>
         </div>

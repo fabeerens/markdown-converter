@@ -570,6 +570,22 @@ body::before {
 }
 .clean-controls { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
 
+/* Voortgangsbalk tijdens opschonen/vertalen: geproduceerde tokens (dit deel)
+   t.o.v. de verwachte totale uitvoer (op basis van de invoergrootte). */
+.progress-track {
+  height: 4px; margin-top: var(--space-2);
+  background: var(--gray-a4);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%; width: 0%;
+  background: var(--accent-9);
+  border-radius: var(--radius-pill);
+  transition: width var(--dur-fast) linear;
+}
+@media (prefers-reduced-motion: reduce) { .progress-fill { transition: none; } }
+
 /* --------------------------------------------------------------------------
    Editor: regelnummers + tekstvak
 
