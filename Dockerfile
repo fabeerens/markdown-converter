@@ -8,6 +8,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# poppler-utils: systeembinary (pdfimages/pdfinfo), niet via pip te installeren —
+# nodig voor het extraheren van losse afbeeldingen uit een PDF
+# (mdconv/sources/pdf_images.py). --no-install-recommends houdt de laag klein.
+RUN apt-get update && apt-get install -y --no-install-recommends poppler-utils \
+    && rm -rf /var/lib/apt/lists/*
+
 # Dependencies eerst (betere laagcache: verandert er alleen appcode, dan slaat
 # Docker deze stap over). De --mount=type=cache bewaart pip's downloadcache
 # tussen builds in een apart BuildKit-cachevolume — dus ook op een VPS/CI die

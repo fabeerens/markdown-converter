@@ -12,13 +12,15 @@ import io
 import json
 import os
 import re
+import zipfile
 from urllib.parse import unquote, urlparse
 
 import requests
 from flask import Blueprint, Response, current_app, jsonify, render_template, request, send_file
 
-from . import cleanup, net, sources, version
+from . import attachments, cleanup, net, sources, version
 from .errors import ConversionError
+from .sources import pdf_images
 
 bp = Blueprint("api", __name__)
 
@@ -73,6 +75,10 @@ def config():
         llm_available=cleanup.is_available(),
         models=cleanup.get_model_choices(),
         profiles=list(cleanup.PROFILES),
+        # Bepaalt of de UI de toggle "Losse afbeeldingen extraheren" bij
+        # Documentupload aanbiedt — alleen zinvol als poppler-utils
+        # (pdfimages/pdfinfo) daadwerkelijk geïnstalleerd is.
+        extract_images_available=pdf_images.available(),
     )
 
 
@@ -114,6 +120,17 @@ def convert_text():
     return jsonify(sources.from_pasted_text(html, text).as_json())
 
 
+def _doc_payload(doc) -> dict:
+    """`Document.as_json()` aangevuld met een bijlage-token als er losse
+    afbeeldingen uit een PDF zijn geëxtraheerd — de binaire data zelf gaat
+    nooit in JSON mee, zie `mdconv/attachments.py`."""
+    payload = doc.as_json()
+    if doc.attachments:
+        payload["attachments_token"] = attachments.store(doc.attachments)
+        payload["attachment_count"] = len(doc.attachments)
+    return payload
+
+
 @bp.post("/api/convert/file")
 def convert_file():
     """Een geüpload bestand omzetten."""
@@ -125,7 +142,9 @@ def convert_file():
     data = upload.read()
     if not data.strip():
         raise ConversionError("Het bestand is leeg.")
-    return jsonify(sources.from_file(data, upload.filename).as_json())
+    extract_images = request.form.get("extract_images") == "1"
+    doc = sources.from_file(data, upload.filename, extract_images=extract_images)
+    return jsonify(_doc_payload(doc))
 
 
 @bp.post("/api/convert/file-url")
@@ -136,7 +155,8 @@ def convert_file_url():
     heeft geen authenticatie en hoort daarom niet zonder reverse proxy + auth
     open op internet te staan (SSRF).
     """
-    url = (_payload().get("url") or "").strip()
+    data_in = _payload()
+    url = (data_in.get("url") or "").strip()
     if not re.match(r"^https?://", url, re.I):
         raise ConversionError("Voer een geldige URL in (beginnend met http:// of https://).")
 
@@ -152,7 +172,9 @@ def convert_file_url():
         raise ConversionError("Bestand is groter dan 40 MB.")
 
     filename = _filename_from_url(url, r.headers.get("Content-Type", ""))
-    return jsonify(sources.from_file_bytes(r.content, filename, url).as_json())
+    extract_images = data_in.get("extract_images") is True
+    doc = sources.from_file_bytes(r.content, filename, url, extract_images=extract_images)
+    return jsonify(_doc_payload(doc))
 
 
 def _filename_from_url(url: str, content_type: str) -> str:
@@ -274,13 +296,26 @@ def clean_cancel():
 
 @bp.post("/api/download")
 def download():
-    """De meegestuurde markdown als .md-bestand terugsturen."""
+    """De meegestuurde markdown terugsturen — als .md, of als .zip mét de
+    `attachments/`-map als er bij de conversie losse afbeeldingen uit een PDF
+    zijn geëxtraheerd (zie `mdconv/attachments.py`)."""
     data = _payload()
     name = re.sub(r"[^A-Za-z0-9._-]", "_", data.get("filename") or "document") or "document"
-    if not name.endswith(".md"):
-        name += ".md"
+
+    directory = attachments.get((data.get("attachments_token") or "").strip())
+    if directory and directory.is_dir():
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr(f"{name}.md", data.get("markdown", ""))
+            for file in sorted(directory.iterdir()):
+                zf.write(file, arcname=f"attachments/{file.name}")
+        buf.seek(0)
+        return send_file(
+            buf, mimetype="application/zip", as_attachment=True, download_name=f"{name}.zip"
+        )
+
     buf = io.BytesIO(data.get("markdown", "").encode("utf-8"))
-    return send_file(buf, mimetype="text/markdown", as_attachment=True, download_name=name)
+    return send_file(buf, mimetype="text/markdown", as_attachment=True, download_name=f"{name}.md")
 
 
 @bp.app_errorhandler(413)

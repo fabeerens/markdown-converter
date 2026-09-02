@@ -44,6 +44,8 @@ mdconv/
     formex.py              Formex-XML → markdown (context expliciet, dus thread-safe)
     files.py               PDF via pdf-inspector, rest via MarkItDown (beide lui geladen)
     pasted_text.py         handmatig geplakte tekst (kaal of verrijkte HTML) → markdown
+    pdf_images.py           losse afbeeldingen uit een PDF (pdfimages/pdfinfo, poppler)
+  attachments.py            tijdelijke, token-based opslag van geëxtraheerde afbeeldingen
   cleanup/
     __init__.py            publieke ingangen: estimate(), clean(), clean_stream()
     config.py              standaarden + instellingen (modellen/deelgrootte/prompts)
@@ -228,6 +230,41 @@ accountregistratie namens de gebruiker):
   pdf-inspector kent alleen PDF. `files.convert()` geeft `(markdown, engine)`
   terug zodat de UI kan tonen welke engine het document daadwerkelijk verwerkte
   (`"pdf-inspector"` of `"MarkItDown"` in het bronveld).
+- **Losse afbeeldingen extraheren** (`extract_images=1` op `/api/convert/file` en
+  `/api/convert/file-url`, alleen voor `.pdf`, bij Documentupload): een **aanvulling** op de
+  normale PDF-tekst (pdf-inspector/MarkItDown hierboven), geen alternatief — de UI-toggle
+  (`#extract-images`, alleen zichtbaar als `/api/config` `extract_images_available: true`
+  teruggeeft) staat naast de normale invoer en verandert niets aan hóe de tekst zelf wordt
+  omgezet.
+  - **`mdconv/sources/pdf_images.py`** (`pdfimages`/`pdfinfo`, poppler-utils — systeembinaries,
+    niet via pip: Homebrew lokaal, `apt-get` in de Dockerfile) extraheert de ingesloten
+    rasterafbeeldingen (grafieken, screenshots). **Hele pagina's als scan worden bewust
+    overgeslagen**: `_is_full_page()` vergelijkt de fysieke afmeting van elke afbeelding
+    (pixels ÷ eigen ppi uit `pdfimages -list`) met de paginaomvang uit `pdfinfo -f N -l N`
+    (let op: dat commando meldt de paginagrootte als `"Page    N size: …"`, niet
+    `"Page size: …"` zoals zonder `-f`/`-l` — een eerdere regex miste dat verschil). Beslaat
+    een afbeelding op beide assen ≥ 85% van de pagina, dan is het vrijwel zeker de hele
+    pagina, geen losse figuur — anders zou elke gescande pagina de eigen tekst als "bijlage"
+    dupliceren. `pdfimages -j` levert alleen écht al-JPEG-gecodeerde afbeeldingen als `.jpg`;
+    een rauwe pixmap (typisch voor grafieken/screenshots) komt er als ongecomprimeerde
+    `.ppm`/`.pbm` uit en wordt hier met Pillow herschreven naar PNG (klein, lossless).
+  - **Bestandsnamen en plaatsing**: elke afbeelding heet `p{paginanummer}[-n].ext` (bv.
+    `p12.png`, of `p12-2.png` bij meerdere op één pagina) — geen contextuele slug zoals bij
+    een OCR-aanpak, want zonder per-pagina Markdown-tekst (`pdf-inspector`/MarkItDown geven
+    één doorlopende tekst terug, geen paginascheiding) is er geen kop om de naam aan te
+    ontlenen. Alle afbeeldingen komen daarom als Obsidian wikilink-embeds
+    (`![[bestandsnaam.png]]`) onder één losse `## Bijlagen`-sectie aan het eind van het
+    document (`sources._attach_pdf_images()` + `sources.from_file()`), in plaats van
+    ín de lopende tekst op hun eigen plek.
+  - **Bijlagen en de zip-download** (`mdconv/attachments.py`): binaire afbeeldingsdata gaat
+    nooit in de conversie-JSON mee. `_doc_payload()` in `api.py` slaat `doc.attachments` op
+    onder een token (`attachments.store()`, een tempdir per set) en stuurt alleen
+    `attachments_token` + `attachment_count` terug; de front-end onthoudt dat op het
+    document (`doc.attachmentsToken`) en stuurt het bij het downloaden terug mee.
+    `/api/download` bouwt dan een `.zip` (de markdown + een `attachments/`-submap) i.p.v.
+    een los `.md`-bestand. `attachments.get()` **verwijdert niets** — nogmaals downloaden mag
+    gewoon; opruimen gebeurt lui, bij elke nieuwe `store()`-aanroep worden sets ouder dan
+    2 uur weggegooid (geen cron/achtergrondtaak nodig voor deze single-user lokale tool).
 - **Tekst plakken** (`pasted_text.py`, endpoint `/api/convert/text`): de front-end stuurt
   zowel `html` (`element.innerHTML` van het `contenteditable`-vak, dus de klembord-opmaak
   zoals de browser die bij plakken invoegt) als `text` (`element.innerText`, kaal) mee.
@@ -534,6 +571,9 @@ regel), inclusief de vloeiende tabbalk-indicator.
   staat de tool stil. `docker-compose.yml` bindt bewust op
   `127.0.0.1` — de tool heeft **geen auth**; publiek ontsluiten alleen achter reverse proxy + auth
   (het `/api/convert/file-url`-endpoint is een SSRF-vector).
+- **poppler-utils** (apt) wordt in de Dockerfile meegeïnstalleerd voor het extraheren van
+  losse afbeeldingen (`mdconv/sources/pdf_images.py`). Lokaal (macOS via `run.sh`):
+  `brew install poppler`.
 - Env-vars via compose: `OPENROUTER_API_KEY`, `LLM_MODEL`, `OPENROUTER_BASE_URL`. Code behandelt
   lege strings als "niet gezet" (`or DEFAULT`), zodat compose's `${VAR:-}` de defaults niet breekt.
 

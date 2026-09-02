@@ -23,6 +23,7 @@ from . import (
     fr_conseil_constitutionnel,
     hudoc,
     pasted_text,
+    pdf_images,
     rechtspraak,
     wetten,
 )
@@ -49,12 +50,27 @@ KIND_DOCUMENT = "document"
 
 
 @dataclass(frozen=True, slots=True)
+class Attachment:
+    """Eén bijlage (losse afbeelding uit een PDF), klaar om als los bestand weg te schrijven."""
+
+    filename: str
+    data: bytes
+
+
+@dataclass(frozen=True, slots=True)
 class Document:
-    """Eén geconverteerd document, klaar voor de editor."""
+    """Eén geconverteerd document, klaar voor de editor.
+
+    `attachments` (losse afbeeldingen uit een PDF, zie `pdf_images.py`) gaat
+    NIET mee in `as_json()` — binaire data hoort niet in de conversie-JSON.
+    De API-laag slaat ze apart op (`mdconv.attachments`) en stuurt alleen een
+    token + aantal mee; pas bij het downloaden wordt er een zip van gemaakt.
+    """
 
     markdown: str
     source: str
     kind: str = KIND_DOCUMENT
+    attachments: tuple = ()
 
     def as_json(self) -> dict:
         return {"markdown": self.markdown, "source": self.source, "kind": self.kind}
@@ -127,22 +143,55 @@ def looks_like_formex(data: bytes) -> bool:
     return b"<" in head[:200] and any(m in head for m in _FORMEX_MARKERS)
 
 
-def from_file(data: bytes, filename: str) -> Document:
-    """Zet een geüpload bestand om naar een document."""
+def from_file(data: bytes, filename: str, *, extract_images: bool = False) -> Document:
+    """Zet een geüpload bestand om naar een document.
+
+    `extract_images=True` haalt bij een PDF ook losse ingesloten afbeeldingen
+    eruit (grafieken, screenshots — hele-pagina-scans uitgesloten, zie
+    `pdf_images.py`) en zet die als Obsidian wikilink-bijlagen onder een eigen
+    "Bijlagen"-sectie aan het einde van het document. Bij elk ander
+    bestandstype (of als poppler-utils niet geïnstalleerd is) wordt deze vlag
+    genegeerd, precies zoals de UI 'm ook alleen bij PDF-invoer toont.
+    """
     if filename.lower().endswith(".xml") and looks_like_formex(data):
         markdown = formex.convert_formex(data)
         if len(markdown.strip()) >= _FORMEX_MIN_LENGTH:
             return Document(markdown=markdown, source=f"Formex XML • {filename}")
 
     markdown, engine = files.convert(data, filename)
-    return Document(markdown=markdown, source=f"{engine} • {filename}")
+
+    attachments: tuple[Attachment, ...] = ()
+    if extract_images and filename.lower().endswith(".pdf") and pdf_images.available():
+        attachments = _attach_pdf_images(data)
+        if attachments:
+            embeds = "\n".join(f"![[{a.filename}]]" for a in attachments)
+            markdown = f"{markdown.rstrip()}\n\n## Bijlagen\n\n{embeds}\n"
+            engine = f"{engine} + {len(attachments)} afbeelding(en)"
+
+    return Document(markdown=markdown, source=f"{engine} • {filename}", attachments=attachments)
 
 
-def from_file_bytes(data: bytes, filename: str, label: str) -> Document:
+def _attach_pdf_images(data: bytes) -> tuple[Attachment, ...]:
+    """Losse afbeeldingen uit een PDF, herbenoemd naar `p{paginanummer}[-n].ext`."""
+    images = pdf_images.extract_images(data)
+    counts: dict[int, int] = {}
+    for img in images:
+        counts[img.page] = counts.get(img.page, 0) + 1
+    attachments = []
+    for img in images:
+        suffix = "" if counts[img.page] == 1 else f"-{img.index_on_page}"
+        attachments.append(Attachment(filename=f"p{img.page:02d}{suffix}.{img.ext}", data=img.data))
+    return tuple(attachments)
+
+
+def from_file_bytes(data: bytes, filename: str, label: str, *, extract_images: bool = False) -> Document:
     """Als `from_file`, maar met een eigen bronvermelding (bv. de URL)."""
-    doc = from_file(data, filename)
+    doc = from_file(data, filename, extract_images=extract_images)
     engine = doc.source.split(" • ", 1)[0]
-    return Document(markdown=doc.markdown, source=f"{engine} • {label}", kind=doc.kind)
+    return Document(
+        markdown=doc.markdown, source=f"{engine} • {label}", kind=doc.kind,
+        attachments=doc.attachments,
+    )
 
 
 # --------------------------------------------------------------------------

@@ -15,6 +15,8 @@ from __future__ import annotations
 import json
 import os
 import sys
+import zipfile
+from io import BytesIO
 
 import pytest
 
@@ -1369,3 +1371,235 @@ def _minimal_text_pdf() -> bytes:
     out += (b"trailer<</Size %d/Root 1 0 R>>\nstartxref\n%d\n%%%%EOF\n"
             % (len(offsets) + 1, start))
     return out
+
+
+# ---------------------------------------------------------------------------
+# Afbeeldingen uit PDF's (pdf_images.py)
+# ---------------------------------------------------------------------------
+
+# Echte `pdfimages -list`-uitvoer (poppler 26.08), gebruikt om de parser tegen
+# het werkelijke kolomformaat te toetsen — een eerdere versie van de regex was
+# één "\S+" te kort (de kolommen "object" en "ID" zijn twee losse velden, geen
+# combinatie "object ID"), waardoor x-ppi/y-ppi een kolom opschoven. Alleen
+# zichtbaar met échte pdfimages-uitvoer, niet met een handgeschreven fixture
+# die toevallig bij de aanname paste.
+_PDFIMAGES_LIST_OUTPUT = """\
+page   num  type   width height color comp bpc  enc interp  object ID x-ppi y-ppi size ratio
+--------------------------------------------------------------------------------------------
+   1     0 image     300   200  rgb     3   8  image  no         4  0    72    72  256B 0.1%
+   2     1 image    1600  2200  rgb     3   8  image  no         6  0   194   188 6724B 0.1%
+   3     2 image     300   200  rgb     3   8  image  no         4  0    72    72  256B 0.1%
+"""
+
+
+def test_pdf_images_list_parser_matches_real_column_layout():
+    from mdconv.sources import pdf_images
+
+    rows = pdf_images._parse_list(_PDFIMAGES_LIST_OUTPUT)
+    assert [r["page"] for r in rows] == [1, 2, 3]
+    assert rows[0] == {"page": 1, "num": 0, "width": 300, "height": 200, "xppi": 72.0, "yppi": 72.0}
+    assert rows[1]["width"] == 1600 and rows[1]["xppi"] == 194.0 and rows[1]["yppi"] == 188.0
+
+
+def test_pdf_images_page_size_regex_handles_both_pdfinfo_formats():
+    from mdconv.sources import pdf_images
+
+    # Zonder -f/-l (heel document):
+    assert pdf_images._PAGE_SIZE_RE.match("Page size:       595.276 x 841.89 pts (A4)")
+    # Met -f/-l (één pagina uit een reeks):
+    m = pdf_images._PAGE_SIZE_RE.match("Page    2 size:  595.276 x 841.89 pts (A4)")
+    assert m and float(m.group(1)) == 595.276 and float(m.group(2)) == 841.89
+
+
+def test_pdf_images_skips_a_full_page_scan_but_keeps_a_small_figure():
+    from mdconv.sources import pdf_images
+
+    page_size = (8.267722222222222, 11.692916666666667)  # A4 in inches
+    small_figure = {"width": 300, "height": 200, "xppi": 72.0, "yppi": 72.0}
+    full_page_scan = {"width": 1600, "height": 2200, "xppi": 194.0, "yppi": 188.0}
+    assert not pdf_images._is_full_page(small_figure, page_size)
+    assert pdf_images._is_full_page(full_page_scan, page_size)
+
+
+def test_pdf_images_full_page_check_is_safe_without_page_size_or_ppi():
+    from mdconv.sources import pdf_images
+
+    row = {"width": 1600, "height": 2200, "xppi": 0.0, "yppi": 0.0}
+    assert not pdf_images._is_full_page(row, (8.27, 11.69))
+    assert not pdf_images._is_full_page(row, None)
+
+
+@pytest.mark.skipif(
+    not __import__("mdconv.sources.pdf_images", fromlist=["available"]).available(),
+    reason="poppler-utils (pdfimages/pdfinfo) niet geïnstalleerd",
+)
+def test_pdf_images_extract_images_end_to_end():
+    """Bouwt een minimale PDF met één rauw ingesloten RGB-pixmap (geen
+    compressie) en verifieert dat die er als PNG uitkomt — echte
+    pdfimages/pdfinfo-aanroepen, geen mocks."""
+    from mdconv.sources import pdf_images
+
+    width, height = 4, 4
+    raw_rgb = bytes([200, 50, 50] * (width * height))  # rood vlak, geen filter
+    objects = [
+        b"<</Type/Catalog/Pages 2 0 R>>",
+        b"<</Type/Pages/Kids[3 0 R]/Count 1>>",
+        b"<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]"
+        b"/Resources<</XObject<</Im1 4 0 R>>>>/Contents 5 0 R>>",
+        b"<</Type/XObject/Subtype/Image/Width %d/Height %d/ColorSpace/DeviceRGB"
+        b"/BitsPerComponent 8/Length %d>>stream\n" % (width, height, len(raw_rgb))
+        + raw_rgb + b"\nendstream",
+    ]
+    content = b"q 100 0 0 100 50 50 cm /Im1 Do Q"
+    objects.append(b"<</Length %d>>stream\n%s\nendstream" % (len(content), content))
+
+    out = b"%PDF-1.4\n"
+    offsets = []
+    for i, body in enumerate(objects, start=1):
+        offsets.append(len(out))
+        out += b"%d 0 obj%s endobj\n" % (i, body)
+    start = len(out)
+    out += b"xref\n0 %d\n0000000000 65535 f \n" % (len(objects) + 1)
+    for off in offsets:
+        out += b"%010d 00000 n \n" % off
+    out += b"trailer<</Size %d/Root 1 0 R>>\nstartxref\n%d\n%%%%EOF\n" % (len(objects) + 1, start)
+
+    images = pdf_images.extract_images(out)
+    assert len(images) == 1
+    assert images[0].page == 1
+    assert images[0].ext == "png"
+    from PIL import Image
+    with Image.open(BytesIO(images[0].data)) as im:
+        assert im.size == (width, height)
+
+
+# ---------------------------------------------------------------------------
+# Integratie: sources.from_file(extract_images=True) en bijlage-opslag
+# (mdconv/attachments.py)
+# ---------------------------------------------------------------------------
+
+def test_from_file_with_extract_images_appends_a_bijlagen_section(monkeypatch):
+    """Combineert een gemockte normale PDF-conversie met gemockte
+    pdfimages-uitvoer: elke afbeelding hoort als wikilink-embed onder één
+    losse "Bijlagen"-sectie te staan, herbenoemd naar `p{pagina}[-n].ext`."""
+    from mdconv import sources
+    from mdconv.sources import files, pdf_images
+
+    monkeypatch.setattr(files, "convert", lambda data, filename: ("# Titel\n\nInhoud.", "pdf-inspector"))
+    monkeypatch.setattr(pdf_images, "available", lambda: True)
+    monkeypatch.setattr(pdf_images, "extract_images", lambda pdf_bytes: [
+        pdf_images.ExtractedImage(page=2, index_on_page=1, data=b"PNGDATA1", ext="png"),
+        pdf_images.ExtractedImage(page=2, index_on_page=2, data=b"PNGDATA2", ext="png"),
+    ])
+
+    doc = sources.from_file(b"fake-pdf-bytes", "test.pdf", extract_images=True)
+
+    assert "## Bijlagen" in doc.markdown
+    assert "![[p02.png]]" not in doc.markdown  # meerdere per pagina: index moet mee
+    assert "![[p02-1.png]]" in doc.markdown
+    assert "![[p02-2.png]]" in doc.markdown
+    assert doc.markdown.index("Inhoud") < doc.markdown.index("Bijlagen")
+    assert {a.filename for a in doc.attachments} == {"p02-1.png", "p02-2.png"}
+    assert "2 afbeelding(en)" in doc.source
+
+
+def test_from_file_with_extract_images_works_without_any_images(monkeypatch):
+    from mdconv import sources
+    from mdconv.sources import files, pdf_images
+
+    monkeypatch.setattr(files, "convert", lambda data, filename: ("# Alleen tekst", "pdf-inspector"))
+    monkeypatch.setattr(pdf_images, "available", lambda: True)
+    monkeypatch.setattr(pdf_images, "extract_images", lambda pdf_bytes: [])
+
+    doc = sources.from_file(b"fake-pdf-bytes", "test.pdf", extract_images=True)
+    assert doc.markdown == "# Alleen tekst"
+    assert doc.attachments == ()
+    assert "afbeelding" not in doc.source
+
+
+def test_from_file_ignores_extract_images_when_poppler_not_available(monkeypatch):
+    from mdconv import sources
+    from mdconv.sources import files, pdf_images
+
+    monkeypatch.setattr(files, "convert", lambda data, filename: ("# Alleen tekst", "pdf-inspector"))
+    monkeypatch.setattr(pdf_images, "available", lambda: False)
+
+    doc = sources.from_file(b"fake-pdf-bytes", "test.pdf", extract_images=True)
+    assert doc.markdown == "# Alleen tekst"
+    assert doc.attachments == ()
+
+
+def test_from_file_ignores_extract_images_for_non_pdf_files(monkeypatch):
+    from mdconv import sources
+    from mdconv.sources import files
+
+    monkeypatch.setattr(files, "convert", lambda data, filename: ("# Woorddocument", "MarkItDown"))
+    doc = sources.from_file(b"fake-docx-bytes", "test.docx", extract_images=True)
+    assert doc.markdown == "# Woorddocument"
+    assert doc.attachments == ()
+
+
+def test_attachments_store_and_get_roundtrip(tmp_path):
+    from mdconv import attachments
+    from mdconv.sources import Attachment
+
+    token = attachments.store([Attachment(filename="p01.png", data=b"DATA")])
+    directory = attachments.get(token)
+    assert directory is not None
+    assert (directory / "p01.png").read_bytes() == b"DATA"
+    # Niet-destructief: nogmaals ophalen moet nog steeds werken.
+    assert attachments.get(token) == directory
+
+
+def test_attachments_get_returns_none_for_an_unknown_token():
+    from mdconv import attachments
+
+    assert attachments.get("does-not-exist") is None
+    assert attachments.get("") is None
+
+
+def test_convert_file_with_extract_images_returns_an_attachments_token(client, monkeypatch):
+    from mdconv import api as api_module
+    from mdconv.sources import Attachment
+
+    monkeypatch.setattr(
+        api_module.sources, "from_file",
+        lambda data, filename, extract_images=False: api_module.sources.Document(
+            markdown="# Test\n\n## Bijlagen\n\n![[p01.png]]\n",
+            source="pdf-inspector + 1 afbeelding(en) • test.pdf",
+            attachments=(Attachment(filename="p01.png", data=b"PNGDATA"),),
+        ),
+    )
+    r = client.post(
+        "/api/convert/file",
+        data={"file": (BytesIO(b"%PDF-1.4 fake"), "test.pdf"), "extract_images": "1"},
+        content_type="multipart/form-data",
+    )
+    assert r.status_code == 200
+    data = r.get_json()
+    assert data["attachment_count"] == 1
+    assert "attachments_token" in data
+
+
+def test_download_with_attachments_token_returns_a_zip(client):
+    from mdconv import attachments
+    from mdconv.sources import Attachment
+
+    token = attachments.store([Attachment(filename="p01.png", data=b"PNGDATA")])
+    r = client.post("/api/download", json={
+        "markdown": "# Test\n\n![[p01.png]]\n",
+        "filename": "test",
+        "attachments_token": token,
+    })
+    assert r.status_code == 200
+    assert r.content_type == "application/zip"
+    zf = zipfile.ZipFile(BytesIO(r.data))
+    assert set(zf.namelist()) == {"test.md", "attachments/p01.png"}
+    assert zf.read("attachments/p01.png") == b"PNGDATA"
+
+
+def test_download_without_attachments_token_returns_plain_markdown(client):
+    r = client.post("/api/download", json={"markdown": "# Test", "filename": "test"})
+    assert r.status_code == 200
+    assert r.content_type.startswith("text/markdown")
+    assert r.data == b"# Test"

@@ -75,6 +75,10 @@
           <input type="file" id="file" multiple hidden
                  accept=".xml,.pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.html,.htm,.csv,.json,.txt,.md,.epub,.rtf,.msg">
         </div>
+        <label class="checkbox" id="extract-images-wrap" hidden>
+          <input type="checkbox" id="extract-images">
+          <span>Voor PDF's: losse ingesloten afbeeldingen meenemen als bijlagen</span>
+        </label>
         <div class="or">of plak een of meer links naar bestanden</div>
         <div class="rows" id="rows-doc"></div>
         <div class="row-actions">
@@ -86,6 +90,10 @@
         PDF's gaan via <strong>pdf-inspector</strong> (layout-bewust: koppen, lijsten en
         tabellen). Heeft een PDF geen tekstlaag, bijvoorbeeld een scan, dan valt de conversie
         terug op MarkItDown. Alle overige formaten gaan altijd via MarkItDown.
+        Met de afbeeldingen-optie (indien beschikbaar) worden grafieken en screenshots uit
+        de PDF gehaald (hele-pagina-scans uitgesloten) en als Obsidian wikilink-bijlagen
+        onder een "Bijlagen"-sectie gezet; de download wordt dan een <strong>.zip</strong>
+        met de markdown en een <code>attachments/</code>-map.
       </p>
     </section>
 

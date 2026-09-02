@@ -50,7 +50,10 @@ function profileFor(doc) {
   return doc.obsidian ? "obsidian" : doc.kind;
 }
 
-function addDoc({ title, filenameBase, source, kind, markdown, allowObsidian }) {
+function addDoc({
+  title, filenameBase, source, kind, markdown, allowObsidian,
+  attachments_token, attachment_count,
+}) {
   const doc = {
     id: state.nextId++,
     title,
@@ -68,6 +71,11 @@ function addDoc({ title, filenameBase, source, kind, markdown, allowObsidian }) 
     cleaned: false,
     translated: false,
     lastUsage: null,
+    // Alleen gezet als bij Documentupload (PDF) losse afbeeldingen zijn
+    // geëxtraheerd — bepaalt of "Download" een .zip met attachments/-map
+    // bouwt i.p.v. een los .md-bestand.
+    attachmentsToken: attachments_token || null,
+    attachmentCount: attachment_count || 0,
   };
   state.docs.push(doc);
   setActive(doc.id);
@@ -348,18 +356,25 @@ async function fetchLinks(kind) {
   );
 }
 
+/** Voor PDF's: losse ingesloten afbeeldingen (grafieken, screenshots) meenemen als bijlagen. */
+function extractImagesRequested() {
+  const el = $("#extract-images");
+  return el && !el.closest("[hidden]") && el.checked;
+}
+
 async function fetchFileUrls() {
   const items = readRows("doc");
   if (!items.length) {
     setStatus("Plak minstens één link naar een bestand.", "err");
     return;
   }
+  const extractImages = extractImagesRequested() || undefined;
   await withBusyButton($("#fetch-doc"), () =>
     runBatch(
       items,
       (item) => item.query,
       async (item) => {
-        const data = await postJSON("/api/convert/file-url", { url: item.query });
+        const data = await postJSON("/api/convert/file-url", { url: item.query, extract_images: extractImages });
         const base = basename(item.query);
         addDoc({ title: base, filenameBase: base, ...data, allowObsidian: true });
       },
@@ -371,12 +386,14 @@ async function fetchFileUrls() {
 async function uploadFiles(fileList) {
   const files = [...fileList];
   if (!files.length) return;
+  const extractImages = extractImagesRequested();
   await runBatch(
     files,
     (file) => file.name,
     async (file) => {
       const form = new FormData();
       form.append("file", file);
+      if (extractImages) form.append("extract_images", "1");
       const data = await api("/api/convert/file", { method: "POST", body: form });
       const base = file.name.replace(/\.[^.]+$/, "") || "document";
       addDoc({ title: base, filenameBase: base, ...data, allowObsidian: true });
@@ -531,6 +548,10 @@ function renderEditor() {
   $("#src").textContent = doc.source;
   $("#src").title = doc.source;
   updateLineNumbers();
+
+  $("#download").textContent = doc.attachmentsToken
+    ? `Download .zip (${doc.attachmentCount} afb.)`
+    : "Download .md";
 
   // "Opmaken voor Obsidian" staat altijd bij automatisch herkende rechtspraak,
   // en ook bij Documentupload/Tekst plakken — daar kán het een uitspraak zijn
@@ -942,15 +963,21 @@ async function downloadActive() {
   const doc = activeDoc();
   if (!doc) return;
   saveEdits();
+  // Zijn er losse afbeeldingen geëxtraheerd (Documentupload, PDF), dan bouwt
+  // /api/download een .zip met de markdown + een attachments/-map i.p.v. een
+  // los .md-bestand — zie mdconv/attachments.py.
   const response = await fetch("/api/download", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ markdown: doc.markdown, filename: doc.filenameBase }),
+    body: JSON.stringify({
+      markdown: doc.markdown, filename: doc.filenameBase,
+      attachments_token: doc.attachmentsToken || undefined,
+    }),
   });
   const blob = await response.blob();
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
-  link.download = `${doc.filenameBase}.md`;
+  link.download = `${doc.filenameBase}.${doc.attachmentsToken ? "zip" : "md"}`;
   link.click();
   URL.revokeObjectURL(link.href);
 }
@@ -963,6 +990,9 @@ async function loadConfig() {
   try {
     const cfg = await api("/api/config");
     state.llmAvailable = Boolean(cfg.llm_available);
+    // Alleen tonen als poppler-utils daadwerkelijk geïnstalleerd is (zie
+    // pdf_images.available()) — anders een dode toggle die altijd faalt.
+    $("#extract-images-wrap").hidden = !cfg.extract_images_available;
     const select = $("#model");
     const previous = select.value;
     select.replaceChildren(
