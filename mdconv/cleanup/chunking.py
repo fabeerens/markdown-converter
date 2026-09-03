@@ -33,14 +33,15 @@ def pack(pieces: list[str], sep: str, limit: int) -> list[str]:
     return chunks
 
 
-def split(text: str, limit: int | None = None) -> list[str]:
+def split(text: str, limit: int | None = None, model: str | None = None) -> list[str]:
     """Splits tekst in delen van maximaal `limit` tekens.
 
-    `limit` volgt standaard de ingestelde deelgrootte, zodat een wijziging in
-    het instellingenpaneel direct meedoet.
+    `limit` volgt standaard de deelgrootte die voor `model` is ingesteld (per
+    AI-endpoint, zie `config.get_chunk_tokens`), zodat een wijziging in het
+    instellingenpaneel direct meedoet.
     """
     if limit is None:
-        limit = config.get_chunk_chars()
+        limit = config.get_chunk_chars(model)
 
     chunks: list[str] = []
     for block in pack(text.split("\n\n"), "\n\n", limit) or [text]:
@@ -64,15 +65,16 @@ def split(text: str, limit: int | None = None) -> list[str]:
     return chunks or [text]
 
 
-def chunks_for(text: str, profile: str) -> list[str]:
+def chunks_for(text: str, profile: str, model: str | None = None) -> list[str]:
     """De delen waarin dit profiel het document verwerkt.
 
     Het obsidian-profiel draait altijd ongesplitst: dat levert één notitie op en
-    frontmatter/analyse mag maar één keer voorkomen.
+    frontmatter/analyse mag maar één keer voorkomen. `model` bepaalt anders de
+    deelgrootte (per AI-endpoint instelbaar, zie config.get_chunk_tokens).
     """
     text = text.strip()
     if not text:
         return []
     if profile in config.NO_CHUNK_PROFILES:
         return [text]
-    return split(text)
+    return split(text, model=model)

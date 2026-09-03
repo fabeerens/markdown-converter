@@ -1031,21 +1031,32 @@ async function loadConfig() {
 
 const dialog = { lastFocus: null };
 
-function modelRow(id = "", label = "") {
+function modelRow(id = "", label = "", chunkTokens = null) {
   const row = document.createElement("div");
   row.className = "row";
   row.innerHTML = `
-    <div class="field" style="flex:0 0 44%"><input type="text" class="mid" placeholder="model-id" aria-label="Model-id"></div>
+    <div class="field" style="flex:0 0 32%"><input type="text" class="mid" placeholder="model-id" aria-label="Model-id"></div>
     <div class="field"><input type="text" class="mlabel" placeholder="label in de lijst" aria-label="Label"></div>
+    <div class="field" style="flex:0 0 110px">
+      <input type="number" class="mchunk" step="1000" placeholder="standaard" aria-label="Tokens per deel voor dit endpoint">
+    </div>
     <button type="button" class="btn btn-ghost btn-icon btn-danger" aria-label="Verwijderen">✕</button>`;
   row.querySelector(".mid").value = id;
   row.querySelector(".mlabel").value = label;
+  const chunkInput = row.querySelector(".mchunk");
+  chunkInput.value = chunkTokens || "";
+  if (state.settings) {
+    chunkInput.min = state.settings.defaults.min_chunk_tokens;
+    chunkInput.max = state.settings.defaults.max_chunk_tokens;
+  }
   row.querySelector("button").addEventListener("click", () => row.remove());
   return row;
 }
 
 function renderModelRows(models) {
-  $("#settings-models").replaceChildren(...(models || []).map((m) => modelRow(m.id, m.label)));
+  $("#settings-models").replaceChildren(
+    ...(models || []).map((m) => modelRow(m.id, m.label, m.chunk_tokens))
+  );
 }
 
 async function openSettings() {
@@ -1057,11 +1068,9 @@ async function openSettings() {
   }
   const s = state.settings;
   renderModelRows(s.models);
-  $("#settings-chunk").value = s.chunk_tokens;
-  $("#settings-chunk").min = s.defaults.min_chunk_tokens;
-  $("#settings-chunk").max = s.defaults.max_chunk_tokens;
-  $("#settings-range").textContent =
-    `tokens per deel (${fmt(s.defaults.min_chunk_tokens)}–${fmt(s.defaults.max_chunk_tokens)})`;
+  $("#settings-chunk-default").textContent = fmt(s.defaults.chunk_tokens);
+  $("#settings-chunk-range").textContent =
+    `${fmt(s.defaults.min_chunk_tokens)}–${fmt(s.defaults.max_chunk_tokens)}`;
   $("#prompt-generic").value = s.prompts.generic;
   $("#prompt-caselaw").value = s.prompts.caselaw;
   $("#prompt-obsidian").value = s.prompts.obsidian;
@@ -1103,6 +1112,7 @@ async function saveSettings() {
   const models = $$("#settings-models .row").map((row) => ({
     id: row.querySelector(".mid").value.trim(),
     label: row.querySelector(".mlabel").value.trim(),
+    chunk_tokens: parseInt(row.querySelector(".mchunk").value, 10) || null,
   })).filter((m) => m.id);
 
   const button = $("#settings-save");
@@ -1111,7 +1121,6 @@ async function saveSettings() {
   try {
     await postJSON("/api/settings", {
       models,
-      chunk_tokens: parseInt($("#settings-chunk").value, 10) || null,
       prompts: {
         generic: $("#prompt-generic").value,
         caselaw: $("#prompt-caselaw").value,
@@ -1158,7 +1167,6 @@ function initSettings() {
   // die standaarden zitten al in het antwoord van /api/settings.
   const resets = {
     "reset-models": () => renderModelRows(state.settings.defaults.models),
-    "reset-chunk": () => { $("#settings-chunk").value = state.settings.defaults.chunk_tokens; },
     "reset-generic": () => { $("#prompt-generic").value = state.settings.defaults.prompts.generic; },
     "reset-caselaw": () => { $("#prompt-caselaw").value = state.settings.defaults.prompts.caselaw; },
     "reset-obsidian": () => { $("#prompt-obsidian").value = state.settings.defaults.prompts.obsidian; },

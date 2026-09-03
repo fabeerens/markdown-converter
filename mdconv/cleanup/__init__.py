@@ -42,7 +42,8 @@ def estimate(markdown: str, profile: str = "generic", model: str | None = None) 
     Tokenaantallen zijn benaderingen (≈ 4 tekens per token): genoeg om de kosten
     in te schatten, geen exacte facturering.
     """
-    chunks = chunking.chunks_for(markdown, profile)
+    resolved = config.resolve_model(model)
+    chunks = chunking.chunks_for(markdown, profile, resolved)
     n = len(chunks)
 
     system_tokens = len(config.get_prompt(profile)) // config.CHARS_PER_TOKEN
@@ -51,7 +52,6 @@ def estimate(markdown: str, profile: str = "generic", model: str | None = None) 
     input_tokens = content_tokens + (system_tokens + 20) * n
     output_tokens = int(content_tokens * config.OUTPUT_RATIO.get(profile, 1.0))
 
-    resolved = config.resolve_model(model)
     pricing = openrouter.get_pricing(resolved) if config.is_available() else None
     cost = None
     if pricing:
@@ -99,7 +99,7 @@ def clean(markdown: str, profile: str = "generic", model: str | None = None) -> 
     _ensure_available()
     resolved = config.resolve_model(model)
     system = config.get_prompt(profile)
-    chunks = chunking.chunks_for(markdown, profile)
+    chunks = chunking.chunks_for(markdown, profile, resolved)
 
     def run(chunk: str) -> tuple[str, dict]:
         return openrouter.clean_chunk(chunk, model=resolved, system=system, profile=profile)
@@ -138,7 +138,7 @@ def clean_stream(
     _ensure_available()
     resolved = config.resolve_model(model)
     system = config.get_prompt(profile)
-    chunks = chunking.chunks_for(markdown, profile)
+    chunks = chunking.chunks_for(markdown, profile, resolved)
 
     # Verwachte totale uitvoer, voor de voortgangsbalk: dezelfde schatting als
     # estimate() gebruikt voor de kostenraming (invoergrootte × OUTPUT_RATIO).

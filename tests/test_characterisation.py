@@ -801,6 +801,24 @@ def test_estimate_obsidian_expects_more_output_than_input(monkeypatch):
     assert obsidian["output_tokens"] > generic["output_tokens"]
 
 
+def test_estimate_uses_the_per_model_chunk_size(isolated_settings, monkeypatch):
+    """Twee endpoints met een verschillende deelgrootte moeten een verschillend
+    aantal delen opleveren voor exact dezelfde tekst — dat is het hele punt van
+    een per-endpoint instelling i.p.v. één centrale deelgrootte."""
+    import mdconv.cleanup as cleanup
+    cfg = isolated_settings
+    monkeypatch.setattr(cfg, "is_available", lambda: False)
+    cfg.update_settings({"models": [
+        {"id": "klein/model", "label": "Klein", "chunk_tokens": cfg.MIN_CHUNK_TOKENS},
+        {"id": "groot/model", "label": "Groot", "chunk_tokens": cfg.MAX_CHUNK_TOKENS},
+    ]})
+
+    text = "tekst " * 20000
+    small = cleanup.estimate(text, profile="generic", model="klein/model")
+    large = cleanup.estimate(text, profile="generic", model="groot/model")
+    assert small["chunks"] > large["chunks"]
+
+
 def test_pricing_lookup_matches_model_id_without_nitro_suffix(monkeypatch):
     """:nitro bestaat niet als los item in de OpenRouter-catalogus."""
     from mdconv.cleanup import openrouter
@@ -961,7 +979,7 @@ def test_clean_stream_yields_progress_and_a_final_usage_marker(monkeypatch):
     from mdconv.cleanup import config, openrouter
 
     monkeypatch.setattr(config, "is_available", lambda: True)
-    monkeypatch.setattr(config, "get_chunk_tokens", lambda: 5_000)
+    monkeypatch.setattr(config, "get_chunk_tokens", lambda model=None: 5_000)
 
     def fake_stream_chunk(chunk, *, model, system, profile, request_id=None):
         yield "a" * 500
@@ -1042,50 +1060,67 @@ def test_settings_defaults_when_nothing_stored(isolated_settings):
 
 def test_settings_roundtrip_and_take_effect_immediately(isolated_settings):
     cfg = isolated_settings
-    cfg.update_settings({"chunk_tokens": 30000, "prompts": {"generic": "eigen prompt"}})
-    assert cfg.get_chunk_tokens() == 30000
+    cfg.update_settings({
+        "models": [{"id": "x/y", "label": "X", "chunk_tokens": 30000}],
+        "prompts": {"generic": "eigen prompt"},
+    })
+    assert cfg.get_chunk_tokens("x/y") == 30000
     assert cfg.get_prompt("generic") == "eigen prompt"
 
 
 def test_settings_empty_value_clears_back_to_default(isolated_settings):
     cfg = isolated_settings
-    cfg.update_settings({"chunk_tokens": 30000, "models": [{"id": "x/y", "label": "X"}],
+    cfg.update_settings({"models": [{"id": "x/y", "label": "X", "chunk_tokens": 30000}],
                          "prompts": {"generic": "eigen"}})
-    cfg.update_settings({"chunk_tokens": None, "models": [], "prompts": {"generic": ""}})
+    cfg.update_settings({"models": [], "prompts": {"generic": ""}})
     from mdconv.cleanup import prompts
-    assert cfg.get_chunk_tokens() == cfg.DEFAULT_CHUNK_TOKENS
+    assert cfg.get_chunk_tokens("x/y") == cfg.DEFAULT_CHUNK_TOKENS
     assert cfg.get_model_choices() == cfg.DEFAULT_MODEL_CHOICES
     assert cfg.get_prompt("generic") == prompts.DEFAULTS["generic"]
 
 
 def test_settings_out_of_range_chunk_size_is_rejected(isolated_settings):
+    """Een ongeldige deelgrootte op een model-rij wist alleen dát veld terug
+    naar de standaard — de rij (id/label) zelf blijft gewoon staan."""
     cfg = isolated_settings
-    cfg.update_settings({"chunk_tokens": 10 ** 9})
-    assert cfg.get_chunk_tokens() == cfg.DEFAULT_CHUNK_TOKENS
-    cfg.update_settings({"chunk_tokens": 1})
-    assert cfg.get_chunk_tokens() == cfg.DEFAULT_CHUNK_TOKENS
+    cfg.update_settings({"models": [{"id": "x/y", "label": "X", "chunk_tokens": 10 ** 9}]})
+    assert cfg.get_chunk_tokens("x/y") == cfg.DEFAULT_CHUNK_TOKENS
+    assert cfg.get_model_choices() == [{"id": "x/y", "label": "X", "chunk_tokens": None}]
+    cfg.update_settings({"models": [{"id": "x/y", "label": "X", "chunk_tokens": 1}]})
+    assert cfg.get_chunk_tokens("x/y") == cfg.DEFAULT_CHUNK_TOKENS
+
+
+def test_settings_unknown_model_falls_back_to_the_default_chunk_size(isolated_settings):
+    cfg = isolated_settings
+    assert cfg.get_chunk_tokens("does/not-exist") == cfg.DEFAULT_CHUNK_TOKENS
+    assert cfg.get_chunk_tokens(None) == cfg.DEFAULT_CHUNK_TOKENS
 
 
 def test_settings_only_stores_changed_keys(isolated_settings):
     cfg = isolated_settings
-    cfg.update_settings({"chunk_tokens": 40000})
+    cfg.update_settings({"models": [{"id": "x/y", "label": "X", "chunk_tokens": 40000}]})
     stored = json.loads(open(cfg._store.path, encoding="utf-8").read())
-    assert list(stored) == ["chunk_tokens"]
+    assert list(stored) == ["models"]
 
 
 def test_settings_payload_exposes_defaults_for_reset(isolated_settings):
     payload = isolated_settings.settings_payload()
-    for key in ("models", "chunk_tokens", "prompts"):
+    for key in ("models", "prompts"):
         assert key in payload and key in payload["defaults"]
+    # chunk_tokens staat sinds de per-endpoint deelgrootte niet meer los in de
+    # payload zelf (wél per model-item), maar de standaardwaarde/grenzen voor
+    # het invoerveld per rij blijven top-level in "defaults".
+    assert "chunk_tokens" not in payload
+    assert "chunk_tokens" in payload["defaults"]
     assert payload["defaults"]["min_chunk_tokens"] < payload["defaults"]["max_chunk_tokens"]
 
 
 def test_settings_change_is_picked_up_without_restart(isolated_settings):
     """De mtime-cache mag een wijziging niet blijven verbergen."""
     cfg = isolated_settings
-    assert cfg.get_chunk_tokens() == cfg.DEFAULT_CHUNK_TOKENS  # vult de cache
-    cfg._store.write({"chunk_tokens": 12345})                  # schrijf er buitenom
-    assert cfg.get_chunk_tokens() == 12345
+    assert cfg.get_chunk_tokens("x/y") == cfg.DEFAULT_CHUNK_TOKENS  # vult de cache
+    cfg._store.write({"models": [{"id": "x/y", "label": "X", "chunk_tokens": 12345}]})  # buitenom
+    assert cfg.get_chunk_tokens("x/y") == 12345
 
 
 def test_model_override_must_be_in_the_configured_list(isolated_settings):
@@ -1203,7 +1238,8 @@ def test_index_page_renders(client):
 
 def test_settings_endpoints_roundtrip(client):
     payload = client.get("/api/settings").get_json()
-    assert payload["chunk_tokens"] >= payload["defaults"]["min_chunk_tokens"]
+    assert payload["defaults"]["min_chunk_tokens"] < payload["defaults"]["max_chunk_tokens"]
+    assert all("chunk_tokens" in m for m in payload["models"])
     # Een lege payload mag niets stukmaken.
     assert client.post("/api/settings", json={}).status_code == 200
 

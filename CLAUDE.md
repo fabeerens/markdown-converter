@@ -400,8 +400,11 @@ accountregistratie namens de gebruiker):
 - **Beide reformat-prompts** (`generic`/`caselaw`) maken alléén echte sectietitels koppen;
   genummerde overwegingen/randnummers blijven alinea's (uitdrukkelijke wens gebruiker —
   niet terugdraaien).
-- Lange documenten worden per ~55.000 tokens (`config.get_chunk_tokens()`, ≈220k tekens) in delen verwerkt;
-  `max_tokens` = 64.000 (Haiku's output-plafond, dus geen afkapping). Meeste teksten = één call.
+- Lange documenten worden per ~55.000 tokens (`config.get_chunk_tokens(model)`, ≈220k tekens)
+  in delen verwerkt; `max_tokens` = 64.000 (Haiku's output-plafond, dus geen afkapping). Meeste
+  teksten = één call. **Deelgrootte is per AI-endpoint instelbaar**, geen centrale instelling
+  (zie "Instellingen" hieronder) — een model met een kleiner effectief contextvenster kan zo
+  een kleinere deelgrootte krijgen zonder dat dat de andere endpoints raakt.
   **Let op**: de UI toont `est.input_tokens` (documentgrootte), NIET `input+output` opgeteld —
   dat laatste oogt ~2x zo groot als het echte document (output ≈ input bij opschonen) en
   deed gebruikers denken dat het chunk-aantal niet klopte terwijl het wél correct was.
@@ -436,24 +439,33 @@ accountregistratie namens de gebruiker):
 - `GET /api/settings` → huidige waarden + `defaults` (voor de reset-knoppen per veld,
   géén apart reset-endpoint nodig). `POST /api/settings` → merget het payload over de
   opgeslagen settings en persisteert; een leeg/ongeldig veld (lege modellenlijst, lege
-  prompt, deelgrootte buiten `_MIN_CHUNK_TOKENS`–`_MAX_CHUNK_TOKENS`) wist juist dat veld
+  prompt, deelgrootte buiten `MIN_CHUNK_TOKENS`–`MAX_CHUNK_TOKENS`) wist juist dat veld
   terug naar "gebruik de standaardwaarde" in plaats van de ongeldige waarde op te slaan.
+- **Deelgrootte is per AI-endpoint, geen centrale instelling.** Elk item in `models` is
+  `{id, label, chunk_tokens}`; `chunk_tokens: null` (leeg gelaten in de UI) betekent
+  "gebruik `DEFAULT_CHUNK_TOKENS` voor dit endpoint". `config.get_chunk_tokens(model)`
+  zoekt het model op in `get_model_choices()` en geeft diens eigen waarde terug, anders de
+  standaard — zonder `model` (of een onbekend model) altijd de standaard, er is geen
+  centraal veld meer om op terug te vallen. `chunking.chunks_for()`/`split()` krijgen het
+  al-opgeloste model (`config.resolve_model(...)`) doorgegeven vanuit `cleanup.estimate()`/
+  `clean()`/`clean_stream()`, vóórdat er iets gesplitst wordt.
 - Opslag: `mdconv/cleanup/` → `state.StateFile` leest/schrijft `.deploy-state/settings.json` (dezelfde gitignored, in Docker als volume
   gemounte map als `version.json`; ook hier een `fcntl.flock` tegen gelijktijdige writes
   door meerdere gunicorn-workers). Alleen daadwerkelijk gewijzigde sleutels staan erin —
   ontbrekend/leeg = val terug op de `_DEFAULT_*`-constante.
 - De ingebouwde standaardwaarden heten `DEFAULT_MODEL_CHOICES`,
   `DEFAULT_CHUNK_TOKENS` en `prompts.DEFAULTS`. `get_model_choices()`,
-  `get_chunk_tokens()` en `get_prompt(profile)` zijn de dynamische lookups; een
+  `get_chunk_tokens(model)` en `get_prompt(profile)` zijn de dynamische lookups; een
   wijziging via de UI werkt daardoor met terugwerkende kracht, zonder herstart.
-- UI (`templates/index.html`): `#btn-settings` (header, `position: absolute` in de
-  al `position: relative` header) opent `#settings-backdrop`, een modal met
-  herhaalbare model-rijen (`modelRow()`/`renderModelRows()`), een `<input type=number>`
-  voor de deelgrootte, en drie prompt-`<textarea>`'s. Elke sectie heeft een eigen
-  "Standaard"-knop die het bijbehorende veld terugzet naar `data.defaults.*` (uit de
-  laatste `GET /api/settings`-respons) — puur client-side, geen extra round-trip.
-  Opslaan roept `loadModelChoices()` opnieuw aan zodat de `#model-choice`-dropdown op
-  het hoofdscherm meteen de bijgewerkte lijst toont zonder page-reload.
+- UI (`templates/index.html`): `#open-settings` (header) opent `#settings`, een modal met
+  herhaalbare model-rijen (`modelRow()`/`renderModelRows()` — id, label, én een
+  `<input type=number class=mchunk>` voor de deelgrootte van dát endpoint) en vier
+  prompt-`<textarea>`'s. Elke sectie heeft een eigen "Standaard"-knop die het bijbehorende
+  veld terugzet naar `data.defaults.*` (uit de laatste `GET /api/settings`-respons) — puur
+  client-side, geen extra round-trip; "Standaardlijst" bij AI-endpoints zet zo ook alle
+  per-endpoint deelgroottes terug (de standaardlijst heeft er zelf geen ingesteld).
+  Opslaan roept `loadConfig()` opnieuw aan zodat de modellenlijst op het hoofdscherm meteen
+  de bijgewerkte lijst toont zonder page-reload.
 
 ## Front-end (`static/app.js` + `static/app.css` + `templates/index.html`)
 
@@ -599,7 +611,7 @@ regel), inclusief de vloeiende tabbalk-indicator.
   weggeschreven bestand nooit als geldige staat gelezen kan worden.
 
 ## Tests
-`.venv/bin/python -m pytest tests/ -q` — 133 karakteriseringstests die het gedrag
+`.venv/bin/python -m pytest tests/ -q` — 149 karakteriseringstests die het gedrag
 vastleggen in plaats van het te beschrijven: `detect_source`-precedentie, ELI→CELEX,
 de chunking-ladder (ook zonder witregels en met één te lang woord), de PDF-reflow, de
 Formex-parser, de settings-semantiek (leeg wist terug naar standaard) en de Nederlandse

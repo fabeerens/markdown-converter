@@ -176,19 +176,14 @@
 
       <section>
         <h3>AI-endpoints <button type="button" class="reset" id="reset-models">Standaardlijst</button></h3>
+        <p class="hint" style="margin:0 0 8px">
+          Deelgrootte (tokens per deel) is per endpoint instelbaar — leeg laten valt terug
+          op de standaard (<span id="settings-chunk-default"></span>,
+          <span id="settings-chunk-range"></span>).
+        </p>
         <div class="rows" id="settings-models"></div>
         <div class="row-actions">
           <button type="button" class="btn btn-dashed" id="settings-add-model">+ Endpoint toevoegen</button>
-        </div>
-      </section>
-
-      <section>
-        <h3>Deelgrootte <button type="button" class="reset" id="reset-chunk">Standaard</button></h3>
-        <div style="display:flex;align-items:center;gap:12px">
-          <div class="field" style="width:140px">
-            <input type="number" id="settings-chunk" step="1000" aria-label="Tokens per deel">
-          </div>
-          <span class="unit" id="settings-range"></span>
         </div>
       </section>
 
