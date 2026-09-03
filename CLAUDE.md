@@ -248,14 +248,23 @@ accountregistratie namens de gebruiker):
     dupliceren. `pdfimages -j` levert alleen écht al-JPEG-gecodeerde afbeeldingen als `.jpg`;
     een rauwe pixmap (typisch voor grafieken/screenshots) komt er als ongecomprimeerde
     `.ppm`/`.pbm` uit en wordt hier met Pillow herschreven naar PNG (klein, lossless).
-  - **Bestandsnamen en plaatsing**: elke afbeelding heet `p{paginanummer}[-n].ext` (bv.
-    `p12.png`, of `p12-2.png` bij meerdere op één pagina) — geen contextuele slug zoals bij
-    een OCR-aanpak, want zonder per-pagina Markdown-tekst (`pdf-inspector`/MarkItDown geven
-    één doorlopende tekst terug, geen paginascheiding) is er geen kop om de naam aan te
-    ontlenen. Alle afbeeldingen komen daarom als Obsidian wikilink-embeds
-    (`![[bestandsnaam.png]]`) onder één losse `## Bijlagen`-sectie aan het eind van het
-    document (`sources._attach_pdf_images()` + `sources.from_file()`), in plaats van
-    ín de lopende tekst op hun eigen plek.
+  - **Bestandsnamen**: elke afbeelding heet `p{paginanummer}[-n].ext` (bv. `p12.png`, of
+    `p12-2.png` bij meerdere op één pagina).
+  - **Plaatsing: op de pagina waar de afbeelding vandaan komt, niet allemaal onderaan.**
+    `files.convert_pdf_pages()` is de tweede, per-pagina variant van pdf-inspectors
+    extractie (`extract_pages_markdown_bytes`, naast het bestaande `process_pdf_bytes` dat
+    ín één samengevoegde string levert) — dat geeft de paginagrenzen die nodig zijn om een
+    afbeelding ná de tekst van precies díe pagina te zetten. `sources._attach_pdf_images_inline()`
+    plakt de pagina's weer aan elkaar en voegt na elke pagina de wikilink-embeds
+    (`![[p{n}.ext]]`) van de afbeeldingen van díe pagina toe — vóór de eerste
+    tekst van de volgende pagina, dus zo dicht bij "de plek in de PDF" als haalbaar zonder
+    coördinaten (paginagranulariteit, niet positie-binnen-de-pagina).
+    **Terugval**: kan pdf-inspector geen per-pagina tekst geven (bv. een PDF zonder
+    tekstlaag die alsnog via MarkItDown gaat, dat één doorlopende tekst zonder
+    paginascheiding teruggeeft), dan is de pagina van geen enkele alinea bekend — dan
+    valt het terug op de oude, grove plaatsing: alle afbeeldingen samen onder één losse
+    `## Bijlagen`-sectie aan het eind (`sources._attach_pdf_images()`), beter een
+    duidelijk-grove plek dan een gok.
   - **Bijlagen en de zip-download** (`mdconv/attachments.py`): binaire afbeeldingsdata gaat
     nooit in de conversie-JSON mee. `_doc_payload()` in `api.py` slaat `doc.attachments` op
     onder een token (`attachments.store()`, een tempdir per set) en stuurt alleen
@@ -611,7 +620,7 @@ regel), inclusief de vloeiende tabbalk-indicator.
   weggeschreven bestand nooit als geldige staat gelezen kan worden.
 
 ## Tests
-`.venv/bin/python -m pytest tests/ -q` — 149 karakteriseringstests die het gedrag
+`.venv/bin/python -m pytest tests/ -q` — 152 karakteriseringstests die het gedrag
 vastleggen in plaats van het te beschrijven: `detect_source`-precedentie, ELI→CELEX,
 de chunking-ladder (ook zonder witregels en met één te lang woord), de PDF-reflow, de
 Formex-parser, de settings-semantiek (leeg wist terug naar standaard) en de Nederlandse

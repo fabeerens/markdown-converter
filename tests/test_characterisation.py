@@ -1256,6 +1256,16 @@ def test_pdf_conversion_prefers_pdf_inspector():
     assert "Hallo" in markdown
 
 
+def test_convert_pdf_pages_gives_one_markdown_string_per_page():
+    """Echte pdf-inspector-aanroep (geen mock): een geldige tekst-PDF moet
+    net zoveel Markdown-pagina's opleveren als de PDF pagina's heeft."""
+    from mdconv.sources.files import convert_pdf_pages
+    pages = convert_pdf_pages(_minimal_text_pdf())
+    assert pages is not None
+    assert len(pages) == 1
+    assert "Hallo" in pages[0]
+
+
 def test_non_pdf_still_uses_markitdown():
     from mdconv.sources.files import convert
     markdown, engine = convert(b"# Kop\n\ntekst\n", "notitie.md")
@@ -1513,6 +1523,54 @@ def test_pdf_images_extract_images_end_to_end():
 # Integratie: sources.from_file(extract_images=True) en bijlage-opslag
 # (mdconv/attachments.py)
 # ---------------------------------------------------------------------------
+
+def test_from_file_with_extract_images_places_images_on_their_own_page(monkeypatch):
+    """Zodra pdf-inspector per-pagina tekst kan geven (convert_pdf_pages),
+    moet elke afbeelding ná de tekst van háár eigen pagina komen — niet
+    allemaal onderaan onder één "Bijlagen"-sectie."""
+    from mdconv import sources
+    from mdconv.sources import files, pdf_images
+
+    monkeypatch.setattr(
+        files, "convert_pdf_pages",
+        lambda data: ["# Hoofdstuk 1\n\nInleiding.", "# Hoofdstuk 2\n\nEen alinea.", "# Hoofdstuk 3\n\nSlot."],
+    )
+    monkeypatch.setattr(pdf_images, "available", lambda: True)
+    monkeypatch.setattr(pdf_images, "extract_images", lambda pdf_bytes: [
+        pdf_images.ExtractedImage(page=2, index_on_page=1, data=b"PNGDATA1", ext="png"),
+        pdf_images.ExtractedImage(page=2, index_on_page=2, data=b"PNGDATA2", ext="png"),
+    ])
+
+    doc = sources.from_file(b"fake-pdf-bytes", "test.pdf", extract_images=True)
+
+    assert "## Bijlagen" not in doc.markdown
+    assert "![[p02-1.png]]" in doc.markdown
+    assert "![[p02-2.png]]" in doc.markdown
+    # De afbeeldingen van pagina 2 staan ná pagina 2's tekst, maar vóór pagina 3's tekst.
+    assert doc.markdown.index("Hoofdstuk 2") < doc.markdown.index("p02-1.png")
+    assert doc.markdown.index("p02-2.png") < doc.markdown.index("Hoofdstuk 3")
+    assert {a.filename for a in doc.attachments} == {"p02-1.png", "p02-2.png"}
+    assert "2 afbeelding(en)" in doc.source
+
+
+def test_from_file_with_extract_images_falls_back_to_bijlagen_without_page_boundaries(monkeypatch):
+    """Kan pdf-inspector geen per-pagina tekst geven (bv. terugval naar
+    MarkItDown), dan is de precieze pagina onbekend — dan gewoon de oude,
+    grove plaatsing: alles onderaan onder één "Bijlagen"-sectie."""
+    from mdconv import sources
+    from mdconv.sources import files, pdf_images
+
+    monkeypatch.setattr(files, "convert_pdf_pages", lambda data: None)
+    monkeypatch.setattr(files, "convert", lambda data, filename: ("# Titel\n\nInhoud.", "MarkItDown"))
+    monkeypatch.setattr(pdf_images, "available", lambda: True)
+    monkeypatch.setattr(pdf_images, "extract_images", lambda pdf_bytes: [
+        pdf_images.ExtractedImage(page=2, index_on_page=1, data=b"PNGDATA1", ext="png"),
+    ])
+
+    doc = sources.from_file(b"fake-pdf-bytes", "test.pdf", extract_images=True)
+    assert "## Bijlagen" in doc.markdown
+    assert "![[p02.png]]" in doc.markdown
+
 
 def test_from_file_with_extract_images_appends_a_bijlagen_section(monkeypatch):
     """Combineert een gemockte normale PDF-conversie met gemockte

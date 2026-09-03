@@ -148,20 +148,40 @@ def from_file(data: bytes, filename: str, *, extract_images: bool = False) -> Do
 
     `extract_images=True` haalt bij een PDF ook losse ingesloten afbeeldingen
     eruit (grafieken, screenshots — hele-pagina-scans uitgesloten, zie
-    `pdf_images.py`) en zet die als Obsidian wikilink-bijlagen onder een eigen
-    "Bijlagen"-sectie aan het einde van het document. Bij elk ander
-    bestandstype (of als poppler-utils niet geïnstalleerd is) wordt deze vlag
-    genegeerd, precies zoals de UI 'm ook alleen bij PDF-invoer toont.
+    `pdf_images.py`) en zet die als Obsidian wikilink-bijlagen ín de tekst, op
+    de pagina waar ze ook echt uit kwamen — mogelijk zodra pdf-inspector een
+    bruikbare tekstlaag heeft (`files.convert_pdf_pages()`, per-pagina
+    Markdown). Kan pdf-inspector geen tekst geven (bv. terugval naar
+    MarkItDown, dat één doorlopende tekst zonder paginagrenzen levert), dan
+    is de precieze pagina niet bekend en komen alle afbeeldingen alsnog
+    onderaan onder een losse "## Bijlagen"-sectie — beter een grove plek dan
+    een gok. Bij elk ander bestandstype (of als poppler-utils niet
+    geïnstalleerd is) wordt deze vlag genegeerd, precies zoals de UI 'm ook
+    alleen bij PDF-invoer toont.
     """
     if filename.lower().endswith(".xml") and looks_like_formex(data):
         markdown = formex.convert_formex(data)
         if len(markdown.strip()) >= _FORMEX_MIN_LENGTH:
             return Document(markdown=markdown, source=f"Formex XML • {filename}")
 
+    if extract_images and filename.lower().endswith(".pdf") and pdf_images.available():
+        pages = files.convert_pdf_pages(data)
+        if pages is not None:
+            markdown, attachments = _attach_pdf_images_inline(pages, data)
+            engine = files.ENGINE_PDF_INSPECTOR
+            if attachments:
+                engine = f"{engine} + {len(attachments)} afbeelding(en)"
+            return Document(
+                markdown=markdown, source=f"{engine} • {filename}", attachments=attachments
+            )
+
     markdown, engine = files.convert(data, filename)
 
     attachments: tuple[Attachment, ...] = ()
     if extract_images and filename.lower().endswith(".pdf") and pdf_images.available():
+        # Hier belanden we alleen als convert_pdf_pages() hierboven None gaf
+        # (geen tekstlaag) — geen paginagrenzen bekend, dus terug naar de
+        # oude, grove plaatsing: alles onderaan.
         attachments = _attach_pdf_images(data)
         if attachments:
             embeds = "\n".join(f"![[{a.filename}]]" for a in attachments)
@@ -182,6 +202,39 @@ def _attach_pdf_images(data: bytes) -> tuple[Attachment, ...]:
         suffix = "" if counts[img.page] == 1 else f"-{img.index_on_page}"
         attachments.append(Attachment(filename=f"p{img.page:02d}{suffix}.{img.ext}", data=img.data))
     return tuple(attachments)
+
+
+def _attach_pdf_images_inline(pages: list[str], data: bytes) -> tuple[str, tuple[Attachment, ...]]:
+    """Plakt per-pagina Markdown (`files.convert_pdf_pages()`) weer aan elkaar
+    en zet elke afbeelding direct ná de tekst van de pagina waar hij bij
+    hoort — "op de plek waar het in de PDF staat", voor zover dat zonder
+    coördinaten haalbaar is (paginagranulariteit, niet exact tussen twee
+    alinea's in)."""
+    images = pdf_images.extract_images(data)
+    images_by_page: dict[int, list] = {}
+    for img in images:
+        images_by_page.setdefault(img.page, []).append(img)
+
+    blocks: list[str] = []
+    attachments: list[Attachment] = []
+    for i, page_text in enumerate(pages):
+        page_num = i + 1  # index → 1-gebaseerd, zelfde telling als pdfimages -list
+        if page_text:
+            blocks.append(page_text)
+
+        page_images = images_by_page.get(page_num, [])
+        if not page_images:
+            continue
+        embeds = []
+        for img in page_images:
+            suffix = "" if len(page_images) == 1 else f"-{img.index_on_page}"
+            filename = f"p{page_num:02d}{suffix}.{img.ext}"
+            attachments.append(Attachment(filename=filename, data=img.data))
+            embeds.append(f"![[{filename}]]")
+        blocks.append("\n".join(embeds))
+
+    markdown = "\n\n".join(blocks).strip() + "\n"
+    return markdown, tuple(attachments)
 
 
 def from_file_bytes(data: bytes, filename: str, label: str, *, extract_images: bool = False) -> Document:

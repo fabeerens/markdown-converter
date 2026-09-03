@@ -101,6 +101,41 @@ def _convert_pdf(data: bytes) -> str | None:
     return markdown + "\n" if markdown else None
 
 
+def convert_pdf_pages(data: bytes) -> list[str] | None:
+    """Als `_convert_pdf`, maar geeft de Markdown per pagina terug i.p.v.
+    samengevoegd — nodig om een afbeelding op de pagina te kunnen plaatsen
+    waar hij ook echt uit kwam (`sources._attach_pdf_images_inline`), i.p.v.
+    alles onderaan het document te dumpen. None betekent hetzelfde als bij
+    `_convert_pdf`: geen bruikbare tekstlaag, of pdf-inspector ontbreekt —
+    de aanroeper valt dan terug op de gewone (samengevoegde) route.
+
+    Zelfde classificatie-gate als `_convert_pdf` (`pdf_type` via
+    `classify_pdf_bytes`, niet via `process_pdf_bytes`, want dat laatste zou
+    de PDF een tweede keer volledig laten extraheren — puur voor de
+    ja/nee-vraag "heeft dit een tekstlaag" is de losse, lichte classificatie
+    genoeg).
+    """
+    try:
+        import pdf_inspector
+    except ImportError:  # pragma: no cover — dependency ontbreekt
+        return None
+    try:
+        classification = pdf_inspector.classify_pdf_bytes(data)
+    except Exception:  # noqa: BLE001 — corrupte PDF: laat de aanroeper terugvallen
+        return None
+    if classification.pdf_type in _NO_TEXT_LAYER:
+        return None
+    try:
+        result = pdf_inspector.extract_pages_markdown_bytes(data)
+    except Exception:  # noqa: BLE001
+        return None
+    # `.page` is 0-gebaseerd en oplopend; de lijstvolgorde is al de juiste
+    # paginavolgorde, dus de aanroeper mag gewoon "index + 1" als 1-gebaseerd
+    # paginanummer gebruiken (zelfde telling als pdfimages -list).
+    pages = [(pm.markdown or "").strip() for pm in result.pages]
+    return pages if any(pages) else None
+
+
 # --------------------------------------------------------------------------
 # Reflow: zachte regeleindes binnen een alinea weer samenvoegen
 # --------------------------------------------------------------------------
