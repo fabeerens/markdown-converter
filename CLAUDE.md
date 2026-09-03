@@ -387,10 +387,16 @@ accountregistratie namens de gebruiker):
   (`cancelActiveClean()`) breekt tegelijk zijn eigen `fetch()` af via een `AbortController`
   — dat is wat de gebruiker meteen ziet; de servercheck is vooral bedoeld om te voorkomen dat
   een groot document op de achtergrond dooronline blijft genereren (en dus geld kost) nadat
-  de gebruiker al is gestopt met wachten. Er loopt **één** opschoon-/vertaalactie tegelijk,
-  app-breed (`activeClean` in `app.js`) — één gedeelde voortgangsbalk en Annuleren-knop in
-  het opschoonpaneel, ongeacht welk tabblad of document; een tweede poging terwijl er al een
-  loopt geeft een duidelijke foutmelding i.p.v. twee streams door elkaar.
+  de gebruiker al is gestopt met wachten. Opschonen/vertalen mag **per document** maar één
+  keer tegelijk lopen (`activeCleans` in `app.js`, een `Map` van docId → `{requestId,
+  controller}`) — nog een keer starten terwijl hetzelfde document al bezig is geeft een
+  duidelijke foutmelding, maar **verschillende documenten lopen gewoon gelijktijdig**
+  (elk zijn eigen `/api/clean/stream`-verzoek; de Flask-dev-server draait `threaded=True`,
+  gunicorn in Docker draait `gthread`). De voortgangsbalk en Annuleren-knop in het
+  opschoonpaneel zijn gedeelde DOM-elementen die altijd het document weerspiegelen dat op
+  dat moment in de editor staat — `renderEditor()` leest `activeCleans.has(doc.id)` bij elke
+  wisseling opnieuw uit, en `cancelActiveClean()` annuleert specifiek het weergegeven
+  document, niet "de eerste de beste" lopende actie.
 - **Beide reformat-prompts** (`generic`/`caselaw`) maken alléén echte sectietitels koppen;
   genummerde overwegingen/randnummers blijven alinea's (uitdrukkelijke wens gebruiker —
   niet terugdraaien).

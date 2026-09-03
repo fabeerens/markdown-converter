@@ -564,16 +564,18 @@ function renderEditor() {
   const model = $("#model");
   if (doc.model && [...model.options].some((o) => o.value === doc.model)) model.value = doc.model;
 
-  // Eén opschoon-/vertaalactie tegelijk, app-breed (zie runClean()): terwijl
-  // die loopt staan beide knoppen uit en de Annuleren-knop aan, ongeacht welk
-  // document nu getoond wordt.
-  const busyHere = Boolean(activeClean) && activeClean.docId === doc.id;
+  // Eén opschoon-/vertaalactie tegelijk per document (zie runClean()): twee
+  // verschillende documenten mogen best gelijktijdig lopen — alleen hetzelfde
+  // document nog een keer aanklikken terwijl het al bezig is, is geblokkeerd.
+  // De knoppen/voortgangsbalk/Annuleren-knop zijn gedeelde DOM-elementen en
+  // weerspiegelen dus altijd het document dat nu getoond wordt.
+  const busyHere = activeCleans.has(doc.id);
   const button = $("#clean");
-  button.disabled = doc.cleaned || Boolean(activeClean);
+  button.disabled = doc.cleaned || busyHere;
   button.textContent = doc.cleaned ? "Opgeschoond ✓" : "Opschonen";
 
   const translateButton = $("#translate-nl");
-  translateButton.disabled = doc.translated || Boolean(activeClean);
+  translateButton.disabled = doc.translated || busyHere;
   translateButton.textContent = doc.translated ? "Vertaald ✓" : "Vertalen naar het Nederlands";
 
   $("#cancel-clean").hidden = !busyHere;
@@ -596,8 +598,9 @@ const fmtCost = (usd) => `$${usd < 0.01 ? usd.toFixed(4) : usd.toFixed(3)}`;
    Voortgangsbalk en resultaat (tokens/kosten) van opschonen/vertalen
    -------------------------------------------------------------------------- */
 
-/** Eén opschoon-/vertaalactie tegelijk, app-breed: {docId, requestId, controller} of null. */
-let activeClean = null;
+/** Eén opschoon-/vertaalactie tegelijk per document: docId → {requestId, controller}.
+ * Verschillende documenten mogen gelijktijdig lopen; hetzelfde document niet twee keer. */
+const activeCleans = new Map();
 
 function setProgress(producedTokens, expectedTokens) {
   $("#clean-progress").hidden = false;
@@ -733,14 +736,19 @@ function makeStreamParser({ onText, onProgress, onUsage }) {
  * naar het document. `guardField` voorkomt dubbel werk (bv. `cleaned` of
  * `translated`) en is per actie apart, zodat opschonen en vertalen elkaar
  * niet blokkeren — je kunt een document eerst vertalen én daarna nog
- * opschonen, of andersom. Er loopt wel maar één actie tegelijk, app-breed
- * (`activeClean`) — één voortgangsbalk en één Annuleren-knop, gedeeld door
- * alle documenten, zoals gevraagd.
+ * opschonen, of andersom. Verschillende documenten mogen gelijktijdig lopen
+ * (`activeCleans`, per docId) — alleen hetzelfde document nog een keer
+ * starten terwijl het al bezig is, is geblokkeerd. De voortgangsbalk en
+ * Annuleren-knop zijn gedeelde DOM-elementen en tonen dus altijd het
+ * document dat op dat moment in de editor staat.
  */
 async function runClean(doc, profile, { guardField, resultLabel, busyText, doneText, sourceSuffix, failMessage }) {
-  if (!doc || doc[guardField] || activeClean) {
-    if (activeClean) {
-      setStatus("Er loopt al een opschoon- of vertaalactie — wacht tot die klaar is, of annuleer eerst.", "err");
+  if (!doc || doc[guardField] || activeCleans.has(doc.id)) {
+    if (activeCleans.has(doc.id)) {
+      setStatus(
+        `"${doc.title}" is al bezig — wacht tot dat klaar is, of annuleer eerst.`,
+        "err"
+      );
     }
     return;
   }
@@ -750,7 +758,7 @@ async function runClean(doc, profile, { guardField, resultLabel, busyText, doneT
   const isLive = () => state.activeId === docId; // gebruiker kan tijdens het wachten wisselen
   const requestId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const controller = new AbortController();
-  activeClean = { docId, requestId, controller };
+  activeCleans.set(docId, { requestId, controller });
   if (isLive()) renderEditor(); // knoppen uit, Annuleren aan, voortgangsbalk klaarzetten
 
   setStatus(busyText, "info", { busy: true });
@@ -816,19 +824,21 @@ async function runClean(doc, profile, { guardField, resultLabel, busyText, doneT
       }
     }
   } finally {
-    activeClean = null;
+    activeCleans.delete(docId);
     if (isLive()) renderEditor();
   }
 }
 
-/** Annuleert de lopende opschoon-/vertaalactie (welk document dat ook is):
- * meldt de server (best-effort, geen wachttijd) en breekt de eigen fetch
- * meteen af. */
+/** Annuleert de lopende opschoon-/vertaalactie van het document dat nu in de
+ * editor staat: meldt de server (best-effort, geen wachttijd) en breekt de
+ * eigen fetch meteen af. */
 function cancelActiveClean() {
-  if (!activeClean) return;
-  const { requestId, controller } = activeClean;
-  postJSON("/api/clean/cancel", { request_id: requestId }).catch(() => {});
-  controller.abort();
+  const doc = activeDoc();
+  if (!doc) return;
+  const entry = activeCleans.get(doc.id);
+  if (!entry) return;
+  postJSON("/api/clean/cancel", { request_id: entry.requestId }).catch(() => {});
+  entry.controller.abort();
 }
 
 async function cleanActiveDoc() {
