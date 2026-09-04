@@ -478,10 +478,12 @@ function deriveName(query) {
   if (ecli) return ecli[0].replace(/:/g, "-");
   const bwb = query.match(/BWB[A-Z]\d+/i);
   if (bwb) return bwb[0].toUpperCase();
+  // CELEX vóór HUDOC: een geconsolideerde CELEX (02014R0910-20241018) matcht
+  // óók het HUDOC-item-id-patroon, andersom kan niet.
+  const celex = query.match(/([0-9][0-9]{4}[A-Z]{1,2}[0-9]{2,4}(?:-[0-9]{8})?)/i);
+  if (celex) return celex[1].toUpperCase();
   const hudoc = query.match(/\b00\d-\d{3,}\b/);
-  if (hudoc) return `HUDOC-${hudoc[0]}`;
-  const celex = query.match(/([0-9][0-9]{4}[A-Z]{1,2}[0-9]{2,4})/i);
-  return celex ? celex[1].toUpperCase() : "document";
+  return hudoc ? `HUDOC-${hudoc[0]}` : "document";
 }
 
 function basename(url) {

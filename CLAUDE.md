@@ -69,6 +69,7 @@ soort), zodat de route niets over engines of classificatie hoeft te weten.
 | Invoer | Route |
 |---|---|
 | CELEX (`32016R0679`), EUR-Lex link, **ELI-link** (`/eli/reg/2016/679/oj`), **`ECLI:EU:…`** | EUR-Lex |
+| **Geconsolideerde versie**: CELEX met datum (`02014R0910-20241018`) of gedateerde ELI (`/eli/reg/2014/910/2024-10-18`) | EUR-Lex (+ overwegingen uit de basishandeling) |
 | **`ECLI:NL:…`** of rechtspraak.nl-link | Rechtspraak.nl |
 | HUDOC-link, item-id (`001-…`), **`ECLI:CE:ECHR:…`** | HUDOC (EHRM) |
 | wetten.overheid.nl-link of **BWB-nummer** (`BWBR0040940`) | wetten.overheid.nl |
@@ -121,9 +122,47 @@ accountregistratie namens de gebruiker):
   resource-mimetype en geeft anders 406. Voorbeeld: `CELEX:52025PC0837` (voorstel + bijlage).
   Alleen als er géén `DOC_n`-links in de 300-respons staan, is het wél een taalprobleem.
 - **ELI-links** (`/eli/reg/2016/679/oj`): Cellar resolvet ELI **niet** direct (404) en de portal blokkeert.
+  Een vierde padsegment in datumvorm (`/eli/reg/2014/910/2024-10-18`) is de consolidatiedatum en
+  levert de geconsolideerde CELEX (sector 0 + datum); `/oj` en andere segmenten niet. Die datum
+  eerder negeren gaf stilzwijgend de oorspronkelijke handeling terug — geen fout, wel het
+  verkeerde document.
   Daarom `eli_to_celex()`: leidt deterministisch een CELEX af (type→letter reg=R/dir=L/dec=D/reco=H,
   `3{jaar}{letter}{nummer:04d}`) en gebruikt vervolgens de normale CELEX-Cellar-route.
-- **EUR-Lex koppen**: koppen komen als `<p>` binnen; `_promote_headings` promoot volledig-geankerde
+- **Geconsolideerde versies** (`02014R0910-20241018`, sector 0 + de datum waarop die versie geldt):
+  Cellar serveert die gewoon op dezelfde `…/resource/celex/{CELEX}`-route, mét `Accept-Language`.
+  Wat er níét in zit is de **preambule**: EUR-Lex laat in een geconsolideerde versie de aanhef, de
+  "Gezien …"-citaten en **álle overwegingen** weg. Die staan alleen in de oorspronkelijke handeling.
+  - **Terugzetten kan structureel, zonder tekstheuristiek.** Beide documenten delen hetzelfde
+    xhtml-skelet: `div.eli-main-title#tit_1` → `div.eli-subdivision#pbl_1` (de preambule) →
+    `div.eli-subdivision#enc_1` (de artikelen). In een geconsolideerde versie ontbreekt precies
+    `#pbl_1`. `_with_base_preamble()` haalt dat blok uit het origineel en zet het terug vóór
+    `#enc_1` — op zijn eigen plek, dus vóór Artikel 1, met één cursieve herkomstregel erboven.
+  - De CELEX van de basishandeling staat **machineleesbaar in het document zelf**: de eerste
+    `►B`-pijl (`p.arrow > a`) linkt ernaartoe en draagt het nummer in zijn `title`-attribuut.
+    `_base_celex()` leest dat; ontbreekt de pijl, dan wordt het nummer afgeleid (sector 0 → 3).
+  - **Terugvalladder bij het invoegen**: `#enc_1` → anders het eerste element met class
+    `title-division-1`/`title-article-norm` (oudere consolidaties zoals `02008R0593-20080724`
+    hebben geen eli-markup, wél die CONVEX-klassen) → anders overslaan. Levert het origineel geen
+    `#pbl_1` (handelingen van vóór ± 2004, bv. `32002L0058`), dan converteert het document gewoon
+    zónder overwegingen — mét een notitie in de tekst, nooit zwijgend.
+  - **Alleen de overwegingen van de basishandeling**, bewuste keuze. Die van de wijzigings-
+    handelingen (►M1/►M2) zitten er niet bij; hun CELEX-nummers staan wel in dezelfde
+    `p.arrow`-links, dus dat is later een kleine uitbreiding.
+  - De ▼B/▼M2-wijzigingsmarkeringen (155 stuks in eIDAS) blijven **bewust staan** — ze zeggen welke
+    passage door welke wijziging is vervangen of ingevoegd. Niet "opschonen".
+  - **Eén CELEX-patroon** (`_CELEX_BODY`), want de vorm stond vier keer los uitgeschreven en liep
+    uit elkaar zodra de datum erbij kwam: kaal werd `02014R0910-20241018` afgewezen, uit een URL
+    werd de datum stil afgekapt tot een CELEX die niet bestaat. Let ook op de tekenklasse in
+    `CELEX[:/]([0-9A-Z()-]+)` — zonder het koppelteken breekt die tak alsnog af.
+  - **Sector 0 faalt niet via de portal.** Cellar 404't op een datum waarop niet geconsolideerd is
+    (consolidatiedata liggen vast, één per wijziging); `_consolidated_error()` zegt dat in het
+    Nederlands, in plaats van door te vallen naar de geblokkeerde portal en daar een netwerkfout
+    te melden.
+  - `detect_source` heeft een **CELEX-uitsluiting** nodig bij de HUDOC-item-id-test:
+    `01999L0001-20040501` bevat "001-20040501", precies de vorm van een HUDOC-id. Dezelfde
+    volgorde-val zit in `deriveName()` in `app.js` (daar staat de CELEX-test daarom vóór de
+    HUDOC-test).
+- **EUR-Lex koppen**: koppen komen als `<p>` binnen; `promote_headings` promoot volledig-geankerde
   regels ("Artikel N", "HOOFDSTUK I") naar `##`/`###`. Genummerde alinea's (overwegingen, arrest-
   punten) staan in de xhtml als **tweekoloms-tabellen**; `_unwrap_marker_tables` zet die om naar
   alinea's/lijst-items (nummer ín het bestaande blok, niet nesten).
@@ -620,11 +659,12 @@ regel), inclusief de vloeiende tabbalk-indicator.
   weggeschreven bestand nooit als geldige staat gelezen kan worden.
 
 ## Tests
-`.venv/bin/python -m pytest tests/ -q` — 152 karakteriseringstests die het gedrag
+`.venv/bin/python -m pytest tests/ -q` — 170 karakteriseringstests die het gedrag
 vastleggen in plaats van het te beschrijven: `detect_source`-precedentie, ELI→CELEX,
-de chunking-ladder (ook zonder witregels en met één te lang woord), de PDF-reflow, de
-Formex-parser, de settings-semantiek (leeg wist terug naar standaard) en de Nederlandse
-foutmeldingen. Ze raken geen netwerk. Verander je de structuur, dan hoeven alleen de
+de geconsolideerde-CELEX-afhandeling (datum behouden, preambule invoegen, en de vier
+terugvalpaden als dat niet lukt), de chunking-ladder (ook zonder witregels en met één te
+lang woord), de PDF-reflow, de Formex-parser, de settings-semantiek (leeg wist terug naar
+standaard) en de Nederlandse foutmeldingen. Ze raken geen netwerk. Verander je de structuur, dan hoeven alleen de
 imports mee te verhuizen; blijft de suite groen, dan is het gedrag identiek.
 
 Eén test dwingt gelijktijdigheid af: `test_formex_footnotes_survive_concurrent_conversions`

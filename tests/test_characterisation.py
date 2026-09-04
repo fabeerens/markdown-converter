@@ -42,6 +42,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     ("ECLI:EU:C:2025:645", None),
     ("32016R0679", None),
     ("https://eur-lex.europa.eu/eli/reg/2016/679/oj", None),
+    ("02014R0910-20241018", None),
+    ("https://eur-lex.europa.eu/eli/reg/2014/910/2024-10-18", None),
     # Nationale rechtspraak (buiten NL/EU/EHRM), per ECLI-landcode.
     ("ECLI:DE:BGH:2019:240919BVIZB39.18.0", "national"),
 ])
@@ -65,6 +67,10 @@ def test_detect_source_hudoc_id_does_not_hijack_dutch_ecli():
     ("/eli/dir/2011/83", "32011L0083"),
     ("/eli/dec/2020/1", "32020D0001"),
     ("/eli/reco/2019/12", "32019H0012"),
+    # Een vierde segment in datumvorm is de consolidatiedatum: dat levert de
+    # geconsolideerde versie (sector 0), niet de oorspronkelijke handeling.
+    ("https://eur-lex.europa.eu/eli/reg/2014/910/2024-10-18", "02014R0910-20241018"),
+    ("/eli/dir/2011/83/2011-11-22", "02011L0083-20111122"),
 ])
 def test_eli_to_celex(eli, expected):
     from mdconv.sources.eurlex import eli_to_celex
@@ -90,6 +96,31 @@ def test_eli_to_celex_pads_number_to_four_digits():
 def test_extract_celex(text, expected):
     from mdconv.sources.eurlex import extract_celex
     assert extract_celex(text) == expected
+
+
+@pytest.mark.parametrize("text", [
+    "02014R0910-20241018",
+    "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A02014R0910-20241018",
+    "https://eur-lex.europa.eu/legal-content/NL/TXT/?uri=CELEX:02014R0910-20241018",
+    "https://eur-lex.europa.eu/legal-content/NL/TXT/HTML/?uri=CELEX%3A02014R0910-20241018",
+    "CELEX:02014R0910-20241018",
+])
+def test_extract_celex_keeps_the_consolidation_date(text):
+    """De datum hoort bij het nummer.
+
+    Kaal werd zo'n CELEX eerst afgewezen; uit een URL werd de datum stil
+    afgekapt tot 02014R0910 — een nummer dat Cellar niet kent, waarna de fout
+    als netwerkprobleem bij de dode portal opdook in plaats van als wat het
+    was.
+    """
+    from mdconv.sources.eurlex import extract_celex
+    assert extract_celex(text) == "02014R0910-20241018"
+
+
+def test_detect_source_does_not_read_a_consolidated_celex_as_a_hudoc_id():
+    """01999L0001-20040501 bevat "001-20040501", de vorm van een HUDOC-item-id."""
+    from mdconv.sources import detect_source
+    assert detect_source("01999L0001-20040501") is None
 
 
 def test_fetch_multipart_concatenates_parts_in_document_order(monkeypatch):
@@ -133,6 +164,168 @@ def test_fetch_multipart_concatenates_parts_in_document_order(monkeypatch):
     assert all(accept == "text/html" for _, accept in fetched_urls)
     assert unescaped.index("DOC_1") < unescaped.index("DOC_2")
     assert "\n\n---\n\n" in markdown
+
+
+# ---------------------------------------------------------------------------
+# Geconsolideerde versies: de preambule uit de oorspronkelijke handeling
+# ---------------------------------------------------------------------------
+#
+# EUR-Lex laat in een geconsolideerde versie de hele preambule weg — aanhef,
+# citaten én overwegingen. Beide documenten delen wel hetzelfde eli-skelet, dus
+# het `#pbl_1`-blok uit het origineel past letterlijk terug tussen de titel en
+# `#enc_1`. Onderstaande mini-HTML heeft precies dat skelet.
+
+CONSOLIDATED_SKELETON = (
+    '<html><body>'
+    '<p class="reference">02014R0910 — NL — 18.10.2024</p>'
+    '<p class="arrow"><a href="http://publications.europa.eu/resource/celex/32014R0910"'
+    ' title="32014R0910">\u25baB</a></p>'
+    '<div class="eli-main-title" id="tit_1"><p>VERORDENING (EU) Nr. 910/2014</p></div>'
+    '<div class="eli-subdivision" id="enc_1">'
+    '<p class="title-division-1">HOOFDSTUK I</p>'
+    '<p class="title-article-norm">Artikel 1</p></div>'
+    '</body></html>'
+)
+
+BASE_ACT_WITH_PREAMBLE = (
+    '<html><body><div class="eli-container">'
+    '<div class="eli-main-title" id="tit_1"><p>VERORDENING (EU) Nr. 910/2014</p></div>'
+    '<div class="eli-subdivision" id="pbl_1">'
+    '<p>HET EUROPEES PARLEMENT EN DE RAAD VAN DE EUROPESE UNIE,</p>'
+    '<div class="eli-subdivision" id="cit_1"><p>Gezien het Verdrag,</p></div>'
+    '<p>Overwegende hetgeen volgt:</p>'
+    '<div class="eli-subdivision" id="rct_1"><p>(1) Het opbouwen van vertrouwen.</p></div>'
+    '<p>HEBBEN DE VOLGENDE VERORDENING VASTGESTELD:</p></div>'
+    '<div class="eli-subdivision" id="enc_1"><p>Artikel 1</p></div>'
+    '</div></body></html>'
+)
+
+
+def _fake_cellar(monkeypatch, body, status=200):
+    """Laat net.documents() één vast antwoord geven, en tel de aanroepen."""
+    from mdconv.sources import eurlex
+
+    calls = []
+
+    class FakeResp:
+        def __init__(self):
+            self.status_code = status
+            self.apparent_encoding = "utf-8"
+            self.text = body
+
+    def fake_get(url, headers=None, timeout=None, allow_redirects=None):
+        calls.append(url)
+        return FakeResp()
+
+    monkeypatch.setattr(
+        eurlex.net, "documents",
+        lambda: type("S", (), {"get": staticmethod(fake_get)})(),
+    )
+    return calls
+
+
+def test_consolidated_text_gets_the_preamble_of_the_base_act(monkeypatch):
+    """De overwegingen komen op hun natuurlijke plek: ná de titel, vóór de artikelen."""
+    from mdconv.sources import eurlex
+
+    calls = _fake_cellar(monkeypatch, BASE_ACT_WITH_PREAMBLE)
+    html = eurlex._with_base_preamble(CONSOLIDATED_SKELETON, "02014R0910-20241018", "NL")
+
+    # De basishandeling wordt opgehaald op het CELEX uit de \u25baB-pijl.
+    assert calls == ["http://publications.europa.eu/resource/celex/32014R0910"]
+    assert "Overwegende hetgeen volgt:" in html
+    assert html.index("VERORDENING (EU) Nr. 910/2014") < html.index("Overwegende hetgeen volgt:")
+    assert html.index("(1) Het opbouwen") < html.index("HOOFDSTUK I")
+    assert "overgenomen uit de oorspronkelijke handeling" in html
+    assert "CELEX:32014R0910" in html
+
+
+def test_consolidated_text_without_eli_skeleton_uses_the_first_heading(monkeypatch):
+    """Oudere consolidaties (bv. 02008R0593-20080724) missen #enc_1, maar hebben
+    wel dezelfde CONVEX-klasse op de eerste hoofdstukkop."""
+    from mdconv.sources import eurlex
+
+    old_style = (
+        '<html><body>'
+        '<p class="arrow"><a href="http://publications.europa.eu/resource/celex/32008R0593"'
+        ' title="32008R0593">\u25baB</a></p>'
+        '<p class="title-doc-first">VERORDENING (EG) Nr. 593/2008</p>'
+        '<p class="title-division-1">HOOFDSTUK I</p>'
+        '</body></html>'
+    )
+    _fake_cellar(monkeypatch, BASE_ACT_WITH_PREAMBLE)
+    html = eurlex._with_base_preamble(old_style, "02008R0593-20080724", "NL")
+
+    assert html.index("(1) Het opbouwen") < html.index("HOOFDSTUK I")
+
+
+def test_consolidated_text_survives_a_base_act_without_a_preamble(monkeypatch):
+    """Handelingen van vóór ± 2004 hebben geen #pbl_1. Dan blijft de
+    geconsolideerde tekst intact — met een notitie, niet zwijgend."""
+    from mdconv.sources import eurlex
+
+    _fake_cellar(monkeypatch, "<html><body><p>Oude opmaak zonder eli-skelet</p></body></html>")
+    html = eurlex._with_base_preamble(CONSOLIDATED_SKELETON, "02014R0910-20241018", "NL")
+
+    assert "HOOFDSTUK I" in html
+    assert "konden niet worden opgehaald" in html
+
+
+def test_consolidated_text_survives_an_unreachable_base_act(monkeypatch):
+    """Een netwerkfout bij de basishandeling mag de conversie niet slopen."""
+    from mdconv.sources import eurlex
+
+    def boom(*a, **k):
+        raise OSError("netwerk weg")
+
+    monkeypatch.setattr(
+        eurlex.net, "documents",
+        lambda: type("S", (), {"get": staticmethod(boom)})(),
+    )
+    html = eurlex._with_base_preamble(CONSOLIDATED_SKELETON, "02014R0910-20241018", "NL")
+
+    assert "HOOFDSTUK I" in html
+    assert "konden niet worden opgehaald" in html
+
+
+def test_base_celex_falls_back_to_deriving_it_from_the_sector_digit():
+    """Zonder \u25baB-pijl is het nummer nog deterministisch: sector 0 wordt sector 3."""
+    from bs4 import BeautifulSoup
+    from mdconv.sources import eurlex
+
+    soup = BeautifulSoup("<html><body><p>geen pijlen</p></body></html>", "lxml")
+    assert eurlex._base_celex(soup, "02014R0910-20241018") == "32014R0910"
+
+
+def test_only_a_consolidated_celex_triggers_the_preamble_merge(monkeypatch):
+    """Een gewone handeling heeft zijn overwegingen al; niets invoegen dus."""
+    from mdconv.sources import eurlex
+
+    calls = _fake_cellar(monkeypatch, BASE_ACT_WITH_PREAMBLE)
+    eurlex._fetch_cellar("32014R0910", "NL")
+
+    assert calls == ["http://publications.europa.eu/resource/celex/32014R0910"]
+
+
+def test_missing_consolidated_version_reports_the_date_not_a_network_error(monkeypatch):
+    """Cellar geeft 404 op een datum waarop niet geconsolideerd is. Doorvallen
+    naar de (geblokkeerde) portal maakte daar een netwerkfout van."""
+    from mdconv.sources import eurlex
+    from mdconv.errors import ConversionError
+
+    _fake_cellar(monkeypatch, "", status=404)
+    with pytest.raises(ConversionError, match="31-12-2016"):
+        eurlex._fetch_cellar("02014R0910-20161231", "NL")
+
+
+def test_consolidated_celex_without_a_date_is_explained(monkeypatch):
+    """02014R0910 bestaat niet: een geconsolideerde CELEX is alleen mét datum geldig."""
+    from mdconv.sources import eurlex
+    from mdconv.errors import ConversionError
+
+    _fake_cellar(monkeypatch, "", status=404)
+    with pytest.raises(ConversionError, match="mist een geldige datum"):
+        eurlex._fetch_cellar("02014R0910", "NL")
 
 
 def test_fetch_multipart_without_doc_links_reports_language_problem():
