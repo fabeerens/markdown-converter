@@ -155,10 +155,41 @@ accountregistratie namens de gebruiker):
     uit elkaar zodra de datum erbij kwam: kaal werd `02014R0910-20241018` afgewezen, uit een URL
     werd de datum stil afgekapt tot een CELEX die niet bestaat. Let ook op de tekenklasse in
     `CELEX[:/]([0-9A-Z()-]+)` — zonder het koppelteken breekt die tak alsnog af.
-  - **Sector 0 faalt niet via de portal.** Cellar 404't op een datum waarop niet geconsolideerd is
-    (consolidatiedata liggen vast, één per wijziging); `_consolidated_error()` zegt dat in het
-    Nederlands, in plaats van door te vallen naar de geblokkeerde portal en daar een netwerkfout
-    te melden.
+  - **Sector 0 faalt niet via de portal.** Cellar 404't op een sector-0-CELEX die het niet kan
+    serveren; doorvallen naar de geblokkeerde portal maakt daar een netwerkfout van. `_fetch_cellar`
+    geeft dan `None` en `fetch_and_convert` gaat over naar `_consolidated_fallback()`.
+  - **Een 404 op sector 0 heeft twee heel verschillende oorzaken, met dezelfde statuscode.**
+    Ofwel de consolidatiedatum bestaat niet (consolidatiedata liggen vast, één per wijziging),
+    ofwel de versie bestaat wél maar is er (nog) niet in de gevraagde taal — **EUR-Lex
+    consolideert taal per taal en loopt daarin achter**. Die tweede is niet exotisch
+    (geverifieerd: `02024R2979-20241204` alleen in IE+SV, `02026R0798-20260408` alleen in DE+ET,
+    `02014R0910-20140917` in 9 van de 24 talen). De tool meldde eerder in álle gevallen dat de
+    datum niet bestond — feitelijk onjuist — en gaf niets terug, terwijl de handeling zelf in het
+    Nederlands wél op te halen is.
+    - **Het onderscheid staat alleen in de metadata**, keyless op te vragen bij het
+      **SPARQL-endpoint** van het Publicatiebureau (`publications.europa.eu/webapi/rdf/sparql`,
+      dezelfde bron als "Alle versies van dit document" op de portal). `_consolidated_index()`
+      vraagt per handeling álle geconsolideerde CELEX-nummers mét hun talen op met één query
+      (`cdm:resource_legal_id_celex` + `FILTER(STRSTARTS(…))` op de sector-0-stam, plus
+      `cdm:expression_uses_language`). Duurt ~6 s, dus **alleen op het faalpad**. `None` betekent
+      "niet te achterhalen", niet "geen" — de ladder behandelt dat anders. Cellars notice-varianten
+      (`?notice=object|branch|tree`) zijn hiervoor géén route: 400/404.
+    - **Terugvalladder** (`_consolidated_fallback()`): de nieuwste geconsolideerde versie **op of
+      vóór** de gevraagde datum die in deze taal bestaat → de oorspronkelijke handeling in deze
+      taal → een foutmelding. Die eerste stap is geen concessie maar het juiste antwoord: vraagt
+      iemand een willekeurige datum (bv. "vandaag"), dan is de nieuwste versie op of vóór die
+      datum precies de versie die op dat moment gold. **Latere versies komen nooit in de plaats** —
+      die verwerken wijzigingen die op de gevraagde datum nog niet golden.
+    - **Nooit stil.** Elke terugval zet een cursieve notitie bovenaan de tekst én noemt de
+      afwijking in de bronvermelding, want stilzwijgend de oorspronkelijke handeling teruggeven
+      is precies de val die deze code eerder maakte (zie de ELI-datum hierboven) — dan lijkt het
+      origineel de geconsolideerde versie. `_fallback_reason()` levert die ene zin voor zowel de
+      notitie als de foutmelding, zodat die twee nooit iets anders kunnen beweren; de talen/datums
+      die ze opsomt zijn er alléén de talen/datums die in de **gevraagde taal** bestaan, want dat
+      is wat de gebruiker ermee kan. `_base_act_tail()` houdt de drie gevallen apart die eerder
+      door elkaar liepen: geen eerdere versie / eerdere versie niet in deze taal / versielijst
+      onbekend. De eerste versie beweerde in dezelfde alinea "geen eerdere versie" én somde de
+      bestaande versies op.
   - `detect_source` heeft een **CELEX-uitsluiting** nodig bij de HUDOC-item-id-test:
     `01999L0001-20040501` bevat "001-20040501", precies de vorm van een HUDOC-id. Dezelfde
     volgorde-val zit in `deriveName()` in `app.js` (daar staat de CELEX-test daarom vóór de
@@ -714,10 +745,12 @@ regel), inclusief de vloeiende tabbalk-indicator.
   weggeschreven bestand nooit als geldige staat gelezen kan worden.
 
 ## Tests
-`.venv/bin/python -m pytest tests/ -q` — 176 karakteriseringstests die het gedrag
+`.venv/bin/python -m pytest tests/ -q` — 181 karakteriseringstests die het gedrag
 vastleggen in plaats van het te beschrijven: `detect_source`-precedentie, ELI→CELEX,
 de geconsolideerde-CELEX-afhandeling (datum behouden, preambule invoegen, en de vier
-terugvalpaden als dat niet lukt), de chunking-ladder (ook zonder witregels en met één te
+terugvalpaden als dat niet lukt), de versie-terugvalladder (nieuwste versie op of vóór de
+gevraagde datum, nooit een latere, en een notitie die niet beweert dat een bestaande versie
+niet bestaat), de chunking-ladder (ook zonder witregels en met één te
 lang woord), de PDF-reflow, de Formex-parser, de settings-semantiek (leeg wist terug naar
 standaard), de batch-zip (eigen naam en eigen `attachments/`-map per document) en de
 Nederlandse foutmeldingen. Twee tests pinnen de front-end vast waar Python niet bij de

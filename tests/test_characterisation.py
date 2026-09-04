@@ -307,15 +307,165 @@ def test_only_a_consolidated_celex_triggers_the_preamble_merge(monkeypatch):
     assert calls == ["http://publications.europa.eu/resource/celex/32014R0910"]
 
 
+# Een 404 van Cellar op een sector-0-CELEX heeft twee heel verschillende
+# oorzaken die dezelfde statuscode geven: de consolidatiedatum bestaat niet, óf
+# de versie bestaat wél maar niet in de gevraagde taal (EUR-Lex consolideert
+# taal per taal). Alleen de metadata weet het verschil. Deze tests pinnen de
+# terugvalladder vast: nieuwste versie op of vóór de gevraagde datum → de
+# oorspronkelijke handeling → een foutmelding, en nooit stil.
+
+CONSOLIDATED_ACT = (
+    '<html><body>'
+    '<p class="arrow"><a href="http://publications.europa.eu/resource/celex/32014R0910"'
+    ' title="32014R0910">►B</a></p>'
+    '<div class="eli-main-title" id="tit_1"><p>VERORDENING (EU) Nr. 910/2014</p></div>'
+    '<div class="eli-subdivision" id="enc_1"><p>Artikel 1</p>'
+    '<p>Deze verordening beoogt de goede werking van de interne markt.</p></div>'
+    '</body></html>'
+)
+
+BASE_ACT = (
+    '<html><body>'
+    '<div class="eli-main-title" id="tit_1"><p>UITVOERINGSVERORDENING (EU) 2024/2979</p></div>'
+    '<div class="eli-subdivision" id="pbl_1"><p>DE EUROPESE COMMISSIE,</p></div>'
+    '<div class="eli-subdivision" id="enc_1"><p>Artikel 1</p>'
+    '<p>Deze verordening stelt technische specificaties vast voor de wallet.</p></div>'
+    '</body></html>'
+)
+
+
+def _fake_cellar_map(monkeypatch, bodies, index=None):
+    """Cellar met een eigen antwoord per CELEX; alles wat ontbreekt geeft 404.
+
+    `index` vervangt de metadata-opvraag (het SPARQL-endpoint), zodat de ladder
+    getest wordt en niet het netwerk. None = "metadata onbereikbaar".
+    """
+    from mdconv.sources import eurlex
+
+    calls = []
+
+    class FakeResp:
+        def __init__(self, body):
+            self.status_code = 200 if body is not None else 404
+            self.apparent_encoding = "utf-8"
+            self.text = body or ""
+
+    def fake_get(url, headers=None, timeout=None, allow_redirects=None):
+        calls.append(url)
+        return FakeResp(bodies.get(url.rsplit("/", 1)[-1]))
+
+    monkeypatch.setattr(
+        eurlex.net, "documents",
+        lambda: type("S", (), {"get": staticmethod(fake_get)})(),
+    )
+    monkeypatch.setattr(eurlex, "_consolidated_index", lambda act: index)
+    return calls
+
+
+def test_version_missing_in_this_language_falls_back_to_the_base_act(monkeypatch):
+    """02024R2979-20241204 bestaat, maar alleen in het Iers en Zweeds.
+
+    De oude melding zei dat de datum niet bestond — feitelijk onjuist — en gaf
+    niets terug, terwijl de Nederlandse tekst van de handeling zelf wél op te
+    halen is.
+    """
+    from mdconv.sources import eurlex
+
+    calls = _fake_cellar_map(
+        monkeypatch, {"32024R2979": BASE_ACT},
+        index={"02024R2979-20241204": {"GLE", "SWE"}},
+    )
+    markdown, source = eurlex.fetch_and_convert("CELEX:02024R2979-20241204", "NL")
+
+    assert "niet in het Nederlands" in markdown
+    assert "Iers en Zweeds" in markdown
+    assert "technische specificaties" in markdown
+    assert "CELEX:32024R2979" in source
+    assert "oorspronkelijke handeling" in source
+    # Geen verzoek aan de geblokkeerde portal: die maakt van elke oorzaak een
+    # netwerkfout.
+    assert not any("eur-lex.europa.eu" in url for url in calls)
+
+
+def test_unknown_date_uses_the_newest_version_before_it(monkeypatch):
+    """Op 01-01-2025 gold de versie per 18-10-2024. Dat is geen concessie maar
+    het juiste document — consolidatiedata liggen vast, één per wijziging."""
+    from mdconv.sources import eurlex
+
+    calls = _fake_cellar_map(
+        monkeypatch,
+        {"02014R0910-20241018": CONSOLIDATED_ACT, "32014R0910": BASE_ACT},
+        index={
+            "02014R0910-20140917": {"ENG"},
+            "02014R0910-20240520": {"NLD"},
+            "02014R0910-20241018": {"NLD"},
+        },
+    )
+    markdown, source = eurlex.fetch_and_convert("02014R0910-20250101", "NL")
+
+    assert "18-10-2024" in markdown
+    assert "CELEX:02014R0910-20241018" in source
+    assert "http://publications.europa.eu/resource/celex/02014R0910-20241018" in calls
+    # Niet de op één na nieuwste: de nieuwste die niet ná de gevraagde datum ligt.
+    assert not any(url.endswith("02014R0910-20240520") for url in calls)
+
+
+def test_a_later_version_is_never_substituted(monkeypatch):
+    """Een latere versie verwerkt wijzigingen die op de gevraagde datum nog niet
+    golden; die mag dus nooit in de plaats komen."""
+    from mdconv.sources import eurlex
+
+    calls = _fake_cellar_map(
+        monkeypatch,
+        {"02014R0910-20241018": CONSOLIDATED_ACT, "32014R0910": BASE_ACT},
+        index={"02014R0910-20241018": {"NLD"}},
+    )
+    markdown, source = eurlex.fetch_and_convert("02014R0910-20150101", "NL")
+
+    assert not any(url.endswith("02014R0910-20241018") for url in calls)
+    assert "oorspronkelijke handeling" in markdown
+    assert "CELEX:32014R0910" in source
+    assert "oorspronkelijke handeling" in source
+
+
+def test_an_earlier_version_in_another_language_is_not_denied(monkeypatch):
+    """De notitie somde de bestaande versies op en beweerde in dezelfde alinea
+    dat er geen eerdere versie was. Die is er wel — net niet in deze taal."""
+    from mdconv.sources import eurlex
+
+    _fake_cellar_map(
+        monkeypatch, {"32014R0910": BASE_ACT},
+        index={"02014R0910-20140917": {"ENG"}, "02014R0910-20241018": {"NLD"}},
+    )
+    markdown, _ = eurlex.fetch_and_convert("02014R0910-20150101", "NL")
+
+    assert "geen eerdere geconsolideerde versie van deze handeling" not in markdown
+    assert "de eerdere geconsolideerde versies bestaan niet in het Nederlands" in markdown
+
+
+def test_unreachable_metadata_still_yields_a_document(monkeypatch):
+    """Is de versielijst niet op te vragen, dan nog steeds de handeling zelf —
+    met een notitie die zegt dat het de oorspronkelijke handeling is."""
+    from mdconv.sources import eurlex
+
+    _fake_cellar_map(monkeypatch, {"32014R0910": BASE_ACT}, index=None)
+    markdown, source = eurlex.fetch_and_convert("02014R0910-20161231", "NL")
+
+    assert "lijst met beschikbare versies ook niet" in markdown
+    assert "oorspronkelijke handeling" in source
+
+
 def test_missing_consolidated_version_reports_the_date_not_a_network_error(monkeypatch):
-    """Cellar geeft 404 op een datum waarop niet geconsolideerd is. Doorvallen
-    naar de (geblokkeerde) portal maakte daar een netwerkfout van."""
+    """Is er niets op te halen — ook de handeling zelf niet — dan een melding
+    die de datum noemt. Doorvallen naar de (geblokkeerde) portal maakte daar een
+    netwerkfout van."""
     from mdconv.sources import eurlex
     from mdconv.errors import ConversionError
 
-    _fake_cellar(monkeypatch, "", status=404)
+    calls = _fake_cellar_map(monkeypatch, {}, index=None)
     with pytest.raises(ConversionError, match="31-12-2016"):
-        eurlex._fetch_cellar("02014R0910-20161231", "NL")
+        eurlex.fetch_and_convert("02014R0910-20161231", "NL")
+    assert not any("eur-lex.europa.eu" in url for url in calls)
 
 
 def test_consolidated_celex_without_a_date_is_explained(monkeypatch):
@@ -323,9 +473,9 @@ def test_consolidated_celex_without_a_date_is_explained(monkeypatch):
     from mdconv.sources import eurlex
     from mdconv.errors import ConversionError
 
-    _fake_cellar(monkeypatch, "", status=404)
+    _fake_cellar_map(monkeypatch, {}, index=None)
     with pytest.raises(ConversionError, match="mist een geldige datum"):
-        eurlex._fetch_cellar("02014R0910", "NL")
+        eurlex.fetch_and_convert("02014R0910", "NL")
 
 
 def test_fetch_multipart_without_doc_links_reports_language_problem():

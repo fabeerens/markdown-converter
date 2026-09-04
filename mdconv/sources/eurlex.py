@@ -162,6 +162,13 @@ def fetch_and_convert(text: str, lang: str = "NL") -> tuple[str, str]:
     except Exception:
         pass  # netwerkprobleem bij Cellar: probeer de portal
 
+    # Strategie 1b: een geconsolideerde versie (sector 0) staat alléén in Cellar.
+    # Doorvallen naar de geblokkeerde portal maakt van elke oorzaak een
+    # netwerkfout; de metadata weet wat er wél is en wat daarvan het dichtst bij
+    # de gevraagde versie ligt.
+    if celex.startswith("0"):
+        return _consolidated_fallback(celex, lang)
+
     # Strategie 2: de EUR-Lex portal (met herhaalpogingen bij HTTP 202).
     html = _fetch_portal_html(celex, lang)
     return html_to_markdown(html), f"EUR-Lex portal • CELEX:{celex} • {lang}"
@@ -190,30 +197,271 @@ def _fetch_cellar(celex: str, lang: str) -> str | None:
         return html_to_markdown(html)
     if r.status_code == 300:
         return _fetch_multipart(r.text, lang, f"CELEX:{celex}")
-    if celex.startswith("0"):
-        # Sector 0 is een geconsolideerde versie. Terugvallen op de portal heeft
-        # hier geen zin (die blokkeert) en levert alleen een netwerkfout op waar
-        # de echte oorzaak een niet-bestaande consolidatiedatum is.
-        raise ConversionError(_consolidated_error(celex))
+    # Elke andere status is hier gewoon een miss (404, maar ook 406 als de taal
+    # niet bestaat). Waaróm een sector-0-CELEX niet op te halen is — datum
+    # bestaat niet, of de versie is er niet in deze taal — staat in de metadata
+    # en niet in de statuscode. Dat uitzoeken, en de beste beschikbare versie
+    # kiezen, doet _consolidated_fallback().
     return None
 
 
-def _consolidated_error(celex: str) -> str:
-    base = _derive_base_celex(celex)
+# --------------------------------------------------------------------------
+# Geconsolideerde versies: welke bestaan er, en in welke talen?
+# --------------------------------------------------------------------------
+#
+# Een 404 van Cellar op een sector-0-CELEX zegt niet wát er mis is. Twee heel
+# verschillende oorzaken geven exact dezelfde status:
+#
+#   * de gevraagde consolidatiedatum bestaat niet — consolidatiedata liggen
+#     vast, één per wijziging;
+#   * de versie bestaat wél, maar is (nog) niet in de gevraagde taal. EUR-Lex
+#     consolideert taal per taal en loopt daarin achter.
+#
+# Die tweede is niet exotisch. Geverifieerd: 02024R2979-20241204 bestaat alleen
+# in het Iers en Zweeds, 02026R0798-20260408 alleen in het Duits en Ests, en van
+# eIDAS bestaat 02014R0910-20140917 in 9 van de 24 talen. Zonder dit onderscheid
+# meldde de tool in al die gevallen dat de datum niet bestond — feitelijk onjuist
+# — en gaf ze niets terug, terwijl de Nederlandse tekst van de handeling zelf wél
+# op te halen is.
+#
+# Het onderscheid staat in de metadata, keyless op te vragen bij het
+# SPARQL-endpoint van het Publicatiebureau: dezelfde bron als "Alle versies van
+# dit document" op de portal.
+
+_SPARQL_URL = "http://publications.europa.eu/webapi/rdf/sparql"
+_SPARQL_TIMEOUT = 30
+
+# Hoeveel oudere geconsolideerde versies we maximaal proberen voordat we op de
+# oorspronkelijke handeling terugvallen. De metadata zegt al in welke taal een
+# versie bestaat, dus in de praktijk is de eerste kandidaat de goede; de grens
+# is er zodat een handeling met dertig versies geen dertig verzoeken uitlokt.
+_FALLBACK_PROBES = 3
+
+# De EU-talen in de codes die Cellar gebruikt (drieletterig in de metadata,
+# tweeletterig in `Accept-Language` — vandaar de brug), met hun Nederlandse naam
+# voor de meldingen.
+_EU_LANGUAGES = {
+    "BG": ("BUL", "Bulgaars"), "CS": ("CES", "Tsjechisch"), "DA": ("DAN", "Deens"),
+    "DE": ("DEU", "Duits"), "EL": ("ELL", "Grieks"), "EN": ("ENG", "Engels"),
+    "ES": ("SPA", "Spaans"), "ET": ("EST", "Ests"), "FI": ("FIN", "Fins"),
+    "FR": ("FRA", "Frans"), "GA": ("GLE", "Iers"), "HR": ("HRV", "Kroatisch"),
+    "HU": ("HUN", "Hongaars"), "IT": ("ITA", "Italiaans"), "LT": ("LIT", "Litouws"),
+    "LV": ("LAV", "Lets"), "MT": ("MLT", "Maltees"), "NL": ("NLD", "Nederlands"),
+    "PL": ("POL", "Pools"), "PT": ("POR", "Portugees"), "RO": ("RON", "Roemeens"),
+    "SK": ("SLK", "Slowaaks"), "SL": ("SLV", "Sloveens"), "SV": ("SWE", "Zweeds"),
+}
+_LANGUAGE_NAMES = {code: name for code, name in _EU_LANGUAGES.values()}
+
+
+def _nl_date(yyyymmdd: str) -> str:
+    return f"{yyyymmdd[6:8]}-{yyyymmdd[4:6]}-{yyyymmdd[0:4]}"
+
+
+def _join_nl(items: list[str]) -> str:
+    if len(items) < 2:
+        return "".join(items)
+    return ", ".join(items[:-1]) + " en " + items[-1]
+
+
+def _language_list(codes: set[str]) -> str:
+    """De talen bij naam, of hun aantal als de lijst te lang wordt om te lezen."""
+    names = sorted(_LANGUAGE_NAMES.get(c, c) for c in codes)
+    if len(names) > 5:
+        return f"in {len(names)} van de {len(_EU_LANGUAGES)} talen"
+    return "in het " + _join_nl(names)
+
+
+def _consolidated_index(act: str) -> dict[str, set[str]] | None:
+    """Per geconsolideerde versie van `act` de talen waarin die bestaat.
+
+    `act` is een sector-0-CELEX zónder datum (`02014R0910`). None betekent "niet
+    te achterhalen" (endpoint onbereikbaar) — iets anders dan een leeg antwoord
+    ("deze handeling is nooit geconsolideerd"), en de ladder hieronder behandelt
+    het ook anders.
+    """
+    if not re.fullmatch(r"0[0-9]{4}[A-Z]{1,2}[0-9]{2,4}(?:\([0-9]+\))?", act, re.I):
+        return None
+    query = (
+        "PREFIX cdm: <http://publications.europa.eu/ontology/cdm#>\n"
+        "SELECT DISTINCT ?celex ?lang WHERE {\n"
+        "  ?w cdm:resource_legal_id_celex ?celex .\n"
+        "  ?e cdm:expression_belongs_to_work ?w ; cdm:expression_uses_language ?lang .\n"
+        f'  FILTER(STRSTARTS(STR(?celex), "{act.upper()}"))\n'
+        "}"
+    )
+    try:
+        r = net.documents().get(
+            _SPARQL_URL,
+            params={"query": query, "format": "application/sparql-results+json"},
+            timeout=_SPARQL_TIMEOUT,
+        )
+        rows = r.json()["results"]["bindings"]
+    except Exception:
+        return None
+    index: dict[str, set[str]] = {}
+    for row in rows:
+        celex = (row.get("celex", {}).get("value") or "").upper()
+        lang = (row.get("lang", {}).get("value") or "").rsplit("/", 1)[-1].upper()
+        if _CONSOLIDATED_RE.match(celex):
+            index.setdefault(celex, set()).add(lang)
+    return index
+
+
+def _fallback_reason(index, celex: str, wanted: str, lang: str, code: str | None) -> str:
+    """Één zin: waarom de gevraagde geconsolideerde versie er niet is.
+
+    Gedeeld door de notitie boven een terugvaltekst en de foutmelding als de
+    hele ladder faalt, zodat die twee nooit iets anders kunnen beweren.
+    """
+    date = _nl_date(wanted)
+    langname = _EU_LANGUAGES.get(lang, (None, lang))[1]
+    if index is None:
+        return (
+            f"De geconsolideerde versie per {date} was niet op te halen bij EUR-Lex, "
+            "en de lijst met beschikbare versies ook niet."
+        )
+    langs = index.get(celex.upper())
+    if langs is not None and code and code not in langs:
+        return (
+            f"De geconsolideerde versie per {date} bestaat op EUR-Lex, maar (nog) niet "
+            f"in het {langname} — alleen {_language_list(langs)}. EUR-Lex consolideert "
+            "taal per taal."
+        )
+    if langs is not None:
+        return (
+            f"De geconsolideerde versie per {date} bestaat op EUR-Lex, ook in het "
+            f"{langname}, maar was nu niet op te halen."
+        )
+    if not index:
+        return (
+            f"EUR-Lex heeft geen geconsolideerde versie per {date}: deze handeling is "
+            "nooit geconsolideerd."
+        )
+    # Noem alleen de datums die in déze taal te krijgen zijn: dat is wat de
+    # gebruiker met de melding kan doen.
+    mine = sorted(
+        (c.rsplit("-", 1)[-1] for c in index if not code or code in index[c]), reverse=True
+    )
+    if mine:
+        shown = _join_nl([_nl_date(d) for d in mine[:5]])
+        more = " (en ouder)" if len(mine) > 5 else ""
+        return (
+            f"EUR-Lex heeft geen geconsolideerde versie per {date}. Consolidatiedata "
+            f"liggen vast, één per wijziging; in het {langname} bestaan de versies per "
+            f"{shown}{more}."
+        )
+    every = sorted((c.rsplit("-", 1)[-1] for c in index), reverse=True)
+    shown = _join_nl([_nl_date(d) for d in every[:5]])
+    more = " (en ouder)" if len(every) > 5 else ""
+    return (
+        f"EUR-Lex heeft geen geconsolideerde versie per {date}, en geen van de versies "
+        f"die er zijn ({shown}{more}) bestaat in het {langname}."
+    )
+
+
+def _base_act_tail(index, before: list[str], earlier: list[str], lang: str) -> str:
+    """Waarom er geen eerdere geconsolideerde versie in de plaats komt.
+
+    Drie verschillende gevallen die makkelijk door elkaar lopen — en waarvan er
+    twee eerder onterecht als "die bestaat niet" werden gemeld, terwijl de
+    notitie in dezelfde alinea de bestaande versies opsomde.
+    """
+    langname = _EU_LANGUAGES.get(lang, (None, lang))[1]
+    if index is None:
+        return "welke eerdere geconsolideerde versies er zijn, was niet na te gaan."
+    if not before:
+        return "EUR-Lex heeft geen eerdere geconsolideerde versie van deze handeling."
+    if not earlier:
+        return f"de eerdere geconsolideerde versies bestaan niet in het {langname}."
+    return "een eerdere geconsolideerde versie was niet op te halen."
+
+
+def _try_cellar(celex: str, lang: str) -> str | None:
+    """`_fetch_cellar` zonder scherpe kanten: elke storing wordt None."""
+    try:
+        markdown = _fetch_cellar(celex, lang)
+    except Exception:
+        return None
+    if markdown and len(markdown.strip()) > 80:
+        return markdown
+    return None
+
+
+def _with_note(markdown: str, note: str) -> str:
+    return f"*{note}*\n\n{markdown}"
+
+
+def _consolidated_fallback(celex: str, lang: str) -> tuple[str, str]:
+    """De beste beschikbare tekst als de gevraagde geconsolideerde versie niet lukt.
+
+    Terugvalladder:
+
+    1. de nieuwste geconsolideerde versie **vóór** de gevraagde datum die wél in
+       deze taal bestaat — dat is precies de versie die op de gevraagde datum
+       gold, dus geen concessie maar het juiste antwoord;
+    2. de oorspronkelijke handeling in deze taal;
+    3. een foutmelding die uit de metadata zegt wát er aan de hand is.
+
+    Latere versies blijven buiten de ladder: die verwerken wijzigingen die op de
+    gevraagde datum nog niet golden. Elke terugval zet een cursieve notitie boven
+    de tekst én noemt de afwijking in de bronvermelding — een ander document dan
+    gevraagd stil doorgeven is de val die deze code eerder maakte, en dan lijkt de
+    oorspronkelijke handeling de geconsolideerde versie te zijn.
+    """
     m = _CONSOLIDATED_RE.match(celex)
     if not m:
-        return (
-            f"CELEX:{celex} ziet eruit als een geconsolideerde versie, maar mist een "
-            "geldige datum. Zo'n nummer heeft de vorm 02014R0910-20241018 (jjjjmmdd). "
-            f"Voor de oorspronkelijke handeling: CELEX:{base}."
+        raise ConversionError(_consolidated_error(celex))
+    wanted = m.group(1)
+    base = _derive_base_celex(celex)
+    index = _consolidated_index(celex.split("-")[0])
+    code = _EU_LANGUAGES.get(lang, (None, lang))[0]
+    reason = _fallback_reason(index, celex, wanted, lang, code)
+
+    before = [c for c in (index or {}) if c.rsplit("-", 1)[-1] < wanted]
+    earlier = sorted(
+        (c for c in before if not (code and code not in index[c])), reverse=True
+    )
+    for cand in earlier[:_FALLBACK_PROBES]:
+        markdown = _try_cellar(cand, lang)
+        if markdown is None:
+            continue
+        got = _nl_date(cand.rsplit("-", 1)[-1])
+        note = (
+            f"{reason} Hieronder staat de geconsolideerde versie per {got} "
+            f"(CELEX:{cand}) — de nieuwste versie op of vóór de gevraagde datum."
         )
-    d = m.group(1)
+        source = (
+            f"EUR-Lex (Cellar) • CELEX:{cand} • {lang} • "
+            f"i.p.v. de gevraagde versie per {_nl_date(wanted)}"
+        )
+        return _with_note(markdown, note), source
+
+    markdown = _try_cellar(base, lang)
+    if markdown is not None:
+        note = (
+            f"{reason} Hieronder staat de oorspronkelijke handeling (CELEX:{base}), "
+            f"niet een geconsolideerde versie: "
+            f"{_base_act_tail(index, before, earlier, lang)}"
+        )
+        source = (
+            f"EUR-Lex (Cellar) • CELEX:{base} • {lang} • oorspronkelijke handeling "
+            f"i.p.v. de geconsolideerde versie per {_nl_date(wanted)}"
+        )
+        return _with_note(markdown, note), source
+
+    raise ConversionError(
+        f"{reason} Ook de oorspronkelijke handeling (CELEX:{base}) was niet op te "
+        f"halen in taal {lang}."
+    )
+
+
+def _consolidated_error(celex: str) -> str:
+    """Een sector-0-CELEX zonder geldige datum: daar valt niets te repareren."""
+    base = _derive_base_celex(celex)
     return (
-        f"EUR-Lex heeft geen geconsolideerde versie van CELEX:{base} per "
-        f"{d[6:8]}-{d[4:6]}-{d[0:4]}. Consolidatiedata liggen vast: er is alleen een "
-        "versie per datum waarop de handeling daadwerkelijk is gewijzigd. Kies de "
-        "juiste versie via 'Alle versies van dit document' op EUR-Lex, of gebruik "
-        f"CELEX:{base} voor de oorspronkelijke handeling."
+        f"CELEX:{celex} ziet eruit als een geconsolideerde versie, maar mist een "
+        "geldige datum. Zo'n nummer heeft de vorm 02014R0910-20241018 (jjjjmmdd). "
+        f"Voor de oorspronkelijke handeling: CELEX:{base}."
     )
 
 
