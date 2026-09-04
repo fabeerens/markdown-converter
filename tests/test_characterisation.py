@@ -1890,3 +1890,97 @@ def test_download_without_attachments_token_returns_plain_markdown(client):
     assert r.status_code == 200
     assert r.content_type.startswith("text/markdown")
     assert r.data == b"# Test"
+
+
+# ---------------------------------------------------------------------------
+# Batch-import: een lijst aanleveren en alles in één keer downloaden
+# ---------------------------------------------------------------------------
+
+def test_download_bundles_multiple_documents_into_one_zip(client):
+    r = client.post("/api/download", json={
+        "filename": "markdown-2026-01-01",
+        "documents": [
+            {"markdown": "# Een", "filename": "32016R0679"},
+            {"markdown": "# Twee", "filename": "BWBR0040940"},
+        ],
+    })
+    assert r.status_code == 200
+    assert r.content_type == "application/zip"
+    assert "markdown-2026-01-01.zip" in r.headers["Content-Disposition"]
+    zf = zipfile.ZipFile(BytesIO(r.data))
+    assert set(zf.namelist()) == {"32016R0679.md", "BWBR0040940.md"}
+    assert zf.read("32016R0679.md") == b"# Een"
+
+
+def test_download_bundle_keeps_documents_with_the_same_name_apart(client):
+    """Twee documenten kunnen dezelfde naam hebben (bv. beide "document").
+
+    In één zip mag dat niet: zonder eigen naam zou het tweede bestand het
+    eerste overschrijven en was dat document stil verdwenen.
+    """
+    r = client.post("/api/download", json={"documents": [
+        {"markdown": "# Een", "filename": "document"},
+        {"markdown": "# Twee", "filename": "document"},
+        {"markdown": "# Drie", "filename": "document"},
+    ]})
+    zf = zipfile.ZipFile(BytesIO(r.data))
+    assert set(zf.namelist()) == {"document.md", "document-2.md", "document-3.md"}
+    assert zf.read("document-3.md") == b"# Drie"
+
+
+def test_download_bundle_sanitises_every_document_name(client):
+    r = client.post("/api/download", json={"documents": [
+        {"markdown": "# x", "filename": "../../etc/passwd"},
+    ]})
+    zf = zipfile.ZipFile(BytesIO(r.data))
+    assert all("/" not in name for name in zf.namelist())
+
+
+def test_download_bundle_gives_each_document_its_own_attachments_folder(client):
+    """Twee PDF's leveren allebei een `p01.png`; die mogen niet botsen."""
+    from mdconv import attachments
+    from mdconv.sources import Attachment
+
+    first = attachments.store([Attachment(filename="p01.png", data=b"EERSTE")])
+    second = attachments.store([Attachment(filename="p01.png", data=b"TWEEDE")])
+    r = client.post("/api/download", json={"documents": [
+        {"markdown": "# Een", "filename": "een", "attachments_token": first},
+        {"markdown": "# Twee", "filename": "twee", "attachments_token": second},
+    ]})
+    zf = zipfile.ZipFile(BytesIO(r.data))
+    assert set(zf.namelist()) == {
+        "een.md", "twee.md",
+        "attachments/een/p01.png", "attachments/twee/p01.png",
+    }
+    assert zf.read("attachments/een/p01.png") == b"EERSTE"
+    assert zf.read("attachments/twee/p01.png") == b"TWEEDE"
+
+
+def test_download_bundle_without_documents_explains_itself_in_dutch(client):
+    r = client.post("/api/download", json={"documents": []})
+    assert r.status_code == 400
+    assert "documenten" in r.get_json()["error"]
+
+
+def test_wetgeving_offers_both_input_forms():
+    """De front-end bouwt de id's van het lijst-tekstvak per conventie op
+    (`#bulk-${kind}-text` enz.). Wordt er in de template één omgenoemd, dan
+    faalt de JS stil — daarom staan ze hier vast."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    html = open(os.path.join(root, "templates", "index.html"), encoding="utf-8").read()
+    for element in (
+        'id="mode-wet-rows"', 'id="mode-wet-bulk"',
+        'id="bulk-wet"', 'id="bulk-wet-text"', 'id="bulk-wet-lang"',
+        'id="bulk-wet-count"', 'id="download-all"',
+    ):
+        assert element in html, f"{element} ontbreekt in index.html"
+
+
+def test_frontend_has_one_celex_pattern():
+    """Aan de serverkant liep een vier keer los uitgeschreven CELEX-vorm uit
+    elkaar zodra de consolidatiedatum erbij kwam (zie _CELEX_BODY in
+    eurlex.py). De front-end kent nu ook één patroon, gedeeld door de
+    lijst-parser en deriveName()."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    js = open(os.path.join(root, "static", "app.js"), encoding="utf-8").read()
+    assert js.count("[0-9][0-9]{4}[A-Z]{1,2}[0-9]{2,4}") == 1

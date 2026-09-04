@@ -11,7 +11,8 @@ verrijkte tekst rechtstreeks in een `contenteditable`-vak plakken/typen). Tabs 1
 posten beide naar `/api/convert/link` (auto-detectie); tab 3 naar `/api/convert/file` of
 `/api/convert/file-url`; tab 4 naar `/api/convert/text`. Tabs 1–3 ondersteunen **meerdere
 documenten tegelijk** (zie "Meerdere documenten" hieronder); tab 4 is één plakvak per keer
-— een batch van tekstvakken past niet bij hoe je knipt-en-plakt.
+— een batch van tekstvakken past niet bij hoe je knipt-en-plakt. Bij **Wetgeving** kun je
+bovendien een hele **lijst** in één keer aanleveren (zie "Batch-import" onder Front-end).
 
 ## Starten
 
@@ -310,7 +311,8 @@ accountregistratie namens de gebruiker):
     `attachments_token` + `attachment_count` terug; de front-end onthoudt dat op het
     document (`doc.attachmentsToken`) en stuurt het bij het downloaden terug mee.
     `/api/download` bouwt dan een `.zip` (de markdown + een `attachments/`-submap) i.p.v.
-    een los `.md`-bestand. `attachments.get()` **verwijdert niets** — nogmaals downloaden mag
+    een los `.md`-bestand — of, bij een `documents`-array (de knop "Alles downloaden"),
+    één zip met alle documenten en per document een eigen `attachments/<naam>/`-map. `attachments.get()` **verwijdert niets** — nogmaals downloaden mag
     gewoon; opruimen gebeurt lui, bij elke nieuwe `store()`-aanroep worden sets ouder dan
     2 uur weggegooid (geen cron/achtergrondtaak nodig voor deze single-user lokale tool).
 - **Tekst plakken** (`pasted_text.py`, endpoint `/api/convert/text`): de front-end stuurt
@@ -525,10 +527,63 @@ document zelf stonden en uit elkaar liepen bij het wisselen van tabblad.
 
 - **Meerdere documenten**: elk tabblad heeft herhaalbare invoerrijen (`makeRow()`/
   `initRows()`), met "+ toevoegen" en per rij een ×-knop (minstens 1 rij blijft staan).
-  `runBatch()` haalt alle ingevulde rijen **parallel** op via `Promise.allSettled`,
+  `runBatch()` haalt de ingevulde rijen op met een **kleine pool**
+  (`BATCH_CONCURRENCY = 4`, géén `Promise.allSettled` over alles tegelijk meer),
   toont voortgang (`3/5 opgehaald…`) en meldt per mislukte rij precies wat faalde —
   één fout blokkeert de rest niet. `#file` heeft `multiple`; slepen en de bestandskiezer
   lopen over alle bestanden.
+  - **Waarom een pool en geen "alles tegelijk"**: bij een aangeleverde lijst van dertig
+    links waren dat dertig gelijktijdige verzoeken naar dezelfde bron (EUR-Lex,
+    wetten.overheid.nl) — precies hoe je throttling of een blokkade uitlokt, nog voordat
+    de eerste conversie klaar is.
+  - **Volgorde en niet-meespringen.** De bronnen antwoorden in willekeurige volgorde, dus
+    elk document krijgt zijn plaats in de lijst mee (`doc.batchIndex`, meegegeven door
+    `run(item, index)`) en `finishBatch()` zet de batch aan het eind terug in
+    invoervolgorde. `addDoc({activate: false})` zorgt dat de editor **tijdens** het
+    ophalen niet meespringt met elk document dat binnenkomt (dat volgde de
+    afrondingsvolgorde); pas `finishBatch()` opent het eerste document van de lijst. De
+    tab verschijnt wél meteen (`renderDocTabs()`), zodat je de lijst ziet vollopen.
+- **Batch-import: een lijst aanleveren** (alleen Wetgeving; `LIST_PASTE_KINDS` is de
+  enige plek om dat uit te breiden). Twee wegen naar dezelfde lijst:
+  - **Plakken splitst zich uit over de rijen.** Plak je meerdere regels in één
+    invoerveld, dan vult regel 1 dat veld en verschijnt er voor elke volgende regel een
+    nieuwe rij (`spreadList()`), met de taalkeuze van de rij waarin je plakte. Alleen bij
+    een **échte** lijst (meerdere regels én ≥ 2 herkende items) wordt het plakken
+    overgenomen; een gewone plak van één regel, of midden in een bestaande waarde, blijft
+    een gewone plak. Zo hoeft de gebruiker niets te leren: één Cmd/Ctrl+V.
+  - **"Lijst plakken"** (`.seg`-schakelaar) ruilt de rijen om voor één tekstvak met één
+    taalkeuze voor de hele lijst. Rijen en tekstvak zijn **twee weergaven van dezelfde
+    lijst**: `switchListMode()` neemt de inhoud mee in beide richtingen, zodat je nooit
+    werk kwijt bent en "Ophalen" altijd leest wat je op dat moment ziet. De gekozen
+    weergave blijft bewaard in `localStorage` (`listMode:wet`). Enter maakt in een
+    tekstvak een regel, dus **Cmd/Ctrl+Enter** haalt op.
+  - **De parser is vergevingsgezind maar voorspelbaar** (`parseList()`/
+    `pickIdentifier()`), per regel in deze volgorde: een URL in de regel (dus een
+    geplakte bullet mét omringende tekst werkt gewoon, sluitleestekens van een
+    markdown-link of prozapunt gaan eraf), anders een ECLI/BWB/CELEX in de regel, anders
+    de regel zelf zonder opsommingsteken of nummering. Onbekende invoer wordt dus **nooit
+    stil weggegooid** — die gaat door naar de server, die in het Nederlands uitlegt wat
+    er mis is. Lege regels en markdown-koppen (`## EU-wetgeving`) worden overgeslagen,
+    want zo ziet een lijst uit een notitie eruit. Een live teller onder het tekstvak
+    (`updateListCount()`) meldt "18 regelingen herkend · 2 dubbele weggelaten" **vóórdat**
+    je achttien verzoeken afvuurt.
+  - **Dubbele invoer gaat eruit op invoer *én* taal** (`readInput()`): dezelfde regeling
+    in NL en EN zijn juist wél twee documenten.
+  - **Één patroon per identificatievorm** (`RE_URL`/`RE_ECLI`/`RE_BWB`/`RE_CELEX`/
+    `RE_HUDOC`), gedeeld door de lijst-parser en `deriveName()`. Dezelfde les als
+    `_CELEX_BODY` aan de serverkant: los uitgeschreven liep de CELEX-vorm uit elkaar
+    zodra de consolidatiedatum erbij kwam. Let ook hier op de volgorde — een
+    geconsolideerde CELEX (`02014R0910-20241018`) matcht óók `RE_HUDOC`, andersom niet.
+  - **`[hidden]` doet het schakelen**, dus de `[hidden] { display: none !important }`-regel
+    in `app.css` is ook hier voorwaarde: `.rows` heeft `display: flex`.
+- **"Alles downloaden (n)"** (`#download-all`, zichtbaar vanaf 2 documenten): bij een lijst
+  van twintig is per document downloaden het nieuwe handwerk. `downloadAll()` stuurt alle
+  documenten in één `documents`-array naar `/api/download`, dat er één zip van maakt —
+  `<naam>.md` per document, en de bijlagen van een document onder `attachments/<naam>/`,
+  want twee PDF's leveren allebei een `p01.png`. Gelijke documentnamen krijgen een
+  `-2`-suffix (`_unique_name()`), anders zou het tweede het eerste overschrijven en was
+  dat document stil verdwenen. `saveDownload()` is de gedeelde helper van
+  `downloadActive()` en `downloadAll()`.
 - **State per document**: `{id, title, filenameBase, source, kind, allowObsidian,
   obsidian, model, markdown, cleaned}` in `state.docs`. `obsidian`/`model` zijn **per
   document**, dus je kunt het ene document als Obsidian-notitie opschonen en het andere
@@ -659,12 +714,15 @@ regel), inclusief de vloeiende tabbalk-indicator.
   weggeschreven bestand nooit als geldige staat gelezen kan worden.
 
 ## Tests
-`.venv/bin/python -m pytest tests/ -q` — 170 karakteriseringstests die het gedrag
+`.venv/bin/python -m pytest tests/ -q` — 176 karakteriseringstests die het gedrag
 vastleggen in plaats van het te beschrijven: `detect_source`-precedentie, ELI→CELEX,
 de geconsolideerde-CELEX-afhandeling (datum behouden, preambule invoegen, en de vier
 terugvalpaden als dat niet lukt), de chunking-ladder (ook zonder witregels en met één te
 lang woord), de PDF-reflow, de Formex-parser, de settings-semantiek (leeg wist terug naar
-standaard) en de Nederlandse foutmeldingen. Ze raken geen netwerk. Verander je de structuur, dan hoeven alleen de
+standaard), de batch-zip (eigen naam en eigen `attachments/`-map per document) en de
+Nederlandse foutmeldingen. Twee tests pinnen de front-end vast waar Python niet bij de
+JS kan: de id's die `app.js` per conventie opbouwt (`#bulk-wet-text` enz.) moeten in
+`index.html` bestaan, en het CELEX-patroon mag maar één keer in `app.js` voorkomen. Ze raken geen netwerk. Verander je de structuur, dan hoeven alleen de
 imports mee te verhuizen; blijft de suite groen, dan is het gedrag identiek.
 
 Eén test dwingt gelijktijdigheid af: `test_formex_footnotes_survive_concurrent_conversions`

@@ -294,16 +294,48 @@ def clean_cancel():
 # Download
 # --------------------------------------------------------------------------
 
+def _safe_name(value, fallback: str = "document") -> str:
+    """Een door de gebruiker gekozen naam veilig maken als bestandsnaam."""
+    return re.sub(r"[^A-Za-z0-9._-]", "_", value or fallback) or fallback
+
+
+def _unique_name(name: str, used: set) -> str:
+    """Twee documenten kunnen dezelfde naam hebben (bv. beide "document").
+
+    In één zip mag dat niet: het tweede bestand zou het eerste overschrijven.
+    """
+    candidate, n = name, 1
+    while candidate in used:
+        n += 1
+        candidate = f"{name}-{n}"
+    used.add(candidate)
+    return candidate
+
+
+def _attachment_dir(token):
+    """De tijdelijke map met geëxtraheerde afbeeldingen, of None."""
+    directory = attachments.get((token or "").strip())
+    return directory if directory and directory.is_dir() else None
+
+
 @bp.post("/api/download")
 def download():
-    """De meegestuurde markdown terugsturen — als .md, of als .zip mét de
-    `attachments/`-map als er bij de conversie losse afbeeldingen uit een PDF
-    zijn geëxtraheerd (zie `mdconv/attachments.py`)."""
-    data = _payload()
-    name = re.sub(r"[^A-Za-z0-9._-]", "_", data.get("filename") or "document") or "document"
+    """De meegestuurde markdown terugsturen.
 
-    directory = attachments.get((data.get("attachments_token") or "").strip())
-    if directory and directory.is_dir():
+    Drie vormen, in deze volgorde:
+    - `documents: [...]` → alle opgehaalde documenten in één zip (batch-download);
+    - één document mét `attachments_token` → een zip met de markdown en de
+      `attachments/`-map (losse afbeeldingen uit een PDF, zie `mdconv/attachments.py`);
+    - anders → een los `.md`-bestand.
+    """
+    data = _payload()
+    documents = data.get("documents")
+    if isinstance(documents, list):
+        return _download_bundle(documents, data.get("filename"))
+
+    name = _safe_name(data.get("filename"))
+    directory = _attachment_dir(data.get("attachments_token"))
+    if directory:
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
             zf.writestr(f"{name}.md", data.get("markdown", ""))
@@ -316,6 +348,34 @@ def download():
 
     buf = io.BytesIO(data.get("markdown", "").encode("utf-8"))
     return send_file(buf, mimetype="text/markdown", as_attachment=True, download_name=f"{name}.md")
+
+
+def _download_bundle(documents: list, name):
+    """Alle documenten in één zip: `<naam>.md` per document.
+
+    De bijlagen van een document komen onder `attachments/<naam>/` — per
+    document een eigen submap, want twee PDF's leveren allebei een `p01.png`
+    en die zouden elkaar anders overschrijven.
+    """
+    entries = [d for d in documents if isinstance(d, dict)]
+    if not entries:
+        raise ConversionError("Geen documenten om te downloaden.")
+
+    buf = io.BytesIO()
+    used: set = set()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for entry in entries:
+            base = _unique_name(_safe_name(entry.get("filename")), used)
+            zf.writestr(f"{base}.md", entry.get("markdown") or "")
+            directory = _attachment_dir(entry.get("attachments_token"))
+            if directory:
+                for file in sorted(directory.iterdir()):
+                    zf.write(file, arcname=f"attachments/{base}/{file.name}")
+    buf.seek(0)
+    return send_file(
+        buf, mimetype="application/zip", as_attachment=True,
+        download_name=f"{_safe_name(name, 'documenten')}.zip",
+    )
 
 
 @bp.app_errorhandler(413)
