@@ -30,6 +30,8 @@ const state = {
   nextId: 1,
   /** Laatst opgehaalde instellingen (incl. `defaults`), voor de reset-knoppen. */
   settings: null,
+  /** Per tabblad: staat de lijst-invoer (één tekstvak) aan i.p.v. losse rijen? */
+  bulk: {},
 };
 
 const LANGS = ["NL", "EN", "FR", "DE", "ES", "IT", "PT", "PL"];
@@ -38,6 +40,30 @@ const PLACEHOLDERS = {
   jur: "ECLI of link — bv. ECLI:EU:C:2025:645 · ECLI:NL:HR:2012:BQ9251 · ECLI:CE:ECHR:… · HUDOC-link",
   wet: "link, CELEX of BWB — bv. 32016R0679 · eur-lex.europa.eu/eli/… · BWBR0040940",
   doc: "https://… (link naar een PDF, Word, Excel …)",
+};
+
+/* Eén patroon per identificatievorm, gedeeld door de lijst-parser en
+   deriveName(). Aan de serverkant leerde dit project al dat een los
+   uitgeschreven CELEX-vorm uit elkaar loopt zodra de consolidatiedatum erbij
+   komt (zie _CELEX_BODY in eurlex.py) — hier dus ook maar één plek.
+   Let op de volgorde bij het testen: een geconsolideerde CELEX
+   (02014R0910-20241018) matcht óók RE_HUDOC, andersom kan niet. */
+const RE_URL = /https?:\/\/\S+/i;
+const RE_ECLI = /ECLI:[A-Z]{2}:[A-Za-z0-9.]+:\d{4}:[A-Za-z0-9.]+/i;
+const RE_BWB = /BWB[A-Z]\d+/i;
+const RE_CELEX = /[0-9][0-9]{4}[A-Z]{1,2}[0-9]{2,4}(?:-[0-9]{8})?/i;
+const RE_HUDOC = /\b00\d-\d{3,}\b/;
+
+/* Op welke tabbladen een geplakte lijst zich uitsplitst over de invoerrijen.
+   Uitbreiden = hier een tabblad bijzetten (en, voor het losse tekstvak,
+   initListMode() aanroepen in init()). */
+const LIST_PASTE_KINDS = new Set(["wet"]);
+
+/** Enkelvoud/meervoud per tabblad, voor "18 regelingen herkend". */
+const LIST_NOUN = {
+  jur: ["document", "documenten"],
+  wet: ["regeling", "regelingen"],
+  doc: ["link", "links"],
 };
 
 /** Het document dat nu in de editor staat. */
@@ -52,11 +78,14 @@ function profileFor(doc) {
 
 function addDoc({
   title, filenameBase, source, kind, markdown, allowObsidian,
-  attachments_token, attachment_count,
+  attachments_token, attachment_count, batchIndex = 0, activate = true,
 }) {
   const doc = {
     id: state.nextId++,
     title,
+    // Plaats in de aangeleverde lijst. Documenten komen in afrondingsvolgorde
+    // binnen; hiermee zet runBatch() ze aan het eind terug in invoervolgorde.
+    batchIndex,
     filenameBase: filenameBase || title,
     source,
     kind: kind === "caselaw" ? "caselaw" : "generic",
@@ -78,7 +107,11 @@ function addDoc({
     attachmentCount: attachment_count || 0,
   };
   state.docs.push(doc);
-  setActive(doc.id);
+  // Tijdens een batch niet meteen openen: dan zou de editor tijdens het
+  // ophalen meespringen met de volgorde waarin de bronnen antwoorden.
+  // De tab verschijnt wel meteen, zodat je de lijst ziet vollopen.
+  if (activate) setActive(doc.id);
+  else renderDocTabs();
   return doc;
 }
 
@@ -262,20 +295,66 @@ function makeRow(kind, onSubmit) {
       onSubmit();
     }
   });
+
+  // Een geplakte lijst splitst zich uit over de rijen — één Cmd/Ctrl+V en de
+  // hele lijst staat er. Alleen bij een échte lijst: een gewone plak van één
+  // regel (of ergens midden in een bestaande waarde) blijft een gewone plak.
+  if (LIST_PASTE_KINDS.has(kind)) {
+    input.addEventListener("paste", (e) => {
+      const text = e.clipboardData ? e.clipboardData.getData("text/plain") : "";
+      if (!text.includes("\n")) return;
+      const { items, duplicates } = parseList(text);
+      if (items.length < 2) return;
+      e.preventDefault();
+      spreadList(kind, row, items, duplicates);
+    });
+  }
   return row;
 }
 
+/** Per tabblad de submit-handler, zodat een rij die later ontstaat (met "+"
+ *  of uit een geplakte lijst) dezelfde Enter-actie krijgt. */
+const rowSubmit = {};
+
 function initRows(kind, onSubmit) {
-  const rows = $(`#rows-${kind}`);
-  const add = () => {
-    const row = makeRow(kind, onSubmit);
-    rows.appendChild(row);
-    return row;
-  };
-  add();
+  rowSubmit[kind] = onSubmit;
+  resetRows(kind, []);
   $(`#add-${kind}`).addEventListener("click", () => {
-    add().querySelector("input").focus();
+    const row = makeRow(kind, onSubmit);
+    $(`#rows-${kind}`).appendChild(row);
+    row.querySelector("input").focus();
   });
+}
+
+/** Vervangt alle rijen van een tabblad door één rij per item (minstens één). */
+function resetRows(kind, items, lang) {
+  const rows = $(`#rows-${kind}`);
+  rows.replaceChildren();
+  (items.length ? items : [""]).forEach((item) => {
+    const row = makeRow(kind, rowSubmit[kind]);
+    row.querySelector("input").value = item;
+    const select = row.querySelector(".lang");
+    if (select && lang) select.value = lang;
+    rows.appendChild(row);
+  });
+}
+
+/** Zet het eerste item in de rij waarin geplakt is en maakt voor elk volgend
+ *  item een nieuwe rij eronder. De taalkeuze van die rij gaat mee: die gold
+ *  blijkbaar voor deze lijst. */
+function spreadList(kind, row, items, duplicates) {
+  const lang = row.querySelector(".lang") ? row.querySelector(".lang").value : null;
+  row.querySelector("input").value = items[0];
+  let previous = row;
+  items.slice(1).forEach((item) => {
+    const next = makeRow(kind, rowSubmit[kind]);
+    previous.after(next);
+    next.querySelector("input").value = item;
+    const select = next.querySelector(".lang");
+    if (select && lang) select.value = lang;
+    previous = next;
+  });
+  setStatus(`${listSummary(kind, items.length, duplicates)} — controleer en klik op Ophalen.`, "ok");
 }
 
 function readRows(kind) {
@@ -288,34 +367,194 @@ function readRows(kind) {
 }
 
 /* --------------------------------------------------------------------------
-   Ophalen — alle rijen parallel, één mislukking blokkeert de rest niet
+   Een geplakte lijst ontleden
+
+   Vergevingsgezind, maar voorspelbaar: per regel één item, en wat er niet uit
+   te halen valt gaat ongewijzigd door naar de server — die legt dan in het
+   Nederlands uit wat er mis is. Stil weggooien is nooit goed.
+   -------------------------------------------------------------------------- */
+
+/** Eén regel uit een lijst → de identificatie die erin staat. */
+function pickIdentifier(line) {
+  const url = line.match(RE_URL);
+  // Sluitleestekens van een markdown-link of een prozaregel horen niet bij de URL.
+  if (url) return url[0].replace(/[.,;:!?)\]}>"'»]+$/, "");
+  for (const pattern of [RE_ECLI, RE_BWB, RE_CELEX]) {
+    const hit = line.match(pattern);
+    if (hit) return hit[0];
+  }
+  // Geen bekende vorm: de regel zelf, zonder opsommingsteken of nummering.
+  return line.replace(/^(?:[-*•·>]+|\d+[.)])\s+/, "").trim();
+}
+
+/**
+ * Een geplakte lijst → losse items, plus hoeveel dubbele eruit gingen.
+ * Lege regels en markdown-koppen (`## EU-wetgeving`) worden overgeslagen: een
+ * lijst uit een notitie heeft die er vaak tussen staan.
+ */
+function parseList(text) {
+  const items = [];
+  const seen = new Set();
+  let duplicates = 0;
+  String(text).split(/\r?\n/).forEach((raw) => {
+    const line = raw.trim();
+    if (!line || line.startsWith("#")) return;
+    const item = pickIdentifier(line);
+    if (!item) return;
+    const key = item.toLowerCase();
+    if (seen.has(key)) {
+      duplicates += 1;
+      return;
+    }
+    seen.add(key);
+    items.push(item);
+  });
+  return { items, duplicates };
+}
+
+function listSummary(kind, count, duplicates) {
+  const [one, many] = LIST_NOUN[kind];
+  const parts = [`${count} ${count === 1 ? one : many} herkend`];
+  if (duplicates) parts.push(`${duplicates} dubbele weggelaten`);
+  return parts.join(" · ");
+}
+
+/* --------------------------------------------------------------------------
+   Lijst plakken — één lijst, twee weergaven
+
+   De losse rijen en het lijst-tekstvak zijn twee vensters op dezelfde lijst:
+   bij het wisselen gaat de inhoud mee. Zo ben je nooit werk kwijt en leest
+   "Ophalen" altijd wat je op dat moment ziet.
+   -------------------------------------------------------------------------- */
+
+function renderListMode(kind) {
+  const bulk = Boolean(state.bulk[kind]);
+  $(`#rows-${kind}`).hidden = bulk;
+  $(`#bulk-${kind}`).hidden = !bulk;
+  $(`#add-${kind}`).hidden = bulk;
+  $(`#mode-${kind}-rows`).setAttribute("aria-pressed", String(!bulk));
+  $(`#mode-${kind}-bulk`).setAttribute("aria-pressed", String(bulk));
+  if (bulk) updateListCount(kind);
+}
+
+function switchListMode(kind, bulk) {
+  if (Boolean(state.bulk[kind]) === bulk) return;
+  const text = $(`#bulk-${kind}-text`);
+  const langSelect = $(`#bulk-${kind}-lang`);
+  if (bulk) {
+    const rows = readRows(kind);
+    if (rows.length) {
+      text.value = rows.map((r) => r.query).join("\n");
+      langSelect.value = rows[0].lang;
+    }
+  } else {
+    // Terug naar losse rijen: één rij per regel, met de taal van de lijst.
+    resetRows(kind, parseList(text.value).items, langSelect.value);
+  }
+  state.bulk[kind] = bulk;
+  localStorage.setItem(`listMode:${kind}`, bulk ? "bulk" : "rows");
+  renderListMode(kind);
+  (bulk ? text : $(`#rows-${kind} input`)).focus();
+}
+
+/** Wat er in het tekstvak herkend wordt, live — zodat je ziet dat de plak
+ *  goed geland is vóórdat je twintig verzoeken afvuurt. */
+function updateListCount(kind) {
+  const { items, duplicates } = parseList($(`#bulk-${kind}-text`).value);
+  $(`#bulk-${kind}-count`).textContent =
+    items.length ? listSummary(kind, items.length, duplicates) : "Eén per regel.";
+}
+
+function initListMode(kind) {
+  const langSelect = $(`#bulk-${kind}-lang`);
+  LANGS.forEach((code) => {
+    const opt = document.createElement("option");
+    opt.textContent = code;
+    langSelect.appendChild(opt);
+  });
+  $(`#mode-${kind}-rows`).addEventListener("click", () => switchListMode(kind, false));
+  $(`#mode-${kind}-bulk`).addEventListener("click", () => switchListMode(kind, true));
+
+  const text = $(`#bulk-${kind}-text`);
+  text.addEventListener("input", () => updateListCount(kind));
+  // In een tekstvak maakt Enter een nieuwe regel; ophalen is Cmd/Ctrl+Enter.
+  text.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      rowSubmit[kind]();
+    }
+  });
+  state.bulk[kind] = localStorage.getItem(`listMode:${kind}`) === "bulk";
+  renderListMode(kind);
+}
+
+/** De in te lezen items van een tabblad: uit het lijst-tekstvak als dat
+ *  actief is, anders uit de rijen. Dubbele invoer gaat eruit — op invoer
+ *  én taal, want dezelfde regeling in twee talen zijn juist twee documenten. */
+function readInput(kind) {
+  const items = state.bulk[kind]
+    ? parseList($(`#bulk-${kind}-text`).value).items.map((query) => ({
+        query,
+        lang: $(`#bulk-${kind}-lang`).value,
+      }))
+    : readRows(kind);
+  const seen = new Set();
+  return items.filter((item) => {
+    const key = `${item.query.toLowerCase()}|${item.lang}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+/* --------------------------------------------------------------------------
+   Ophalen — met een kleine pool, één mislukking blokkeert de rest niet
    -------------------------------------------------------------------------- */
 
 /**
- * Verwerk een lijst taken parallel en rapporteer voortgang en deelmislukkingen.
+ * Hoeveel documenten er tegelijk worden opgehaald.
+ *
+ * Bewust een kleine pool en niet alles tegelijk: een lijst van dertig links
+ * zou dertig gelijktijdige verzoeken naar dezelfde bron sturen (EUR-Lex,
+ * wetten.overheid.nl) en dat is precies hoe je throttling of een blokkade
+ * uitlokt — nog voordat de eerste conversie klaar is.
+ */
+const BATCH_CONCURRENCY = 4;
+
+/**
+ * Verwerk een lijst taken met een kleine pool en rapporteer voortgang en
+ * deelmislukkingen. Eén fout blokkeert de rest niet.
  * @param {Array} items       de op te halen dingen
  * @param {Function} label    item → naam voor de foutmelding
- * @param {Function} run      item → Promise die een document toevoegt
+ * @param {Function} run      (item, index) → Promise die een document toevoegt
  * @param {string} noun       "opgehaald" / "geconverteerd"
  */
 async function runBatch(items, label, run, noun) {
   let done = 0;
   const failures = [];
+  const base = state.docs.length;
   const tick = () => setStatus(`Bezig: ${done}/${items.length} ${noun}…`, "info", { busy: true });
   tick();
 
-  await Promise.allSettled(
-    items.map(async (item) => {
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const index = next++;
       try {
-        await run(item);
+        await run(items[index], index);
       } catch (e) {
-        failures.push(`${label(item)} — ${e.message}`);
+        failures.push(`${label(items[index])} — ${e.message}`);
       } finally {
         done += 1;
         tick();
       }
-    })
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(BATCH_CONCURRENCY, items.length) }, worker)
   );
+
+  finishBatch(base);
 
   if (!failures.length) {
     setStatus(items.length === 1 ? "Klaar." : `${items.length} documenten ${noun}.`, "ok");
@@ -329,6 +568,24 @@ async function runBatch(items, label, run, noun) {
   }
 }
 
+/**
+ * Zet de documenten van deze batch in de volgorde van de aangeleverde lijst
+ * en open het eerste.
+ *
+ * De bronnen antwoorden in willekeurige volgorde, dus zonder deze stap staat
+ * de tabbalk bij een lijst van twintig in een andere volgorde dan je lijst.
+ * Openen gebeurt hier en niet in addDoc(), zodat de editor tijdens het
+ * ophalen niet meespringt met elk document dat binnenkomt.
+ */
+function finishBatch(base) {
+  const batch = state.docs.slice(base);
+  if (!batch.length) return;
+  batch.sort((a, b) => a.batchIndex - b.batchIndex);
+  state.docs.length = base;
+  state.docs.push(...batch);
+  setActive(batch[0].id);
+}
+
 function withBusyButton(button, work) {
   button.disabled = true;
   return work().finally(() => {
@@ -337,7 +594,7 @@ function withBusyButton(button, work) {
 }
 
 async function fetchLinks(kind) {
-  const items = readRows(kind);
+  const items = readInput(kind);
   if (!items.length) {
     setStatus("Voer minstens één ECLI, CELEX of link in.", "err");
     return;
@@ -346,10 +603,13 @@ async function fetchLinks(kind) {
     runBatch(
       items,
       (item) => item.query,
-      async (item) => {
+      async (item, index) => {
         const data = await postJSON("/api/convert/link", item);
         const name = deriveName(item.query);
-        addDoc({ title: name, filenameBase: name, ...data });
+        addDoc({
+          title: name, filenameBase: name, ...data,
+          batchIndex: index, activate: false,
+        });
       },
       "opgehaald"
     )
@@ -363,7 +623,7 @@ function extractImagesRequested() {
 }
 
 async function fetchFileUrls() {
-  const items = readRows("doc");
+  const items = readInput("doc");
   if (!items.length) {
     setStatus("Plak minstens één link naar een bestand.", "err");
     return;
@@ -373,10 +633,13 @@ async function fetchFileUrls() {
     runBatch(
       items,
       (item) => item.query,
-      async (item) => {
+      async (item, index) => {
         const data = await postJSON("/api/convert/file-url", { url: item.query, extract_images: extractImages });
         const base = basename(item.query);
-        addDoc({ title: base, filenameBase: base, ...data, allowObsidian: true });
+        addDoc({
+          title: base, filenameBase: base, ...data, allowObsidian: true,
+          batchIndex: index, activate: false,
+        });
       },
       "opgehaald"
     )
@@ -390,13 +653,16 @@ async function uploadFiles(fileList) {
   await runBatch(
     files,
     (file) => file.name,
-    async (file) => {
+    async (file, index) => {
       const form = new FormData();
       form.append("file", file);
       if (extractImages) form.append("extract_images", "1");
       const data = await api("/api/convert/file", { method: "POST", body: form });
       const base = file.name.replace(/\.[^.]+$/, "") || "document";
-      addDoc({ title: base, filenameBase: base, ...data, allowObsidian: true });
+      addDoc({
+        title: base, filenameBase: base, ...data, allowObsidian: true,
+        batchIndex: index, activate: false,
+      });
     },
     "geconverteerd"
   );
@@ -464,7 +730,7 @@ async function fetchPastedText() {
       async (item) => {
         const data = await postJSON("/api/convert/text", item);
         const name = deriveName(item.text);
-        addDoc({ title: name, filenameBase: name, ...data, allowObsidian: true });
+        addDoc({ title: name, filenameBase: name, ...data, allowObsidian: true, activate: false });
         el.innerHTML = "";
       },
       "opgemaakt"
@@ -474,14 +740,16 @@ async function fetchPastedText() {
 
 /** Een bestandsnaam voor de download, afgeleid uit de ingevoerde identifier. */
 function deriveName(query) {
-  const ecli = query.match(/ECLI:[A-Z]{2}:[A-Za-z0-9.]+:\d{4}:[A-Za-z0-9.]+/i);
+  const ecli = query.match(RE_ECLI);
   if (ecli) return ecli[0].replace(/:/g, "-");
-  const bwb = query.match(/BWB[A-Z]\d+/i);
+  const bwb = query.match(RE_BWB);
   if (bwb) return bwb[0].toUpperCase();
-  const hudoc = query.match(/\b00\d-\d{3,}\b/);
-  if (hudoc) return `HUDOC-${hudoc[0]}`;
-  const celex = query.match(/([0-9][0-9]{4}[A-Z]{1,2}[0-9]{2,4})/i);
-  return celex ? celex[1].toUpperCase() : "document";
+  // CELEX vóór HUDOC: een geconsolideerde CELEX (02014R0910-20241018) matcht
+  // óók het HUDOC-item-id-patroon, andersom kan niet.
+  const celex = query.match(RE_CELEX);
+  if (celex) return celex[0].toUpperCase();
+  const hudoc = query.match(RE_HUDOC);
+  return hudoc ? `HUDOC-${hudoc[0]}` : "document";
 }
 
 function basename(url) {
@@ -496,6 +764,11 @@ function basename(url) {
 function renderDocTabs() {
   const wrap = $("#doc-tabs");
   wrap.hidden = state.docs.length === 0;
+  // Met een lijst van twintig is per document downloaden het nieuwe handwerk.
+  const all = $("#download-all");
+  all.hidden = state.docs.length < 2;
+  all.textContent = `Alles downloaden (${state.docs.length})`;
+  all.title = `Alle ${state.docs.length} documenten in één .zip`;
   wrap.replaceChildren(
     ...state.docs.map((doc) => {
       const tab = document.createElement("div");
@@ -969,6 +1242,25 @@ async function copyActive() {
   }
 }
 
+/** Het antwoord van /api/download als bestand opslaan. */
+async function saveDownload(body, filename) {
+  const response = await fetch("/api/download", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    setStatus(data.error || "Downloaden is mislukt.", "err");
+    return;
+  }
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(await response.blob());
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+
 async function downloadActive() {
   const doc = activeDoc();
   if (!doc) return;
@@ -976,20 +1268,32 @@ async function downloadActive() {
   // Zijn er losse afbeeldingen geëxtraheerd (Documentupload, PDF), dan bouwt
   // /api/download een .zip met de markdown + een attachments/-map i.p.v. een
   // los .md-bestand — zie mdconv/attachments.py.
-  const response = await fetch("/api/download", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
+  await saveDownload(
+    {
       markdown: doc.markdown, filename: doc.filenameBase,
       attachments_token: doc.attachmentsToken || undefined,
-    }),
-  });
-  const blob = await response.blob();
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = `${doc.filenameBase}.${doc.attachmentsToken ? "zip" : "md"}`;
-  link.click();
-  URL.revokeObjectURL(link.href);
+    },
+    `${doc.filenameBase}.${doc.attachmentsToken ? "zip" : "md"}`
+  );
+}
+
+/** Alle opgehaalde documenten in één zip: `<naam>.md` per document, en de
+ *  bijlagen per document onder `attachments/<naam>/`. */
+async function downloadAll() {
+  if (!state.docs.length) return;
+  saveEdits();
+  const name = `markdown-${new Date().toISOString().slice(0, 10)}`;
+  await saveDownload(
+    {
+      filename: name,
+      documents: state.docs.map((doc) => ({
+        markdown: doc.markdown,
+        filename: doc.filenameBase,
+        attachments_token: doc.attachmentsToken || undefined,
+      })),
+    },
+    `${name}.zip`
+  );
 }
 
 /* --------------------------------------------------------------------------
@@ -1221,6 +1525,8 @@ function init() {
   initRows("jur", () => fetchLinks("jur"));
   initRows("wet", () => fetchLinks("wet"));
   initRows("doc", fetchFileUrls);
+  // Ná initRows: het lijst-tekstvak deelt de submit-handler van de rijen.
+  initListMode("wet");
 
   $("#fetch-jur").addEventListener("click", () => fetchLinks("jur"));
   $("#fetch-wet").addEventListener("click", () => fetchLinks("wet"));
@@ -1237,6 +1543,7 @@ function init() {
   $("#cancel-clean").addEventListener("click", cancelActiveClean);
   $("#copy").addEventListener("click", copyActive);
   $("#download").addEventListener("click", downloadActive);
+  $("#download-all").addEventListener("click", downloadAll);
 
   $("#obsidian").addEventListener("change", (e) => {
     const doc = activeDoc();
