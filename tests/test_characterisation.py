@@ -2112,18 +2112,25 @@ def test_download_bundle_without_documents_explains_itself_in_dutch(client):
     assert "documenten" in r.get_json()["error"]
 
 
-def test_wetgeving_offers_both_input_forms():
+@pytest.mark.parametrize("kind, has_lang", [("jur", True), ("wet", True), ("doc", False)])
+def test_tab_offers_both_input_forms(kind, has_lang):
     """De front-end bouwt de id's van het lijst-tekstvak per conventie op
     (`#bulk-${kind}-text` enz.). Wordt er in de template één omgenoemd, dan
-    faalt de JS stil — daarom staan ze hier vast."""
+    faalt de JS stil — daarom staan ze hier vast. Documentupload ("doc") heeft
+    geen taalkeuze voor de lijst; de rest wel."""
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     html = open(os.path.join(root, "templates", "index.html"), encoding="utf-8").read()
-    for element in (
-        'id="mode-wet-rows"', 'id="mode-wet-bulk"',
-        'id="bulk-wet"', 'id="bulk-wet-text"', 'id="bulk-wet-lang"',
-        'id="bulk-wet-count"', 'id="download-all"',
-    ):
+    elements = [
+        f'id="mode-{kind}-rows"', f'id="mode-{kind}-bulk"',
+        f'id="bulk-{kind}"', f'id="bulk-{kind}-text"', f'id="bulk-{kind}-count"',
+    ]
+    if has_lang:
+        elements.append(f'id="bulk-{kind}-lang"')
+    else:
+        assert f'id="bulk-{kind}-lang"' not in html
+    for element in elements:
         assert element in html, f"{element} ontbreekt in index.html"
+    assert 'id="download-all"' in html
 
 
 def test_frontend_has_one_celex_pattern():

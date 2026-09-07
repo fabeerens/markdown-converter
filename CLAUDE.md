@@ -11,7 +11,7 @@ verrijkte tekst rechtstreeks in een `contenteditable`-vak plakken/typen). Tabs 1
 posten beide naar `/api/convert/link` (auto-detectie); tab 3 naar `/api/convert/file` of
 `/api/convert/file-url`; tab 4 naar `/api/convert/text`. Tabs 1–3 ondersteunen **meerdere
 documenten tegelijk** (zie "Meerdere documenten" hieronder); tab 4 is één plakvak per keer
-— een batch van tekstvakken past niet bij hoe je knipt-en-plakt. Bij **Wetgeving** kun je
+— een batch van tekstvakken past niet bij hoe je knipt-en-plakt. Bij tabs 1–3 kun je
 bovendien een hele **lijst** in één keer aanleveren (zie "Batch-import" onder Front-end).
 
 ## Starten
@@ -574,8 +574,12 @@ document zelf stonden en uit elkaar liepen bij het wisselen van tabblad.
     ophalen niet meespringt met elk document dat binnenkomt (dat volgde de
     afrondingsvolgorde); pas `finishBatch()` opent het eerste document van de lijst. De
     tab verschijnt wél meteen (`renderDocTabs()`), zodat je de lijst ziet vollopen.
-- **Batch-import: een lijst aanleveren** (alleen Wetgeving; `LIST_PASTE_KINDS` is de
-  enige plek om dat uit te breiden). Twee wegen naar dezelfde lijst:
+- **Batch-import: een lijst aanleveren** (Jurisprudentie, Wetgeving en Documentupload;
+  `LIST_PASTE_KINDS` + de `.seg`/`.bulk`-markup in `index.html` + een `initListMode()`-
+  aanroep zijn samen de plek om dat uit te breiden). Documentupload ("doc") heeft **geen
+  taalkeuze** voor de lijst — `#bulk-doc-lang` bestaat niet en de list-mode-helpers
+  (`switchListMode`/`initListMode`/`readInput`) gaan daar met een `?`-guard omheen. Twee
+  wegen naar dezelfde lijst:
   - **Plakken splitst zich uit over de rijen.** Plak je meerdere regels in één
     invoerveld, dan vult regel 1 dat veld en verschijnt er voor elke volgende regel een
     nieuwe rij (`spreadList()`), met de taalkeuze van de rij waarin je plakte. Alleen bij
@@ -586,7 +590,7 @@ document zelf stonden en uit elkaar liepen bij het wisselen van tabblad.
     taalkeuze voor de hele lijst. Rijen en tekstvak zijn **twee weergaven van dezelfde
     lijst**: `switchListMode()` neemt de inhoud mee in beide richtingen, zodat je nooit
     werk kwijt bent en "Ophalen" altijd leest wat je op dat moment ziet. De gekozen
-    weergave blijft bewaard in `localStorage` (`listMode:wet`). Enter maakt in een
+    weergave blijft bewaard in `localStorage` (`listMode:<kind>`). Enter maakt in een
     tekstvak een regel, dus **Cmd/Ctrl+Enter** haalt op.
   - **De parser is vergevingsgezind maar voorspelbaar** (`parseList()`/
     `pickIdentifier()`), per regel in deze volgorde: een URL in de regel (dus een
@@ -745,7 +749,7 @@ regel), inclusief de vloeiende tabbalk-indicator.
   weggeschreven bestand nooit als geldige staat gelezen kan worden.
 
 ## Tests
-`.venv/bin/python -m pytest tests/ -q` — 181 karakteriseringstests die het gedrag
+`.venv/bin/python -m pytest tests/ -q` — 184 karakteriseringstests die het gedrag
 vastleggen in plaats van het te beschrijven: `detect_source`-precedentie, ELI→CELEX,
 de geconsolideerde-CELEX-afhandeling (datum behouden, preambule invoegen, en de vier
 terugvalpaden als dat niet lukt), de versie-terugvalladder (nieuwste versie op of vóór de
@@ -754,8 +758,9 @@ niet bestaat), de chunking-ladder (ook zonder witregels en met één te
 lang woord), de PDF-reflow, de Formex-parser, de settings-semantiek (leeg wist terug naar
 standaard), de batch-zip (eigen naam en eigen `attachments/`-map per document) en de
 Nederlandse foutmeldingen. Twee tests pinnen de front-end vast waar Python niet bij de
-JS kan: de id's die `app.js` per conventie opbouwt (`#bulk-wet-text` enz.) moeten in
-`index.html` bestaan, en het CELEX-patroon mag maar één keer in `app.js` voorkomen. Ze raken geen netwerk. Verander je de structuur, dan hoeven alleen de
+JS kan: de id's die `app.js` per conventie opbouwt (`#bulk-<kind>-text` enz., per
+lijst-tabblad; `doc` zonder `-lang`) moeten in `index.html` bestaan, en het CELEX-patroon
+mag maar één keer in `app.js` voorkomen. Ze raken geen netwerk. Verander je de structuur, dan hoeven alleen de
 imports mee te verhuizen; blijft de suite groen, dan is het gedrag identiek.
 
 Eén test dwingt gelijktijdigheid af: `test_formex_footnotes_survive_concurrent_conversions`
