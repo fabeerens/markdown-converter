@@ -32,7 +32,20 @@
     <!-- Jurisprudentie -->
     <section class="pane" data-pane="jur" id="pane-jur" role="tabpanel" aria-label="Jurisprudentie">
       <div class="card">
+        <div class="seg" role="group" aria-label="Invoervorm">
+          <button type="button" class="seg-btn" id="mode-jur-rows" aria-pressed="true">Losse regels</button>
+          <button type="button" class="seg-btn" id="mode-jur-bulk" aria-pressed="false">Lijst plakken</button>
+        </div>
         <div class="rows" id="rows-jur"></div>
+        <div class="bulk" id="bulk-jur" hidden>
+          <label class="visually-hidden" for="bulk-jur-text">Lijst met ECLI's of links</label>
+          <textarea id="bulk-jur-text" spellcheck="false"
+                    placeholder="Eén per regel — plak hier een hele lijst:&#10;&#10;ECLI:NL:HR:2023:1234&#10;ECLI:EU:C:2025:645&#10;- HvJ EU, zie https://curia.europa.eu/…&#10;&#10;Opsommingstekens, omringende tekst en dubbele regels worden er zelf uitgehaald."></textarea>
+          <div class="bulk-bar">
+            <span class="count" id="bulk-jur-count"></span>
+            <select class="select lang" id="bulk-jur-lang" aria-label="Taal voor de hele lijst"></select>
+          </div>
+        </div>
         <div class="row-actions">
           <button type="button" class="btn btn-dashed" id="add-jur">+ Document toevoegen</button>
           <button type="button" class="btn btn-solid btn-lg" id="fetch-jur">Ophalen</button>
@@ -43,7 +56,9 @@
         het <strong>EHRM</strong> (HUDOC-link, item-id of <code>ECLI:CE:ECHR:…</code>) en de
         <strong>Nederlandse rechtspraak</strong> (<code>ECLI:NL:…</code> of rechtspraak.nl-link).
         De taalkeuze bepaalt de versie of vertaling. Voeg meerdere documenten toe om ze in
-        één keer op te halen — elk komt in een eigen tabblad.
+        één keer op te halen — elk komt in een eigen tabblad. Heb je een <strong>lijst</strong>?
+        Plak die in één keer — in een invoerregel (die splitst zich dan uit over losse regels)
+        of via <strong>Lijst plakken</strong> hierboven, met één taalkeuze voor de hele lijst.
       </p>
     </section>
 
@@ -96,7 +111,19 @@
           <span>Voor PDF's: losse ingesloten afbeeldingen meenemen als bijlagen</span>
         </label>
         <div class="or">of plak een of meer links naar bestanden</div>
+        <div class="seg" role="group" aria-label="Invoervorm">
+          <button type="button" class="seg-btn" id="mode-doc-rows" aria-pressed="true">Losse regels</button>
+          <button type="button" class="seg-btn" id="mode-doc-bulk" aria-pressed="false">Lijst plakken</button>
+        </div>
         <div class="rows" id="rows-doc"></div>
+        <div class="bulk" id="bulk-doc" hidden>
+          <label class="visually-hidden" for="bulk-doc-text">Lijst met links naar bestanden</label>
+          <textarea id="bulk-doc-text" spellcheck="false"
+                    placeholder="Eén link per regel — plak hier een hele lijst:&#10;&#10;https://example.com/rapport.pdf&#10;https://example.com/bijlage.docx&#10;&#10;Opsommingstekens, omringende tekst en dubbele regels worden er zelf uitgehaald."></textarea>
+          <div class="bulk-bar">
+            <span class="count" id="bulk-doc-count"></span>
+          </div>
+        </div>
         <div class="row-actions">
           <button type="button" class="btn btn-dashed" id="add-doc">+ Link toevoegen</button>
           <button type="button" class="btn btn-solid btn-lg" id="fetch-doc">Ophalen</button>
@@ -110,6 +137,8 @@
         de PDF gehaald (hele-pagina-scans uitgesloten) en als Obsidian wikilink-bijlagen
         onder een "Bijlagen"-sectie gezet; de download wordt dan een <strong>.zip</strong>
         met de markdown en een <code>attachments/</code>-map.
+        Heb je een <strong>lijst</strong> links? Plak die in één keer — in een invoerregel
+        (die splitst zich dan uit over losse regels) of via <strong>Lijst plakken</strong>.
       </p>
     </section>
 

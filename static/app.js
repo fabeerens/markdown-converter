@@ -55,9 +55,11 @@ const RE_CELEX = /[0-9][0-9]{4}[A-Z]{1,2}[0-9]{2,4}(?:-[0-9]{8})?/i;
 const RE_HUDOC = /\b00\d-\d{3,}\b/;
 
 /* Op welke tabbladen een geplakte lijst zich uitsplitst over de invoerrijen.
-   Uitbreiden = hier een tabblad bijzetten (en, voor het losse tekstvak,
-   initListMode() aanroepen in init()). */
-const LIST_PASTE_KINDS = new Set(["wet"]);
+   Uitbreiden = hier een tabblad bijzetten, de `.seg`/`.bulk`-markup in
+   index.html toevoegen en initListMode() aanroepen in init(). Documentupload
+   ("doc") heeft geen taalkeuze — de list-mode-helpers gaan met `#bulk-doc-lang`
+   afwezig om. */
+const LIST_PASTE_KINDS = new Set(["jur", "wet", "doc"]);
 
 /** Enkelvoud/meervoud per tabblad, voor "18 regelingen herkend". */
 const LIST_NOUN = {
@@ -445,11 +447,12 @@ function switchListMode(kind, bulk) {
     const rows = readRows(kind);
     if (rows.length) {
       text.value = rows.map((r) => r.query).join("\n");
-      langSelect.value = rows[0].lang;
+      if (langSelect) langSelect.value = rows[0].lang;
     }
   } else {
     // Terug naar losse rijen: één rij per regel, met de taal van de lijst.
-    resetRows(kind, parseList(text.value).items, langSelect.value);
+    // Documentupload heeft geen taalkeuze (`#bulk-doc-lang` bestaat niet).
+    resetRows(kind, parseList(text.value).items, langSelect ? langSelect.value : null);
   }
   state.bulk[kind] = bulk;
   localStorage.setItem(`listMode:${kind}`, bulk ? "bulk" : "rows");
@@ -466,12 +469,15 @@ function updateListCount(kind) {
 }
 
 function initListMode(kind) {
+  // Documentupload heeft geen taalkeuze voor de lijst.
   const langSelect = $(`#bulk-${kind}-lang`);
-  LANGS.forEach((code) => {
-    const opt = document.createElement("option");
-    opt.textContent = code;
-    langSelect.appendChild(opt);
-  });
+  if (langSelect) {
+    LANGS.forEach((code) => {
+      const opt = document.createElement("option");
+      opt.textContent = code;
+      langSelect.appendChild(opt);
+    });
+  }
   $(`#mode-${kind}-rows`).addEventListener("click", () => switchListMode(kind, false));
   $(`#mode-${kind}-bulk`).addEventListener("click", () => switchListMode(kind, true));
 
@@ -495,7 +501,7 @@ function readInput(kind) {
   const items = state.bulk[kind]
     ? parseList($(`#bulk-${kind}-text`).value).items.map((query) => ({
         query,
-        lang: $(`#bulk-${kind}-lang`).value,
+        lang: $(`#bulk-${kind}-lang`)?.value || "NL",
       }))
     : readRows(kind);
   const seen = new Set();
@@ -1526,7 +1532,9 @@ function init() {
   initRows("wet", () => fetchLinks("wet"));
   initRows("doc", fetchFileUrls);
   // Ná initRows: het lijst-tekstvak deelt de submit-handler van de rijen.
+  initListMode("jur");
   initListMode("wet");
+  initListMode("doc");
 
   $("#fetch-jur").addEventListener("click", () => fetchLinks("jur"));
   $("#fetch-wet").addEventListener("click", () => fetchLinks("wet"));
