@@ -95,9 +95,13 @@ def detect_source(query: str) -> str | None:
         return "hudoc"
     if wetten.matches(q):
         return "wetten"
+    # Een geconsolideerde CELEX van een handeling met een laag nummer bevat
+    # dezelfde cijfergroep als een HUDOC-item-id (01999L0001-20040501 →
+    # "001-20040501"), vandaar de CELEX-uitsluiting naast die voor ECLI:NL.
     if (hudoc.ITEM_ID_RE.search(q)
             and "rechtspraak" not in low
-            and not rechtspraak.ECLI_RE.search(q)):
+            and not rechtspraak.ECLI_RE.search(q)
+            and not eurlex.is_celex(q)):
         return "hudoc"
     # Alleen Nederlandse ECLI's horen bij Rechtspraak.nl. EU-ECLI's (ECLI:EU:…)
     # gaan naar EUR-Lex; overige ECLI's vallen ook door.

@@ -50,7 +50,20 @@
     <!-- Wetgeving -->
     <section class="pane" data-pane="wet" id="pane-wet" role="tabpanel" aria-label="Wetgeving" hidden>
       <div class="card">
+        <div class="seg" role="group" aria-label="Invoervorm">
+          <button type="button" class="seg-btn" id="mode-wet-rows" aria-pressed="true">Losse regels</button>
+          <button type="button" class="seg-btn" id="mode-wet-bulk" aria-pressed="false">Lijst plakken</button>
+        </div>
         <div class="rows" id="rows-wet"></div>
+        <div class="bulk" id="bulk-wet" hidden>
+          <label class="visually-hidden" for="bulk-wet-text">Lijst met links, CELEX- of BWB-nummers</label>
+          <textarea id="bulk-wet-text" spellcheck="false"
+                    placeholder="Eén per regel — plak hier een hele lijst:&#10;&#10;32016R0679&#10;https://wetten.overheid.nl/BWBR0040940&#10;- Verordening (EU) 2014/910, zie https://eur-lex.europa.eu/eli/reg/2014/910/2024-10-18&#10;&#10;Opsommingstekens, omringende tekst en dubbele regels worden er zelf uitgehaald."></textarea>
+          <div class="bulk-bar">
+            <span class="count" id="bulk-wet-count"></span>
+            <select class="select lang" id="bulk-wet-lang" aria-label="Taal voor de hele lijst"></select>
+          </div>
+        </div>
         <div class="row-actions">
           <button type="button" class="btn btn-dashed" id="add-wet">+ Regeling toevoegen</button>
           <button type="button" class="btn btn-solid btn-lg" id="fetch-wet">Ophalen</button>
@@ -61,6 +74,9 @@
         <strong>Nederlandse wetgeving</strong> via wetten.overheid.nl (link of BWB-nummer,
         eventueel met versiedatum). Staat er een anker in de link
         (<code>…#Hoofdstuk16</code>), dan wordt alléén dat onderdeel opgehaald.
+        Heb je een <strong>lijst</strong>? Plak die in één keer — in een invoerregel
+        (die splitst zich dan uit over losse regels) of via <strong>Lijst plakken</strong>
+        hierboven, met één taalkeuze voor de hele lijst.
       </p>
     </section>
 
@@ -148,6 +164,7 @@
         <span class="src" id="src"></span>
         <button type="button" class="btn btn-outline" id="copy">Kopiëren</button>
         <button type="button" class="btn btn-outline" id="download">Download .md</button>
+        <button type="button" class="btn btn-outline" id="download-all" hidden>Alles downloaden</button>
       </div>
 
       <div class="editor" id="editor">

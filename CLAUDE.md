@@ -11,7 +11,8 @@ verrijkte tekst rechtstreeks in een `contenteditable`-vak plakken/typen). Tabs 1
 posten beide naar `/api/convert/link` (auto-detectie); tab 3 naar `/api/convert/file` of
 `/api/convert/file-url`; tab 4 naar `/api/convert/text`. Tabs 1–3 ondersteunen **meerdere
 documenten tegelijk** (zie "Meerdere documenten" hieronder); tab 4 is één plakvak per keer
-— een batch van tekstvakken past niet bij hoe je knipt-en-plakt.
+— een batch van tekstvakken past niet bij hoe je knipt-en-plakt. Bij **Wetgeving** kun je
+bovendien een hele **lijst** in één keer aanleveren (zie "Batch-import" onder Front-end).
 
 ## Starten
 
@@ -69,6 +70,7 @@ soort), zodat de route niets over engines of classificatie hoeft te weten.
 | Invoer | Route |
 |---|---|
 | CELEX (`32016R0679`), EUR-Lex link, **ELI-link** (`/eli/reg/2016/679/oj`), **`ECLI:EU:…`** | EUR-Lex |
+| **Geconsolideerde versie**: CELEX met datum (`02014R0910-20241018`) of gedateerde ELI (`/eli/reg/2014/910/2024-10-18`) | EUR-Lex (+ overwegingen uit de basishandeling) |
 | **`ECLI:NL:…`** of rechtspraak.nl-link | Rechtspraak.nl |
 | HUDOC-link, item-id (`001-…`), **`ECLI:CE:ECHR:…`** | HUDOC (EHRM) |
 | wetten.overheid.nl-link of **BWB-nummer** (`BWBR0040940`) | wetten.overheid.nl |
@@ -121,9 +123,78 @@ accountregistratie namens de gebruiker):
   resource-mimetype en geeft anders 406. Voorbeeld: `CELEX:52025PC0837` (voorstel + bijlage).
   Alleen als er géén `DOC_n`-links in de 300-respons staan, is het wél een taalprobleem.
 - **ELI-links** (`/eli/reg/2016/679/oj`): Cellar resolvet ELI **niet** direct (404) en de portal blokkeert.
+  Een vierde padsegment in datumvorm (`/eli/reg/2014/910/2024-10-18`) is de consolidatiedatum en
+  levert de geconsolideerde CELEX (sector 0 + datum); `/oj` en andere segmenten niet. Die datum
+  eerder negeren gaf stilzwijgend de oorspronkelijke handeling terug — geen fout, wel het
+  verkeerde document.
   Daarom `eli_to_celex()`: leidt deterministisch een CELEX af (type→letter reg=R/dir=L/dec=D/reco=H,
   `3{jaar}{letter}{nummer:04d}`) en gebruikt vervolgens de normale CELEX-Cellar-route.
-- **EUR-Lex koppen**: koppen komen als `<p>` binnen; `_promote_headings` promoot volledig-geankerde
+- **Geconsolideerde versies** (`02014R0910-20241018`, sector 0 + de datum waarop die versie geldt):
+  Cellar serveert die gewoon op dezelfde `…/resource/celex/{CELEX}`-route, mét `Accept-Language`.
+  Wat er níét in zit is de **preambule**: EUR-Lex laat in een geconsolideerde versie de aanhef, de
+  "Gezien …"-citaten en **álle overwegingen** weg. Die staan alleen in de oorspronkelijke handeling.
+  - **Terugzetten kan structureel, zonder tekstheuristiek.** Beide documenten delen hetzelfde
+    xhtml-skelet: `div.eli-main-title#tit_1` → `div.eli-subdivision#pbl_1` (de preambule) →
+    `div.eli-subdivision#enc_1` (de artikelen). In een geconsolideerde versie ontbreekt precies
+    `#pbl_1`. `_with_base_preamble()` haalt dat blok uit het origineel en zet het terug vóór
+    `#enc_1` — op zijn eigen plek, dus vóór Artikel 1, met één cursieve herkomstregel erboven.
+  - De CELEX van de basishandeling staat **machineleesbaar in het document zelf**: de eerste
+    `►B`-pijl (`p.arrow > a`) linkt ernaartoe en draagt het nummer in zijn `title`-attribuut.
+    `_base_celex()` leest dat; ontbreekt de pijl, dan wordt het nummer afgeleid (sector 0 → 3).
+  - **Terugvalladder bij het invoegen**: `#enc_1` → anders het eerste element met class
+    `title-division-1`/`title-article-norm` (oudere consolidaties zoals `02008R0593-20080724`
+    hebben geen eli-markup, wél die CONVEX-klassen) → anders overslaan. Levert het origineel geen
+    `#pbl_1` (handelingen van vóór ± 2004, bv. `32002L0058`), dan converteert het document gewoon
+    zónder overwegingen — mét een notitie in de tekst, nooit zwijgend.
+  - **Alleen de overwegingen van de basishandeling**, bewuste keuze. Die van de wijzigings-
+    handelingen (►M1/►M2) zitten er niet bij; hun CELEX-nummers staan wel in dezelfde
+    `p.arrow`-links, dus dat is later een kleine uitbreiding.
+  - De ▼B/▼M2-wijzigingsmarkeringen (155 stuks in eIDAS) blijven **bewust staan** — ze zeggen welke
+    passage door welke wijziging is vervangen of ingevoegd. Niet "opschonen".
+  - **Eén CELEX-patroon** (`_CELEX_BODY`), want de vorm stond vier keer los uitgeschreven en liep
+    uit elkaar zodra de datum erbij kwam: kaal werd `02014R0910-20241018` afgewezen, uit een URL
+    werd de datum stil afgekapt tot een CELEX die niet bestaat. Let ook op de tekenklasse in
+    `CELEX[:/]([0-9A-Z()-]+)` — zonder het koppelteken breekt die tak alsnog af.
+  - **Sector 0 faalt niet via de portal.** Cellar 404't op een sector-0-CELEX die het niet kan
+    serveren; doorvallen naar de geblokkeerde portal maakt daar een netwerkfout van. `_fetch_cellar`
+    geeft dan `None` en `fetch_and_convert` gaat over naar `_consolidated_fallback()`.
+  - **Een 404 op sector 0 heeft twee heel verschillende oorzaken, met dezelfde statuscode.**
+    Ofwel de consolidatiedatum bestaat niet (consolidatiedata liggen vast, één per wijziging),
+    ofwel de versie bestaat wél maar is er (nog) niet in de gevraagde taal — **EUR-Lex
+    consolideert taal per taal en loopt daarin achter**. Die tweede is niet exotisch
+    (geverifieerd: `02024R2979-20241204` alleen in IE+SV, `02026R0798-20260408` alleen in DE+ET,
+    `02014R0910-20140917` in 9 van de 24 talen). De tool meldde eerder in álle gevallen dat de
+    datum niet bestond — feitelijk onjuist — en gaf niets terug, terwijl de handeling zelf in het
+    Nederlands wél op te halen is.
+    - **Het onderscheid staat alleen in de metadata**, keyless op te vragen bij het
+      **SPARQL-endpoint** van het Publicatiebureau (`publications.europa.eu/webapi/rdf/sparql`,
+      dezelfde bron als "Alle versies van dit document" op de portal). `_consolidated_index()`
+      vraagt per handeling álle geconsolideerde CELEX-nummers mét hun talen op met één query
+      (`cdm:resource_legal_id_celex` + `FILTER(STRSTARTS(…))` op de sector-0-stam, plus
+      `cdm:expression_uses_language`). Duurt ~6 s, dus **alleen op het faalpad**. `None` betekent
+      "niet te achterhalen", niet "geen" — de ladder behandelt dat anders. Cellars notice-varianten
+      (`?notice=object|branch|tree`) zijn hiervoor géén route: 400/404.
+    - **Terugvalladder** (`_consolidated_fallback()`): de nieuwste geconsolideerde versie **op of
+      vóór** de gevraagde datum die in deze taal bestaat → de oorspronkelijke handeling in deze
+      taal → een foutmelding. Die eerste stap is geen concessie maar het juiste antwoord: vraagt
+      iemand een willekeurige datum (bv. "vandaag"), dan is de nieuwste versie op of vóór die
+      datum precies de versie die op dat moment gold. **Latere versies komen nooit in de plaats** —
+      die verwerken wijzigingen die op de gevraagde datum nog niet golden.
+    - **Nooit stil.** Elke terugval zet een cursieve notitie bovenaan de tekst én noemt de
+      afwijking in de bronvermelding, want stilzwijgend de oorspronkelijke handeling teruggeven
+      is precies de val die deze code eerder maakte (zie de ELI-datum hierboven) — dan lijkt het
+      origineel de geconsolideerde versie. `_fallback_reason()` levert die ene zin voor zowel de
+      notitie als de foutmelding, zodat die twee nooit iets anders kunnen beweren; de talen/datums
+      die ze opsomt zijn er alléén de talen/datums die in de **gevraagde taal** bestaan, want dat
+      is wat de gebruiker ermee kan. `_base_act_tail()` houdt de drie gevallen apart die eerder
+      door elkaar liepen: geen eerdere versie / eerdere versie niet in deze taal / versielijst
+      onbekend. De eerste versie beweerde in dezelfde alinea "geen eerdere versie" én somde de
+      bestaande versies op.
+  - `detect_source` heeft een **CELEX-uitsluiting** nodig bij de HUDOC-item-id-test:
+    `01999L0001-20040501` bevat "001-20040501", precies de vorm van een HUDOC-id. Dezelfde
+    volgorde-val zit in `deriveName()` in `app.js` (daar staat de CELEX-test daarom vóór de
+    HUDOC-test).
+- **EUR-Lex koppen**: koppen komen als `<p>` binnen; `promote_headings` promoot volledig-geankerde
   regels ("Artikel N", "HOOFDSTUK I") naar `##`/`###`. Genummerde alinea's (overwegingen, arrest-
   punten) staan in de xhtml als **tweekoloms-tabellen**; `_unwrap_marker_tables` zet die om naar
   alinea's/lijst-items (nummer ín het bestaande blok, niet nesten).
@@ -271,7 +342,8 @@ accountregistratie namens de gebruiker):
     `attachments_token` + `attachment_count` terug; de front-end onthoudt dat op het
     document (`doc.attachmentsToken`) en stuurt het bij het downloaden terug mee.
     `/api/download` bouwt dan een `.zip` (de markdown + een `attachments/`-submap) i.p.v.
-    een los `.md`-bestand. `attachments.get()` **verwijdert niets** — nogmaals downloaden mag
+    een los `.md`-bestand — of, bij een `documents`-array (de knop "Alles downloaden"),
+    één zip met alle documenten en per document een eigen `attachments/<naam>/`-map. `attachments.get()` **verwijdert niets** — nogmaals downloaden mag
     gewoon; opruimen gebeurt lui, bij elke nieuwe `store()`-aanroep worden sets ouder dan
     2 uur weggegooid (geen cron/achtergrondtaak nodig voor deze single-user lokale tool).
 - **Tekst plakken** (`pasted_text.py`, endpoint `/api/convert/text`): de front-end stuurt
@@ -486,10 +558,63 @@ document zelf stonden en uit elkaar liepen bij het wisselen van tabblad.
 
 - **Meerdere documenten**: elk tabblad heeft herhaalbare invoerrijen (`makeRow()`/
   `initRows()`), met "+ toevoegen" en per rij een ×-knop (minstens 1 rij blijft staan).
-  `runBatch()` haalt alle ingevulde rijen **parallel** op via `Promise.allSettled`,
+  `runBatch()` haalt de ingevulde rijen op met een **kleine pool**
+  (`BATCH_CONCURRENCY = 4`, géén `Promise.allSettled` over alles tegelijk meer),
   toont voortgang (`3/5 opgehaald…`) en meldt per mislukte rij precies wat faalde —
   één fout blokkeert de rest niet. `#file` heeft `multiple`; slepen en de bestandskiezer
   lopen over alle bestanden.
+  - **Waarom een pool en geen "alles tegelijk"**: bij een aangeleverde lijst van dertig
+    links waren dat dertig gelijktijdige verzoeken naar dezelfde bron (EUR-Lex,
+    wetten.overheid.nl) — precies hoe je throttling of een blokkade uitlokt, nog voordat
+    de eerste conversie klaar is.
+  - **Volgorde en niet-meespringen.** De bronnen antwoorden in willekeurige volgorde, dus
+    elk document krijgt zijn plaats in de lijst mee (`doc.batchIndex`, meegegeven door
+    `run(item, index)`) en `finishBatch()` zet de batch aan het eind terug in
+    invoervolgorde. `addDoc({activate: false})` zorgt dat de editor **tijdens** het
+    ophalen niet meespringt met elk document dat binnenkomt (dat volgde de
+    afrondingsvolgorde); pas `finishBatch()` opent het eerste document van de lijst. De
+    tab verschijnt wél meteen (`renderDocTabs()`), zodat je de lijst ziet vollopen.
+- **Batch-import: een lijst aanleveren** (alleen Wetgeving; `LIST_PASTE_KINDS` is de
+  enige plek om dat uit te breiden). Twee wegen naar dezelfde lijst:
+  - **Plakken splitst zich uit over de rijen.** Plak je meerdere regels in één
+    invoerveld, dan vult regel 1 dat veld en verschijnt er voor elke volgende regel een
+    nieuwe rij (`spreadList()`), met de taalkeuze van de rij waarin je plakte. Alleen bij
+    een **échte** lijst (meerdere regels én ≥ 2 herkende items) wordt het plakken
+    overgenomen; een gewone plak van één regel, of midden in een bestaande waarde, blijft
+    een gewone plak. Zo hoeft de gebruiker niets te leren: één Cmd/Ctrl+V.
+  - **"Lijst plakken"** (`.seg`-schakelaar) ruilt de rijen om voor één tekstvak met één
+    taalkeuze voor de hele lijst. Rijen en tekstvak zijn **twee weergaven van dezelfde
+    lijst**: `switchListMode()` neemt de inhoud mee in beide richtingen, zodat je nooit
+    werk kwijt bent en "Ophalen" altijd leest wat je op dat moment ziet. De gekozen
+    weergave blijft bewaard in `localStorage` (`listMode:wet`). Enter maakt in een
+    tekstvak een regel, dus **Cmd/Ctrl+Enter** haalt op.
+  - **De parser is vergevingsgezind maar voorspelbaar** (`parseList()`/
+    `pickIdentifier()`), per regel in deze volgorde: een URL in de regel (dus een
+    geplakte bullet mét omringende tekst werkt gewoon, sluitleestekens van een
+    markdown-link of prozapunt gaan eraf), anders een ECLI/BWB/CELEX in de regel, anders
+    de regel zelf zonder opsommingsteken of nummering. Onbekende invoer wordt dus **nooit
+    stil weggegooid** — die gaat door naar de server, die in het Nederlands uitlegt wat
+    er mis is. Lege regels en markdown-koppen (`## EU-wetgeving`) worden overgeslagen,
+    want zo ziet een lijst uit een notitie eruit. Een live teller onder het tekstvak
+    (`updateListCount()`) meldt "18 regelingen herkend · 2 dubbele weggelaten" **vóórdat**
+    je achttien verzoeken afvuurt.
+  - **Dubbele invoer gaat eruit op invoer *én* taal** (`readInput()`): dezelfde regeling
+    in NL en EN zijn juist wél twee documenten.
+  - **Één patroon per identificatievorm** (`RE_URL`/`RE_ECLI`/`RE_BWB`/`RE_CELEX`/
+    `RE_HUDOC`), gedeeld door de lijst-parser en `deriveName()`. Dezelfde les als
+    `_CELEX_BODY` aan de serverkant: los uitgeschreven liep de CELEX-vorm uit elkaar
+    zodra de consolidatiedatum erbij kwam. Let ook hier op de volgorde — een
+    geconsolideerde CELEX (`02014R0910-20241018`) matcht óók `RE_HUDOC`, andersom niet.
+  - **`[hidden]` doet het schakelen**, dus de `[hidden] { display: none !important }`-regel
+    in `app.css` is ook hier voorwaarde: `.rows` heeft `display: flex`.
+- **"Alles downloaden (n)"** (`#download-all`, zichtbaar vanaf 2 documenten): bij een lijst
+  van twintig is per document downloaden het nieuwe handwerk. `downloadAll()` stuurt alle
+  documenten in één `documents`-array naar `/api/download`, dat er één zip van maakt —
+  `<naam>.md` per document, en de bijlagen van een document onder `attachments/<naam>/`,
+  want twee PDF's leveren allebei een `p01.png`. Gelijke documentnamen krijgen een
+  `-2`-suffix (`_unique_name()`), anders zou het tweede het eerste overschrijven en was
+  dat document stil verdwenen. `saveDownload()` is de gedeelde helper van
+  `downloadActive()` en `downloadAll()`.
 - **State per document**: `{id, title, filenameBase, source, kind, allowObsidian,
   obsidian, model, markdown, cleaned}` in `state.docs`. `obsidian`/`model` zijn **per
   document**, dus je kunt het ene document als Obsidian-notitie opschonen en het andere
@@ -620,11 +745,17 @@ regel), inclusief de vloeiende tabbalk-indicator.
   weggeschreven bestand nooit als geldige staat gelezen kan worden.
 
 ## Tests
-`.venv/bin/python -m pytest tests/ -q` — 152 karakteriseringstests die het gedrag
+`.venv/bin/python -m pytest tests/ -q` — 181 karakteriseringstests die het gedrag
 vastleggen in plaats van het te beschrijven: `detect_source`-precedentie, ELI→CELEX,
-de chunking-ladder (ook zonder witregels en met één te lang woord), de PDF-reflow, de
-Formex-parser, de settings-semantiek (leeg wist terug naar standaard) en de Nederlandse
-foutmeldingen. Ze raken geen netwerk. Verander je de structuur, dan hoeven alleen de
+de geconsolideerde-CELEX-afhandeling (datum behouden, preambule invoegen, en de vier
+terugvalpaden als dat niet lukt), de versie-terugvalladder (nieuwste versie op of vóór de
+gevraagde datum, nooit een latere, en een notitie die niet beweert dat een bestaande versie
+niet bestaat), de chunking-ladder (ook zonder witregels en met één te
+lang woord), de PDF-reflow, de Formex-parser, de settings-semantiek (leeg wist terug naar
+standaard), de batch-zip (eigen naam en eigen `attachments/`-map per document) en de
+Nederlandse foutmeldingen. Twee tests pinnen de front-end vast waar Python niet bij de
+JS kan: de id's die `app.js` per conventie opbouwt (`#bulk-wet-text` enz.) moeten in
+`index.html` bestaan, en het CELEX-patroon mag maar één keer in `app.js` voorkomen. Ze raken geen netwerk. Verander je de structuur, dan hoeven alleen de
 imports mee te verhuizen; blijft de suite groen, dan is het gedrag identiek.
 
 Eén test dwingt gelijktijdigheid af: `test_formex_footnotes_survive_concurrent_conversions`
