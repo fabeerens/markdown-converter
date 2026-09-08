@@ -906,8 +906,8 @@ function renderCleanResult(doc) {
   if (usage.cost) parts.push(`${fmtCost(usage.cost)} (OpenRouter)`);
   if (elapsedMs) {
     const seconds = elapsedMs / 1000;
-    const tokensPerSec = usage.total_tokens / seconds;
-    parts.push(`${fmtDuration(seconds)} · ${tokensPerSec.toFixed(1)} tokens/s`);
+    const tokensPerSec = (usage.completion_tokens || 0) / seconds;
+    parts.push(`${fmtDuration(seconds)} · ${tokensPerSec.toFixed(1)} uitvoertokens/s`);
   }
   el.textContent = parts.join(" · ");
   el.hidden = false;

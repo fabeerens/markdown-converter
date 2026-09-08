@@ -478,13 +478,14 @@ accountregistratie namens de gebruiker):
   dat moment in de editor staat — `renderEditor()` leest `activeCleans.has(doc.id)` bij elke
   wisseling opnieuw uit, en `cancelActiveClean()` annuleert specifiek het weergegeven
   document, niet "de eerste de beste" lopende actie.
-  **Duur en tokens/seconde** staan naast het tokengebruik zodra een actie klaar is
+  **Duur en uitvoertokens/seconde** staan naast het tokengebruik zodra een actie klaar is
   (`renderCleanResult()` in `app.js`): `runClean()` meet `performance.now()` vóór de
   `fetch()` en ná het laatste stukje tekst, en zet dat als `elapsedMs` in `doc.lastUsage`
   naast de `Usage`-marker (dus alleen bij een geslaagde afronding, niet bij annuleren of een
-  fout — die tonen geen halve/misleidende duur). Tokens/seconde is `usage.total_tokens`
-  gedeeld door die duur, dus invoer+uitvoer samen — dat is de doorlooptijd die de gebruiker
-  ervaart, niet alleen de modelgeneratiesnelheid van de uitvoer.
+  fout — die tonen geen halve/misleidende duur). Het aantal is `usage.completion_tokens`
+  gedeeld door die duur, dus alleen de uitvoer — dat is de modelgeneratiesnelheid; de
+  invoertokens tellen niet mee, die worden in één keer verstuurd en zeggen niets over hoe
+  snel het model tekst produceert.
 - **Beide reformat-prompts** (`generic`/`caselaw`) maken alléén echte sectietitels koppen;
   genummerde overwegingen/randnummers blijven alinea's (uitdrukkelijke wens gebruiker —
   niet terugdraaien).
