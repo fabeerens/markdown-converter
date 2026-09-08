@@ -901,11 +901,24 @@ function renderCleanResult(doc) {
     el.hidden = true;
     return;
   }
-  const { label, usage } = doc.lastUsage;
+  const { label, usage, elapsedMs } = doc.lastUsage;
   const parts = [`${label}: ${fmt(usage.total_tokens)} tokens (${fmt(usage.prompt_tokens || 0)} invoer, ${fmt(usage.completion_tokens || 0)} uitvoer)`];
   if (usage.cost) parts.push(`${fmtCost(usage.cost)} (OpenRouter)`);
+  if (elapsedMs) {
+    const seconds = elapsedMs / 1000;
+    const tokensPerSec = usage.total_tokens / seconds;
+    parts.push(`${fmtDuration(seconds)} · ${tokensPerSec.toFixed(1)} tokens/s`);
+  }
   el.textContent = parts.join(" · ");
   el.hidden = false;
+}
+
+/** Bv. "3,4s" of "1m 12s" — geen decimalen meer zodra het over een minuut loopt. */
+function fmtDuration(seconds) {
+  if (seconds < 60) return `${seconds.toFixed(1)}s`;
+  const minutes = Math.floor(seconds / 60);
+  const rest = Math.round(seconds % 60);
+  return `${minutes}m ${rest}s`;
 }
 
 let estimateToken = 0;
@@ -1035,6 +1048,7 @@ async function runClean(doc, profile, { guardField, resultLabel, busyText, doneT
 
   const docId = doc.id;
   const isLive = () => state.activeId === docId; // gebruiker kan tijdens het wachten wisselen
+  const startedAt = performance.now();
   const requestId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const controller = new AbortController();
   activeCleans.set(docId, { requestId, controller });
@@ -1087,7 +1101,8 @@ async function runClean(doc, profile, { guardField, resultLabel, busyText, doneT
     doc.markdown = acc.trim() + "\n";
     doc.source += sourceSuffix;
     doc[guardField] = true;
-    doc.lastUsage = usage ? { label: resultLabel, usage } : doc.lastUsage;
+    const elapsedMs = performance.now() - startedAt;
+    doc.lastUsage = usage ? { label: resultLabel, usage, elapsedMs } : doc.lastUsage;
     renderDocTabs();
     setStatus(doneText, "ok");
   } catch (e) {
