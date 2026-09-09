@@ -86,6 +86,14 @@ DEFAULT_OCR_MODELS = [
     {"id": "openai/gpt-5.6-luna-pro", "label": "GPT-5.6 Luna Pro — hoogste kwaliteit"},
 ]
 
+# Hoeveel PDF-pagina's in één vision-verzoek gaan. Meer = minder round-trips en
+# minder rate-limit-druk, maar het uitvoerplafond van het model begrenst het:
+# bij te veel pagina's raakt het antwoord afgekapt. Een paar van deze verzoeken
+# lopen parallel (`_MAX_PARALLEL_BATCHES` in `mdconv/ocr.py`).
+DEFAULT_OCR_PAGES_PER_REQUEST = 5
+MIN_OCR_PAGES_PER_REQUEST = 1
+MAX_OCR_PAGES_PER_REQUEST = 20
+
 _store = StateFile("settings.json")
 
 
@@ -167,6 +175,17 @@ def get_ocr_prompt() -> str:
     return prompts.OCR
 
 
+def get_ocr_pages_per_request() -> int:
+    """Pagina's per vision-verzoek: eigen waarde binnen de grenzen, anders de standaard."""
+    try:
+        n = int(_stored().get("ocr_pages_per_request"))
+    except (TypeError, ValueError):
+        return DEFAULT_OCR_PAGES_PER_REQUEST
+    if MIN_OCR_PAGES_PER_REQUEST <= n <= MAX_OCR_PAGES_PER_REQUEST:
+        return n
+    return DEFAULT_OCR_PAGES_PER_REQUEST
+
+
 def get_chunk_tokens(model: str | None = None) -> int:
     """Deelgrootte in tokens voor `model`: diens eigen waarde als die gezet is,
     anders `DEFAULT_CHUNK_TOKENS`. Zonder `model` (of een onbekend model) altijd
@@ -240,11 +259,13 @@ def settings_payload() -> dict:
     return {
         "models": get_model_choices(),
         "ocr_models": get_ocr_models(),
+        "ocr_pages_per_request": get_ocr_pages_per_request(),
         "prompts": {p: get_prompt(p) for p in prompts.PROFILES},
         "ocr_prompt": get_ocr_prompt(),
         "defaults": {
             "models": DEFAULT_MODEL_CHOICES,
             "ocr_models": DEFAULT_OCR_MODELS,
+            "ocr_pages_per_request": DEFAULT_OCR_PAGES_PER_REQUEST,
             "chunk_tokens": DEFAULT_CHUNK_TOKENS,
             "prompts": dict(prompts.DEFAULTS),
             "ocr_prompt": prompts.OCR,
@@ -284,6 +305,16 @@ def update_settings(payload: dict) -> dict:
                 data["ocr_prompt"] = text
             else:
                 data.pop("ocr_prompt", None)
+
+        if "ocr_pages_per_request" in payload:
+            try:
+                n = int(payload["ocr_pages_per_request"])
+            except (TypeError, ValueError):
+                n = None
+            if n is not None and MIN_OCR_PAGES_PER_REQUEST <= n <= MAX_OCR_PAGES_PER_REQUEST:
+                data["ocr_pages_per_request"] = n
+            else:
+                data.pop("ocr_pages_per_request", None)
 
         if isinstance(payload.get("prompts"), dict):
             stored = dict(data.get("prompts") or {})

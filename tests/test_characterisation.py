@@ -2195,62 +2195,103 @@ def test_render_pages_rejects_a_document_over_the_page_cap(monkeypatch):
         pdf_images.render_pages(b"%PDF-1.4", dpi=150, max_pages=100)
 
 
-def _fake_ocr(monkeypatch, pages, page_stream):
-    """render_pages → `pages` (list[bytes]); openrouter.ocr_page_stream → `page_stream`."""
+def _fake_ocr(monkeypatch, pages, pages_stream, *, per_request=None):
+    """render_pages → `pages` (list[bytes]); openrouter.ocr_pages_stream →
+    `pages_stream` (krijgt een lijst PNG's per verzoek); optioneel de
+    pagina's-per-verzoek forceren."""
     import mdconv.cleanup as cleanup_pkg
     from mdconv import ocr
     from mdconv.cleanup import config, openrouter
 
     monkeypatch.setattr(ocr.pdf_images, "render_pages", lambda data, **kw: pages)
     monkeypatch.setattr(ocr.pdf_images, "render_available", lambda: True)
-    monkeypatch.setattr(openrouter, "ocr_page_stream", page_stream)
+    monkeypatch.setattr(openrouter, "ocr_pages_stream", pages_stream)
     monkeypatch.setattr(config, "is_available", lambda: True)
     # api.py roept cleanup.is_available aan (bij import gebonden aan config.is_available).
     monkeypatch.setattr(cleanup_pkg, "is_available", lambda: True)
+    if per_request is not None:
+        monkeypatch.setattr(config, "get_ocr_pages_per_request", lambda: per_request)
 
 
-def test_ocr_pdf_stream_joins_pages_and_sums_usage(monkeypatch):
+def test_ocr_pdf_stream_batches_pages_and_keeps_order(monkeypatch):
     from mdconv import ocr
     from mdconv.cleanup import openrouter
 
-    def page_stream(png, *, model, system, request_id=None):
-        yield f"## {png.decode()}"
+    seen_sizes = []
+
+    def pages_stream(images, *, model, system, request_id=None):
+        seen_sizes.append(len(images))
+        yield "|".join(i.decode() for i in images)
         yield openrouter.Usage({"prompt_tokens": 10, "completion_tokens": 4,
                                 "total_tokens": 14, "cost": 0.01})
 
-    _fake_ocr(monkeypatch, [b"p1", b"p2"], page_stream)
+    twelve = [f"p{n}".encode() for n in range(1, 13)]
+    _fake_ocr(monkeypatch, twelve, pages_stream, per_request=5)
     out = list(ocr.ocr_pdf_stream(b"%PDF", request_id="r1"))
 
+    # 12 pagina's, 5 per verzoek → groepen van 5, 5, 2 (volgorde van afronding
+    # is bij parallel niet vast, dus gesorteerd vergelijken).
+    assert sorted(seen_sizes) == [2, 5, 5]
     text = "".join(x for x in out if isinstance(x, str))
-    assert text == "## p1\n\n## p2"
-    progress = [dict(x) for x in out if isinstance(x, openrouter.Progress)]
-    assert progress == [
-        {"produced_tokens": 1, "expected_tokens": 2},
-        {"produced_tokens": 2, "expected_tokens": 2},
-    ]
+    assert text == (
+        "p1|p2|p3|p4|p5\n\np6|p7|p8|p9|p10\n\np11|p12"
+    )
+    progress = [dict(x)["produced_tokens"] for x in out if isinstance(x, openrouter.Progress)]
+    assert progress == [5, 10, 12]                      # pagina's tot nu toe, per groep
     usage = [dict(x) for x in out if isinstance(x, openrouter.Usage)][-1]
-    assert usage == {"prompt_tokens": 20, "completion_tokens": 8,
-                     "total_tokens": 28, "cost": 0.02}
+    assert usage["total_tokens"] == 42                  # 3 groepen × 14
+    assert usage["cost"] == pytest.approx(0.03)
+
+
+def test_ocr_pdf_stream_one_request_for_a_short_pdf(monkeypatch):
+    from mdconv import ocr
+
+    calls = []
+
+    def pages_stream(images, *, model, system, request_id=None):
+        calls.append(len(images))
+        yield "ok"
+        return
+
+    _fake_ocr(monkeypatch, [b"a", b"b", b"c"], pages_stream)  # standaard 5 per verzoek
+    list(ocr.ocr_pdf_stream(b"%PDF"))
+    assert calls == [3]                                 # alles in één verzoek
 
 
 def test_ocr_pdf_stream_stops_silently_on_cancel(monkeypatch):
     from mdconv import ocr
-    from mdconv.cleanup import cancel
+    from mdconv.cleanup import cancel, openrouter
 
-    seen = []
+    def pages_stream(images, *, model, system, request_id=None):
+        yield f"group {images[0].decode()}"
 
-    def page_stream(png, *, model, system, request_id=None):
-        seen.append(png)
-        yield f"page {png.decode()}"
-        if png == b"p1":
-            cancel.request(request_id)  # simuleer een gelijktijdige /api/clean/cancel
+    monkeypatch.setattr(ocr, "_MAX_PARALLEL_BATCHES", 1)
+    _fake_ocr(monkeypatch, [b"p1", b"p2", b"p3"], pages_stream, per_request=1)
 
-    _fake_ocr(monkeypatch, [b"p1", b"p2", b"p3"], page_stream)
-    out = list(ocr.ocr_pdf_stream(b"%PDF", request_id="rX"))
+    gen = ocr.ocr_pdf_stream(b"%PDF", request_id="rX")
+    first = next(gen)                                    # tekst van groep 1
+    cancel.request("rX")                                 # gelijktijdige /api/clean/cancel
+    rest = list(gen)
 
-    assert seen == [b"p1"]                       # pagina 2 en 3 niet meer opgehaald
-    assert not any(hasattr(x, "keys") and "total_tokens" in x for x in out)  # geen Usage-afsluiting
-    assert not cancel.is_cancelled("rX")         # de finally-clause heeft opgeruimd
+    assert first == "group p1"
+    assert not any(isinstance(x, openrouter.Usage) for x in rest)  # geen afsluiting
+    assert not cancel.is_cancelled("rX")                 # de finally-clause heeft opgeruimd
+
+
+def test_ocr_pages_stream_truncation_advises_a_smaller_batch(monkeypatch):
+    from mdconv import ocr
+    from mdconv.errors import ConversionError
+
+    def pages_stream(images, *, model, system, request_id=None):
+        yield "begin"
+        raise ConversionError(
+            "Het antwoord werd afgekapt: te veel pagina's voor één verzoek. "
+            "Verlaag 'pagina's per verzoek' in de instellingen."
+        )
+
+    _fake_ocr(monkeypatch, [b"p1", b"p2"], pages_stream, per_request=5)
+    with pytest.raises(ConversionError, match="pagina's per verzoek"):
+        list(ocr.ocr_pdf_stream(b"%PDF"))
 
 
 def test_ocr_pdf_stream_requires_a_key(monkeypatch):
@@ -2268,12 +2309,12 @@ def test_api_convert_file_ocr_streams_transcription(client, monkeypatch):
 
     from mdconv.cleanup import openrouter
 
-    def page_stream(png, *, model, system, request_id=None):
-        yield f"$x_{png.decode()}$"
+    def pages_stream(images, *, model, system, request_id=None):
+        yield "".join(f"$x_{i.decode()}$" for i in images)
         yield openrouter.Usage({"prompt_tokens": 5, "completion_tokens": 2,
                                 "total_tokens": 7, "cost": 0.001})
 
-    _fake_ocr(monkeypatch, [b"1", b"2"], page_stream)
+    _fake_ocr(monkeypatch, [b"1", b"2"], pages_stream)
     r = client.post(
         "/api/convert/file/ocr",
         data={"file": (BytesIO(b"%PDF-1.4 fake"), "slides.pdf"),
@@ -2283,7 +2324,7 @@ def test_api_convert_file_ocr_streams_transcription(client, monkeypatch):
     assert r.status_code == 200
     body = r.get_data(as_text=True)
     stripped = re.sub(r"\x00CLEAN_[A-Z]+\x00.*?\x00", "", body, flags=re.S)
-    assert stripped == "$x_1$\n\n$x_2$"
+    assert stripped == "$x_1$$x_2$"                     # 2 pagina's in één groep
     assert "\x00CLEAN_PROGRESS\x00" in body
     assert "\x00CLEAN_USAGE\x00" in body
 
@@ -2320,7 +2361,9 @@ def test_config_and_settings_expose_ocr_models(client):
     assert "ocr_available" in cfg
     settings = client.get("/api/settings").get_json()
     assert settings["ocr_models"] and settings["ocr_prompt"]
+    assert settings["ocr_pages_per_request"] == 5
     assert settings["defaults"]["ocr_models"] and settings["defaults"]["ocr_prompt"]
+    assert settings["defaults"]["ocr_pages_per_request"] == 5
 
 
 def test_ocr_settings_roundtrip_and_reset(isolated_settings):
@@ -2328,14 +2371,17 @@ def test_ocr_settings_roundtrip_and_reset(isolated_settings):
     cfg.update_settings({
         "ocr_models": [{"id": "vendor/vision-x", "label": "Vision X"}],
         "ocr_prompt": "Transcribe carefully.",
+        "ocr_pages_per_request": 8,
     })
     assert [m["id"] for m in cfg.get_ocr_models()] == ["vendor/vision-x"]
     assert cfg.resolve_ocr_model("vendor/vision-x") == "vendor/vision-x"
     assert cfg.get_ocr_prompt() == "Transcribe carefully."
-    # Leeg = terug naar de ingebouwde standaard.
-    cfg.update_settings({"ocr_models": [], "ocr_prompt": ""})
+    assert cfg.get_ocr_pages_per_request() == 8
+    # Leeg / buiten de grenzen = terug naar de ingebouwde standaard.
+    cfg.update_settings({"ocr_models": [], "ocr_prompt": "", "ocr_pages_per_request": 999})
     assert cfg.get_ocr_models() == cfg.DEFAULT_OCR_MODELS
     assert cfg.get_ocr_prompt() == cfg.prompts.OCR
+    assert cfg.get_ocr_pages_per_request() == cfg.DEFAULT_OCR_PAGES_PER_REQUEST
 
 
 def test_pane_doc_has_ocr_controls():
@@ -2346,5 +2392,6 @@ def test_pane_doc_has_ocr_controls():
     for element in (
         'id="ocr-opts"', 'id="ocr-mode"', 'id="ocr-model"',
         'id="settings-ocr-models"', 'id="settings-add-ocr-model"', 'id="prompt-ocr"',
+        'id="settings-ocr-pages"',
     ):
         assert element in html, f"{element} ontbreekt in index.html"

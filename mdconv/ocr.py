@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
 
 from .cleanup import cancel as _cancel
 from .cleanup import config, openrouter
@@ -35,10 +36,16 @@ is_available = config.is_available
 
 # Rasterresolutie en paginagrens. 200 dpi is genoeg voor kleine sub-/superscripts;
 # `OCR_DPI` kan het bijstellen als de kosten/omvang knellen. De paginagrens houdt
-# een bewust-trage modus in toom (elke pagina = één apart vision-verzoek).
+# een bewust-trage modus in toom.
 _env_dpi = os.environ.get("OCR_DPI")
 _DPI = int(_env_dpi) if _env_dpi and _env_dpi.isdigit() else 200
 _MAX_PAGES = 100
+
+# Hoeveel verzoeken (elk met `config.get_ocr_pages_per_request()` pagina's)
+# tegelijk lopen. Meer dan een paar lokt rate-limiting uit; `OCR_PARALLEL` stelt
+# het bij. Zelfde idee als `cleanup._MAX_PARALLEL_CHUNKS`.
+_env_par = os.environ.get("OCR_PARALLEL")
+_MAX_PARALLEL_BATCHES = int(_env_par) if _env_par and _env_par.isdigit() else 3
 
 
 def _sum_usage(usages: list[dict]) -> dict:
@@ -50,15 +57,23 @@ def _sum_usage(usages: list[dict]) -> dict:
     return total
 
 
+def _batches(items: list, size: int) -> list[list]:
+    return [items[i:i + size] for i in range(0, len(items), size)]
+
+
 def ocr_pdf_stream(
     pdf_bytes: bytes, *, model: str | None = None, request_id: str | None = None
 ) -> Iterator[str | Usage | Progress]:
-    """Transcribeer elke pagina van `pdf_bytes` en lever de Markdown streamend op.
+    """Transcribeer `pdf_bytes` en lever de Markdown streamend op.
 
-    Spiegelt `cleanup.clean_stream`: pagina's worden **na elkaar** verwerkt
-    (documentvolgorde bij live meelezen), met een `Progress`-marker per pagina
-    en één opgeteld `Usage`-marker aan het eind. `request_id` geeft
-    `/api/clean/cancel` een aangrijpingspunt om stil (geen fout) te stoppen.
+    De pagina's gaan in groepen van `config.get_ocr_pages_per_request()` naar
+    het model (minder round-trips, minder rate-limit-druk); tot
+    `_MAX_PARALLEL_BATCHES` van die verzoeken lopen **parallel**, maar de tekst
+    komt **in documentvolgorde** naar buiten — een groep die eerder klaar is
+    wacht op zijn beurt. Per groep één `Progress`-marker (pagina's tot nu toe),
+    één opgeteld `Usage` aan het eind. `request_id` geeft `/api/clean/cancel`
+    een aangrijpingspunt om stil (geen fout) te stoppen; een fout halverwege
+    stopt de nog lopende groepen ook.
     """
     if not config.is_available():
         raise ConversionError(
@@ -70,23 +85,44 @@ def ocr_pdf_stream(
     system = config.get_ocr_prompt()
     pages = pdf_images.render_pages(pdf_bytes, dpi=_DPI, max_pages=_MAX_PAGES)
     total = len(pages)
+    groups = _batches(pages, config.get_ocr_pages_per_request())
     totals: list[dict] = []
 
+    def run_group(images: list[bytes]) -> tuple[str, dict | None]:
+        text_parts: list[str] = []
+        usage: dict | None = None
+        for piece in openrouter.ocr_pages_stream(
+            images, model=resolved, system=system, request_id=request_id
+        ):
+            if isinstance(piece, openrouter.Usage):
+                usage = piece
+            else:
+                text_parts.append(piece)
+        return "".join(text_parts).strip(), usage
+
     _cancel.clear(request_id)
+    done_pages = 0
     try:
-        for i, png in enumerate(pages):
-            if _cancel.is_cancelled(request_id):
-                return
-            if i > 0:
-                yield "\n\n"
-            for piece in openrouter.ocr_page_stream(
-                png, model=resolved, system=system, request_id=request_id
-            ):
-                if isinstance(piece, openrouter.Usage):
-                    totals.append(piece)
-                else:
-                    yield piece
-            yield openrouter.Progress(produced_tokens=i + 1, expected_tokens=total)
+        with ThreadPoolExecutor(max_workers=min(_MAX_PARALLEL_BATCHES, len(groups))) as pool:
+            futures = [pool.submit(run_group, g) for g in groups]
+            try:
+                for i, (fut, group) in enumerate(zip(futures, groups)):
+                    if _cancel.is_cancelled(request_id):
+                        return
+                    text, usage = fut.result()
+                    if i > 0 and text:
+                        yield "\n\n"
+                    if text:
+                        yield text
+                    if usage is not None:
+                        totals.append(usage)
+                    done_pages += len(group)
+                    yield openrouter.Progress(produced_tokens=done_pages, expected_tokens=total)
+            except BaseException:
+                # Fout, client weg, of annulering: de nog lopende groepen bij de
+                # eerstvolgende SSE-regel laten stoppen i.p.v. door te betalen.
+                _cancel.request(request_id)
+                raise
         if _cancel.is_cancelled(request_id):
             return
         yield openrouter.Usage(_sum_usage(totals))
