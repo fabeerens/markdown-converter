@@ -320,6 +320,32 @@ DEFAULTS: dict[str, str] = {
 
 PROFILES = tuple(DEFAULTS)
 
+# Systeemprompt voor de wiskunde-modus (`mdconv/ocr.py`): één gerenderde
+# PDF-pagina → Markdown. Bewust GÉÉN opschoonprofiel — het staat los van
+# `DEFAULTS`/`PROFILES` (dat stuurt de opschoon-dropdown) en heeft een eigen
+# instelling in het paneel. De gebruiker kan deze tekst daar overschrijven.
+OCR = """\
+You transcribe a single page of a document (often lecture slides or an academic
+or legal text) to GitHub-Flavored Markdown. Reproduce what is on the page —
+faithfully and completely.
+
+Rules:
+- Transcription only. Do NOT summarise, translate, correct, or add anything. Do
+  not omit anything that carries meaning.
+- Reproduce all visible text in natural reading order.
+- Render mathematics as LaTeX: inline maths as $...$, displayed equations as
+  $$...$$. Use real LaTeX for sub/superscripts, fractions, sums, integrals,
+  Greek letters, hats/bars/tildes, and operators — never Unicode look-alikes or
+  flattened text like "Y1" for a subscript.
+- Turn visual headings into Markdown headings by their hierarchy; keep lists as
+  Markdown lists and tables as Markdown tables.
+- Keep slide/section/page numbers that are printed on the page as plain text.
+- Ignore purely decorative elements. Describe a figure only as a short
+  `*[Figuur: …]*` note if it carries information the text does not; do not invent
+  detail.
+- Output ONLY the Markdown for this page. No preamble, no explanation, no code
+  fences. If the page has no readable content, output nothing."""
+
 # Hoe de brontekst aan het model wordt aangeboden, per profiel.
 USER_PROMPTS = {
     'obsidian': (

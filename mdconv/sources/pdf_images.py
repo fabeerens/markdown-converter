@@ -33,6 +33,9 @@ from pathlib import Path
 from ..errors import ConversionError
 
 _TIMEOUT = 180
+# Rasteren van veel pagina's op hoge dpi (wiskunde-modus) duurt langer dan het
+# lichte `pdfimages -list`/`pdfinfo`-werk hierboven.
+_RENDER_TIMEOUT = 600
 
 # Beslaat een ingesloten afbeelding op zowel breedte als hoogte minstens dit
 # aandeel van de fysieke paginaomvang, dan tellen we 'm als "hele pagina".
@@ -64,15 +67,15 @@ def available() -> bool:
     return shutil.which("pdfimages") is not None and shutil.which("pdfinfo") is not None
 
 
-def _run(args: list[str]) -> str:
+def _run(args: list[str], *, timeout: int = _TIMEOUT) -> str:
     try:
         result = subprocess.run(
-            args, capture_output=True, text=True, timeout=_TIMEOUT, check=False
+            args, capture_output=True, text=True, timeout=timeout, check=False
         )
     except subprocess.TimeoutExpired as e:
-        raise ConversionError("Afbeeldingen extraheren duurde te lang (pdfimages).") from e
+        raise ConversionError("Een poppler-bewerking duurde te lang.") from e
     except OSError as e:
-        raise ConversionError(f"Kon pdfimages/pdfinfo niet uitvoeren: {e}") from e
+        raise ConversionError(f"Kon pdfimages/pdfinfo/pdftoppm niet uitvoeren: {e}") from e
     return result.stdout
 
 
@@ -178,3 +181,68 @@ def extract_images(pdf_bytes: bytes) -> list[ExtractedImage]:
                 ext=ext,
             ))
         return images
+
+
+# --------------------------------------------------------------------------
+# Pagina's naar afbeeldingen rasteren (wiskunde-modus / OCR)
+# --------------------------------------------------------------------------
+#
+# Aparte functie van `extract_images`: die haalt de ingesloten rasters eruit;
+# dit rendert elke *pagina* als PNG, zodat een vision-model de opgemaakte
+# formules kan lezen (zie `mdconv/ocr.py`). Deelt wel de poppler-conventies
+# van deze module (`_run`, `ConversionError`, tempdir).
+
+_PAGES_RE = re.compile(r"^Pages:\s+(\d+)", re.M)
+
+
+def render_available() -> bool:
+    return shutil.which("pdftoppm") is not None and shutil.which("pdfinfo") is not None
+
+
+def page_count(pdf_bytes: bytes) -> int:
+    """Aantal pagina's in de PDF, via `pdfinfo`. 0 als het niet te bepalen is."""
+    with tempfile.TemporaryDirectory(prefix="mdconv-pdfinfo-") as tmp:
+        pdf_path = Path(tmp) / "in.pdf"
+        pdf_path.write_bytes(pdf_bytes)
+        m = _PAGES_RE.search(_run(["pdfinfo", str(pdf_path)]))
+        return int(m.group(1)) if m else 0
+
+
+def render_pages(pdf_bytes: bytes, *, dpi: int = 200, max_pages: int = 100) -> list[bytes]:
+    """Elke pagina van de PDF als PNG (bytes), op volgorde.
+
+    Weigert een PDF met meer dan `max_pages` pagina's vóór het rasteren — de
+    gebruiker kiest bewust voor deze trage modus, dus een expliciete grens is
+    beter dan een halve conversie of een uitlopende rekening.
+    """
+    if not render_available():
+        raise ConversionError(
+            "Pagina's rasteren vereist poppler-utils (pdftoppm/pdfinfo), dat niet op dit "
+            "systeem is geïnstalleerd. Zie CLAUDE.md voor installatie-instructies."
+        )
+
+    n = page_count(pdf_bytes)
+    if n > max_pages:
+        raise ConversionError(
+            f"De PDF heeft {n} pagina's; de wiskunde-modus verwerkt er maximaal {max_pages}. "
+            "Splits het document en probeer de delen apart."
+        )
+
+    with tempfile.TemporaryDirectory(prefix="mdconv-pdftoppm-") as tmp:
+        tmp_path = Path(tmp)
+        pdf_path = tmp_path / "in.pdf"
+        pdf_path.write_bytes(pdf_bytes)
+        _run(
+            ["pdftoppm", "-png", "-r", str(dpi), str(pdf_path), str(tmp_path / "page")],
+            timeout=_RENDER_TIMEOUT,
+        )
+        # `pdftoppm` schrijft `page-1.png`, `page-2.png`, … (bij ≥ 10 pagina's
+        # nul-gevuld tot gelijke breedte). Sorteer op het paginanummer zelf,
+        # niet lexicaal — anders komt `page-10` vóór `page-2`.
+        pages = sorted(
+            tmp_path.glob("page-*.png"),
+            key=lambda p: int(p.stem.rsplit("-", 1)[-1]),
+        )
+        if not pages:
+            raise ConversionError("Geen pagina's uit de PDF kunnen rasteren.")
+        return [p.read_bytes() for p in pages]

@@ -6,6 +6,7 @@ via de gedeelde sessie (zonder automatische retries, zie `mdconv.net`).
 
 from __future__ import annotations
 
+import base64
 import json
 import re
 import threading
@@ -266,6 +267,91 @@ def stream_chunk(
         # zonder foutstatus. Zonder deze check zou dat stilletjes "niets"
         # opleveren in plaats van een duidelijke melding.
         raise ConversionError("AI-opschoning gaf geen inhoud terug.")
+
+
+def ocr_page_stream(
+    png_bytes: bytes, *, model: str, system: str, request_id: str | None = None
+) -> Iterator[str | Usage]:
+    """Eén gerenderde PDF-pagina (PNG) → Markdown, streamend.
+
+    Als `stream_chunk`, maar de gebruikersboodschap draagt een afbeelding
+    (`image_url` met een `data:`-URI) i.p.v. tekst — het model moet dus
+    multimodaal zijn. Geen `finish_reason == "length"` → dat betekent hier dat
+    één pagina niet in het uitvoerplafond paste; wel een nette melding. Een
+    lege stream is géén fout: een blanco pagina levert legitiem niets op.
+    """
+    key = config.api_key()
+    if not key:
+        raise ConfigError(
+            "Wiskunde-modus niet beschikbaar: geen OpenRouter API-sleutel. "
+            "Zet de omgevingsvariabele OPENROUTER_API_KEY en herstart de tool."
+        )
+
+    data_uri = "data:image/png;base64," + base64.b64encode(png_bytes).decode("ascii")
+    try:
+        resp = net.llm().post(
+            f"{config.base_url()}/chat/completions",
+            headers={
+                "Authorization": f"Bearer {key}",
+                "Content-Type": "application/json",
+                "X-Title": "Markdown converter",
+            },
+            json={
+                "model": model,
+                "temperature": 0,
+                "max_tokens": config.MAX_OUTPUT_TOKENS,
+                "stream": True,
+                "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": [
+                        {"type": "text", "text": "Transcribe this page to Markdown."},
+                        {"type": "image_url", "image_url": {"url": data_uri}},
+                    ]},
+                ],
+            },
+            timeout=_REQUEST_TIMEOUT,
+            stream=True,
+        )
+    except requests.exceptions.RequestException as e:
+        raise ConversionError(f"Wiskunde-modus mislukt (verbindingsfout): {e}") from e
+
+    if resp.status_code == 401:
+        raise ConfigError(
+            "Wiskunde-modus niet beschikbaar: ongeldige of ontbrekende OpenRouter API-sleutel. "
+            "Controleer OPENROUTER_API_KEY en herstart de tool."
+        )
+    if resp.status_code != 200:
+        raise ConversionError(
+            f"Wiskunde-modus mislukt (OpenRouter {resp.status_code}): {_error_detail(resp)}"
+        )
+
+    resp.encoding = "utf-8"
+    try:
+        for line in resp.iter_lines(decode_unicode=True):
+            if cancel.is_cancelled(request_id):
+                return
+            if not line or not line.startswith("data:"):
+                continue
+            payload = line[len("data:"):].strip()
+            if payload == "[DONE]":
+                break
+            try:
+                event = json.loads(payload)
+            except ValueError:
+                continue
+            choice = (event.get("choices") or [{}])[0]
+            delta_piece = choice.get("delta", {}).get("content")
+            if delta_piece:
+                yield delta_piece
+            if choice.get("finish_reason") == "length":
+                raise ConversionError(
+                    "Een pagina werd afgekapt: te veel inhoud voor één transcriptie."
+                )
+            usage = event.get("usage")
+            if usage:
+                yield Usage(usage)
+    finally:
+        resp.close()
 
 
 def strip_fence_stream(pieces: Iterator[str]) -> Iterator[str]:
