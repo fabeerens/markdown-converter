@@ -1236,7 +1236,7 @@ async function streamOnePdf(entry, name, viaUrl) {
   const controller = new AbortController();
   activeCleans.set(docId, { requestId, controller });
   if (isLive()) renderEditor();
-  setStatus(`"${name}" transcriberen… elke pagina is een apart AI-verzoek.`, "info", { busy: true });
+  setStatus(`"${name}" transcriberen met een vision-model…`, "info", { busy: true });
 
   try {
     let response;
@@ -1589,6 +1589,10 @@ async function openSettings() {
   const s = state.settings;
   renderModelRows(s.models);
   renderOcrModelRows(s.ocr_models);
+  // Leeg tonen als het de standaardwaarde is (zelfde "leeg = standaard"-idee
+  // als de deelgrootte per endpoint).
+  $("#settings-ocr-pages").value =
+    s.ocr_pages_per_request === s.defaults.ocr_pages_per_request ? "" : s.ocr_pages_per_request;
   $("#settings-chunk-default").textContent = fmt(s.defaults.chunk_tokens);
   $("#settings-chunk-range").textContent =
     `${fmt(s.defaults.min_chunk_tokens)}–${fmt(s.defaults.max_chunk_tokens)}`;
@@ -1641,6 +1645,7 @@ async function saveSettings() {
     id: row.querySelector(".omid").value.trim(),
     label: row.querySelector(".omlabel").value.trim(),
   })).filter((m) => m.id);
+  const ocrPages = parseInt($("#settings-ocr-pages").value, 10) || null;
 
   const button = $("#settings-save");
   const msg = $("#settings-msg");
@@ -1649,6 +1654,7 @@ async function saveSettings() {
     await postJSON("/api/settings", {
       models,
       ocr_models: ocrModels,
+      ocr_pages_per_request: ocrPages,
       ocr_prompt: $("#prompt-ocr").value,
       prompts: {
         generic: $("#prompt-generic").value,

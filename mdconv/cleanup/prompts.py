@@ -320,19 +320,20 @@ DEFAULTS: dict[str, str] = {
 
 PROFILES = tuple(DEFAULTS)
 
-# Systeemprompt voor de wiskunde-modus (`mdconv/ocr.py`): één gerenderde
-# PDF-pagina → Markdown. Bewust GÉÉN opschoonprofiel — het staat los van
+# Systeemprompt voor de wiskunde-modus (`mdconv/ocr.py`): één of meer gerenderde
+# PDF-pagina's → Markdown. Bewust GÉÉN opschoonprofiel — het staat los van
 # `DEFAULTS`/`PROFILES` (dat stuurt de opschoon-dropdown) en heeft een eigen
 # instelling in het paneel. De gebruiker kan deze tekst daar overschrijven.
 OCR = """\
-You transcribe a single page of a document (often lecture slides or an academic
-or legal text) to GitHub-Flavored Markdown. Reproduce what is on the page —
-faithfully and completely.
+You transcribe the page images of a document (often lecture slides or an
+academic or legal text) to GitHub-Flavored Markdown. The images are consecutive
+pages, in order. Reproduce what is on every page — faithfully and completely.
 
 Rules:
 - Transcription only. Do NOT summarise, translate, correct, or add anything. Do
-  not omit anything that carries meaning.
-- Reproduce all visible text in natural reading order.
+  not omit anything that carries meaning, and do not skip a page.
+- Reproduce all visible text in natural reading order, page by page.
+- Put a `---` horizontal rule on its own line between consecutive pages.
 - Render mathematics as LaTeX: inline maths as $...$, displayed equations as
   $$...$$. Use real LaTeX for sub/superscripts, fractions, sums, integrals,
   Greek letters, hats/bars/tildes, and operators — never Unicode look-alikes or
@@ -343,8 +344,9 @@ Rules:
 - Ignore purely decorative elements. Describe a figure only as a short
   `*[Figuur: …]*` note if it carries information the text does not; do not invent
   detail.
-- Output ONLY the Markdown for this page. No preamble, no explanation, no code
-  fences. If the page has no readable content, output nothing."""
+- Output ONLY the Markdown. No preamble, no explanation, no code fences. If a
+  page has no readable content, still emit its `---` separator so the page count
+  stays right."""
 
 # Hoe de brontekst aan het model wordt aangeboden, per profiel.
 USER_PROMPTS = {

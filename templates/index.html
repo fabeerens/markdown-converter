@@ -252,6 +252,14 @@
         <div class="row-actions">
           <button type="button" class="btn btn-dashed" id="settings-add-ocr-model">+ Model toevoegen</button>
         </div>
+        <p class="hint" style="margin:12px 0 4px">
+          Pagina's per verzoek — meer = minder verzoeken en minder rate-limiting, maar te veel
+          raakt afgekapt. Een paar verzoeken lopen parallel. Leeg = standaard (5).
+        </p>
+        <div class="field" style="max-width:160px">
+          <input type="number" id="settings-ocr-pages" min="1" max="20" step="1"
+                 placeholder="standaard (5)" aria-label="Pagina's per vision-verzoek">
+        </div>
       </section>
 
       <section>

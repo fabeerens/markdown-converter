@@ -359,25 +359,33 @@ accountregistratie namens de gebruiker):
   - **`pdf_images.render_pages()`** rastert elke pagina met `pdftoppm -png -r <dpi>` (poppler,
     dezelfde binaries als `extract_images`; `render_available()` checkt `pdftoppm`/`pdfinfo`).
     `page_count()` (via `pdfinfo`) weigert eerst een PDF > `_MAX_PAGES` (100) — een bewust
-    trage modus (elke pagina = één apart vision-verzoek) hoort een harde grens te hebben.
+    trage modus hoort een harde grens te hebben.
     `_DPI` = 200, bij te stellen met de env-var `OCR_DPI`. Paginasortering is **numeriek**
     (`page-2` vóór `page-10`), niet lexicaal.
-  - **`openrouter.ocr_page_stream(png_bytes, …)`** is `stream_chunk` met een `image_url`
-    data-URI als user-content i.p.v. tekst — het model moet dus multimodaal zijn. Géén
-    "lege stream = fout"-check (een blanco pagina levert legitiem niets op); `finish_reason
-    == "length"` betekent hier dat één pagina niet in het uitvoerplafond paste.
-  - **`ocr.ocr_pdf_stream()`** spiegelt `cleanup.clean_stream`: pagina's ná elkaar
-    (documentvolgorde bij live meelezen), `\n\n` ertussen, één `Progress`-marker per pagina
-    (`produced_tokens` = pagina, `expected_tokens` = totaal), één opgeteld `Usage` aan het
-    eind, `_cancel.clear(request_id)` in een `finally`.
+  - **`openrouter.ocr_pages_stream(images, …)`** is `stream_chunk` met één of meer
+    `image_url` data-URI's als user-content i.p.v. tekst — het model moet dus multimodaal
+    zijn. Géén "lege stream = fout"-check (een blanco pagina levert legitiem niets op);
+    `finish_reason == "length"` betekent dat de pagina's in dít verzoek niet in het
+    uitvoerplafond pasten → melding met het advies "pagina's per verzoek" te verlagen.
+  - **`ocr.ocr_pdf_stream()`** verdeelt de pagina's in groepen van
+    `config.get_ocr_pages_per_request()` (standaard 5, instelbaar in het paneel) en laat
+    tot `_MAX_PARALLEL_BATCHES` (3, env `OCR_PARALLEL`) van die verzoeken **parallel** lopen
+    (`ThreadPoolExecutor`, zoals `cleanup.clean()`), maar levert de tekst **in
+    documentvolgorde** uit — een groep die eerder klaar is wacht op zijn beurt, en zijn
+    tekst verschijnt dan in één keer. `\n\n` tussen groepen, één `Progress` per groep
+    (`produced_tokens` = pagina's tot nu toe), één opgeteld `Usage` aan het eind. Een fout
+    of `GeneratorExit` (client weg) zet de annuleringsvlag zodat de nog lopende groepen bij
+    hun eerstvolgende SSE-regel stoppen; `_cancel.clear(request_id)` in een `finally`.
+    Een korte PDF (≤ groepgrootte) is dus gewoon één verzoek.
   - **Streaming + annuleren hergebruiken de opschoon-infrastructuur volledig**: dezelfde
     `_frame`/`STREAM_ERROR_SENTINEL` met de `CLEAN_`-tagnamen (bewust niet hernoemd — dan
     hoeft `makeStreamParser` niet te wijzigen), dezelfde proces-brede `mdconv.cleanup.cancel`-
     set en hetzelfde `/api/clean/cancel`-endpoint, en aan de front-end de `activeCleans`-Map
     + `#cancel-clean`-knop.
-  - **Modellen + prompt staan in het instellingenpaneel** (`DEFAULT_OCR_MODELS`,
-    `prompts.OCR`, `ocr_models`/`ocr_prompt` in `settings.json`) met dezelfde "leeg =
-    standaard"-semantiek als de opschoonmodellen. `DEFAULT_OCR_MODELS`:
+  - **Modellen, prompt én pagina's-per-verzoek staan in het instellingenpaneel**
+    (`DEFAULT_OCR_MODELS`, `prompts.OCR`, `DEFAULT_OCR_PAGES_PER_REQUEST` = 5; keys
+    `ocr_models`/`ocr_prompt`/`ocr_pages_per_request` in `settings.json`) met dezelfde "leeg
+    = standaard"-semantiek als de opschoonmodellen. `DEFAULT_OCR_MODELS`:
     `qwen/qwen3.7-flash` en `openai/gpt-5.6-luna-pro`. Env-terugval `OCR_MODEL`. Deze prompt
     zit **niet** in `prompts.DEFAULTS`/`PROFILES` (dat stuurt de opschoon-dropdown).
 - **Tekst plakken** (`pasted_text.py`, endpoint `/api/convert/text`): de front-end stuurt
@@ -804,7 +812,7 @@ regel), inclusief de vloeiende tabbalk-indicator.
   weggeschreven bestand nooit als geldige staat gelezen kan worden.
 
 ## Tests
-`.venv/bin/python -m pytest tests/ -q` — 195 karakteriseringstests die het gedrag
+`.venv/bin/python -m pytest tests/ -q` — 197 karakteriseringstests die het gedrag
 vastleggen in plaats van het te beschrijven: `detect_source`-precedentie, ELI→CELEX,
 de geconsolideerde-CELEX-afhandeling (datum behouden, preambule invoegen, en de vier
 terugvalpaden als dat niet lukt), de versie-terugvalladder (nieuwste versie op of vóór de

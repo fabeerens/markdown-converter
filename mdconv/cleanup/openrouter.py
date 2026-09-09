@@ -269,17 +269,17 @@ def stream_chunk(
         raise ConversionError("AI-opschoning gaf geen inhoud terug.")
 
 
-def ocr_page_stream(
-    png_bytes: bytes, *, model: str, system: str, request_id: str | None = None
+def ocr_pages_stream(
+    images: list[bytes], *, model: str, system: str, request_id: str | None = None
 ) -> Iterator[str | Usage]:
-    """Eén gerenderde PDF-pagina (PNG) → Markdown, streamend.
+    """Eén of meer gerenderde PDF-pagina's (PNG) → Markdown, streamend.
 
-    Als `stream_chunk`, maar de gebruikersboodschap draagt een afbeelding
-    (`image_url` met een `data:`-URI) i.p.v. tekst — het model moet dus
-    multimodaal zijn. Geen `finish_reason == "length"` → dat betekent hier dat
-    één pagina niet in het uitvoerplafond paste; wel een nette melding. Een
-    lege stream is géén fout: een blanco pagina levert legitiem niets op.
-    """
+    Als `stream_chunk`, maar de gebruikersboodschap draagt de pagina's als
+    afbeeldingen (`image_url` met een `data:`-URI) i.p.v. tekst — het model moet
+    dus multimodaal zijn. `finish_reason == "length"` betekent hier dat de
+    pagina's in dit verzoek niet in het uitvoerplafond pasten — nette melding met
+    het advies de deelgrootte te verlagen. Een lege stream is géén fout (een
+    blanco pagina levert legitiem niets op)."""
     key = config.api_key()
     if not key:
         raise ConfigError(
@@ -287,7 +287,12 @@ def ocr_page_stream(
             "Zet de omgevingsvariabele OPENROUTER_API_KEY en herstart de tool."
         )
 
-    data_uri = "data:image/png;base64," + base64.b64encode(png_bytes).decode("ascii")
+    parts = [{"type": "text",
+              "text": f"Transcribe these {len(images)} page image(s) to Markdown, in order."}]
+    for png in images:
+        uri = "data:image/png;base64," + base64.b64encode(png).decode("ascii")
+        parts.append({"type": "image_url", "image_url": {"url": uri}})
+
     try:
         resp = net.llm().post(
             f"{config.base_url()}/chat/completions",
@@ -303,10 +308,7 @@ def ocr_page_stream(
                 "stream": True,
                 "messages": [
                     {"role": "system", "content": system},
-                    {"role": "user", "content": [
-                        {"type": "text", "text": "Transcribe this page to Markdown."},
-                        {"type": "image_url", "image_url": {"url": data_uri}},
-                    ]},
+                    {"role": "user", "content": parts},
                 ],
             },
             timeout=_REQUEST_TIMEOUT,
@@ -345,7 +347,8 @@ def ocr_page_stream(
                 yield delta_piece
             if choice.get("finish_reason") == "length":
                 raise ConversionError(
-                    "Een pagina werd afgekapt: te veel inhoud voor één transcriptie."
+                    "Het antwoord werd afgekapt: te veel pagina's voor één verzoek. "
+                    "Verlaag 'pagina's per verzoek' in de instellingen."
                 )
             usage = event.get("usage")
             if usage:
