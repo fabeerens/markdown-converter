@@ -628,10 +628,23 @@ function extractImagesRequested() {
   return el && !el.closest("[hidden]") && el.checked;
 }
 
+/** Wiskunde-modus: PDF-pagina's door een vision-model transcriberen i.p.v. de
+ *  snelle tekstextractie. Alleen zinvol met een OpenRouter-sleutel + poppler. */
+function ocrModeRequested() {
+  const el = $("#ocr-mode");
+  return el && !el.closest("[hidden]") && el.checked;
+}
+
 async function fetchFileUrls() {
   const items = readInput("doc");
   if (!items.length) {
     setStatus("Plak minstens één link naar een bestand.", "err");
+    return;
+  }
+  if (ocrModeRequested()) {
+    await withBusyButton($("#fetch-doc"), () =>
+      runOcr(items.map((it) => ({ url: it.query })), { viaUrl: true })
+    );
     return;
   }
   const extractImages = extractImagesRequested() || undefined;
@@ -655,6 +668,10 @@ async function fetchFileUrls() {
 async function uploadFiles(fileList) {
   const files = [...fileList];
   if (!files.length) return;
+  if (ocrModeRequested()) {
+    await runOcr(files.map((file) => ({ file })), { viaUrl: false });
+    return;
+  }
   const extractImages = extractImagesRequested();
   await runBatch(
     files,
@@ -1162,6 +1179,144 @@ async function translateActiveDoc() {
 }
 
 /* --------------------------------------------------------------------------
+   Wiskunde-modus (OCR) — PDF pagina-voor-pagina door een vision-model
+
+   Spiegelt runClean(): één streaming-aanroep per PDF, live in het tekstvak,
+   annuleerbaar via dezelfde #cancel-clean-knop en activeCleans-Map. Het
+   document wordt eerst leeg aangemaakt en loopt al streamend vol. Meerdere
+   PDF's worden ná elkaar verwerkt (niet parallel) — elke PDF is al N
+   vision-verzoeken, en gelijktijdig lopen verstoort de live-voortgang en lokt
+   rate-limiting uit.
+   -------------------------------------------------------------------------- */
+
+async function runOcr(entries, { viaUrl }) {
+  let done = 0;
+  const failures = [];
+  for (const entry of entries) {
+    const name = viaUrl
+      ? basename(entry.url)
+      : entry.file.name.replace(/\.[^.]+$/, "") || "document";
+    try {
+      await streamOnePdf(entry, name, viaUrl);
+    } catch (e) {
+      if (e.name !== "AbortError") failures.push(`${name} — ${e.message}`);
+    }
+    done += 1;
+    setStatus(`Bezig: ${done}/${entries.length} getranscribeerd…`, "info", { busy: true });
+  }
+  if (!failures.length) {
+    setStatus(entries.length === 1 ? "Klaar." : `${entries.length} documenten getranscribeerd.`, "ok");
+  } else {
+    setStatus(
+      `${entries.length - failures.length}/${entries.length} gelukt.`,
+      "err",
+      { detail: failures.join("  ·  ") }
+    );
+  }
+}
+
+async function streamOnePdf(entry, name, viaUrl) {
+  const modelSelect = $("#ocr-model");
+  const modelId = modelSelect.value || undefined;
+  const modelLabel = modelSelect.selectedOptions[0]?.textContent || modelId || "OCR";
+  const doc = addDoc({
+    title: name,
+    filenameBase: name,
+    source: `wiskunde-OCR (${modelLabel}) • ${name}`,
+    kind: "document",
+    markdown: "",
+    allowObsidian: true,
+    activate: true,
+  });
+
+  const docId = doc.id;
+  const isLive = () => state.activeId === docId;
+  const startedAt = performance.now();
+  const requestId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const controller = new AbortController();
+  activeCleans.set(docId, { requestId, controller });
+  if (isLive()) renderEditor();
+  setStatus(`"${name}" transcriberen… elke pagina is een apart AI-verzoek.`, "info", { busy: true });
+
+  try {
+    let response;
+    if (viaUrl) {
+      response = await fetch("/api/convert/file-url/ocr", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: entry.url, model: modelId, request_id: requestId }),
+        signal: controller.signal,
+      });
+    } else {
+      const form = new FormData();
+      form.append("file", entry.file);
+      if (modelId) form.append("model", modelId);
+      form.append("request_id", requestId);
+      response = await fetch("/api/convert/file/ocr", {
+        method: "POST",
+        body: form,
+        signal: controller.signal,
+      });
+    }
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error || `Fout ${response.status}`);
+    }
+
+    if (isLive()) $("#md").value = "";
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let acc = "";
+    let usage = null;
+    const parser = makeStreamParser({
+      onText: (t) => {
+        acc += t;
+        doc.markdown = acc;
+        if (isLive()) {
+          $("#md").value = acc;
+          updateLineNumbers();
+        }
+      },
+      onProgress: (p) => {
+        if (isLive()) setProgress(p.produced_tokens, p.expected_tokens);
+        setStatus(
+          `"${name}": pagina ${p.produced_tokens}/${p.expected_tokens} getranscribeerd…`,
+          "info",
+          { busy: true }
+        );
+      },
+      onUsage: (u) => { usage = u; },
+    });
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      parser.push(decoder.decode(value, { stream: true }));
+    }
+    const err = parser.finish();
+    if (err !== null) throw new Error(err || "Transcriptie mislukt.");
+
+    doc.markdown = acc.trim() + "\n";
+    doc.lastUsage = usage
+      ? { label: "Wiskunde-OCR", usage, elapsedMs: performance.now() - startedAt }
+      : null;
+    renderDocTabs();
+  } catch (e) {
+    if (e.name === "AbortError") {
+      // Wat er al binnen was blijft staan; niet als mislukking tellen.
+      doc.markdown = doc.markdown.trim() ? doc.markdown.trim() + "\n" : "";
+      setStatus(`"${name}" geannuleerd.`, "info");
+    } else if (!doc.markdown.trim()) {
+      // Niets bruikbaars binnengekomen: het lege tabblad weer opruimen.
+      closeDoc(docId);
+    }
+    throw e;
+  } finally {
+    activeCleans.delete(docId);
+    if (isLive()) renderEditor();
+  }
+}
+
+/* --------------------------------------------------------------------------
    Regelnummers
 
    Eén nummer per échte regel (per enter), niet per visueel omgebogen regel.
@@ -1345,6 +1500,26 @@ async function loadConfig() {
         break;
       }
     }
+
+    // Wiskunde-modus: alleen zinvol met een sleutel én poppler (pdftoppm).
+    $("#ocr-opts").hidden = !(state.llmAvailable && cfg.ocr_available);
+    const ocrSelect = $("#ocr-model");
+    const prevOcr = ocrSelect.value;
+    ocrSelect.replaceChildren(
+      ...(cfg.ocr_models || []).map((m) => {
+        const opt = document.createElement("option");
+        opt.value = m.id;
+        opt.textContent = m.label || m.id;
+        return opt;
+      })
+    );
+    const rememberedOcr = localStorage.getItem("ocrModel");
+    for (const candidate of [prevOcr, rememberedOcr]) {
+      if (candidate && [...ocrSelect.options].some((o) => o.value === candidate)) {
+        ocrSelect.value = candidate;
+        break;
+      }
+    }
   } catch {
     state.llmAvailable = false;
   }
@@ -1378,6 +1553,26 @@ function modelRow(id = "", label = "", chunkTokens = null) {
   return row;
 }
 
+/** Rij voor een wiskunde-OCR-model: alleen id + label (geen deelgrootte). */
+function ocrModelRow(id = "", label = "") {
+  const row = document.createElement("div");
+  row.className = "row";
+  row.innerHTML = `
+    <div class="field" style="flex:0 0 40%"><input type="text" class="omid" placeholder="model-id" aria-label="Model-id"></div>
+    <div class="field"><input type="text" class="omlabel" placeholder="label in de lijst" aria-label="Label"></div>
+    <button type="button" class="btn btn-ghost btn-icon btn-danger" aria-label="Verwijderen">✕</button>`;
+  row.querySelector(".omid").value = id;
+  row.querySelector(".omlabel").value = label;
+  row.querySelector("button").addEventListener("click", () => row.remove());
+  return row;
+}
+
+function renderOcrModelRows(models) {
+  $("#settings-ocr-models").replaceChildren(
+    ...(models || []).map((m) => ocrModelRow(m.id, m.label))
+  );
+}
+
 function renderModelRows(models) {
   $("#settings-models").replaceChildren(
     ...(models || []).map((m) => modelRow(m.id, m.label, m.chunk_tokens))
@@ -1393,6 +1588,7 @@ async function openSettings() {
   }
   const s = state.settings;
   renderModelRows(s.models);
+  renderOcrModelRows(s.ocr_models);
   $("#settings-chunk-default").textContent = fmt(s.defaults.chunk_tokens);
   $("#settings-chunk-range").textContent =
     `${fmt(s.defaults.min_chunk_tokens)}–${fmt(s.defaults.max_chunk_tokens)}`;
@@ -1400,6 +1596,7 @@ async function openSettings() {
   $("#prompt-caselaw").value = s.prompts.caselaw;
   $("#prompt-obsidian").value = s.prompts.obsidian;
   $("#prompt-translate_nl").value = s.prompts.translate_nl;
+  $("#prompt-ocr").value = s.ocr_prompt;
   $("#settings-msg").textContent = "";
 
   dialog.lastFocus = document.activeElement;
@@ -1440,12 +1637,19 @@ async function saveSettings() {
     chunk_tokens: parseInt(row.querySelector(".mchunk").value, 10) || null,
   })).filter((m) => m.id);
 
+  const ocrModels = $$("#settings-ocr-models .row").map((row) => ({
+    id: row.querySelector(".omid").value.trim(),
+    label: row.querySelector(".omlabel").value.trim(),
+  })).filter((m) => m.id);
+
   const button = $("#settings-save");
   const msg = $("#settings-msg");
   button.disabled = true;
   try {
     await postJSON("/api/settings", {
       models,
+      ocr_models: ocrModels,
+      ocr_prompt: $("#prompt-ocr").value,
       prompts: {
         generic: $("#prompt-generic").value,
         caselaw: $("#prompt-caselaw").value,
@@ -1474,6 +1678,9 @@ function initSettings() {
   $("#settings-add-model").addEventListener("click", () => {
     $("#settings-models").appendChild(modelRow()).querySelector("input").focus();
   });
+  $("#settings-add-ocr-model").addEventListener("click", () => {
+    $("#settings-ocr-models").appendChild(ocrModelRow()).querySelector("input").focus();
+  });
 
   // Klik op de achtergrond sluit; klik in de dialoog niet.
   $("#settings").addEventListener("mousedown", (e) => {
@@ -1498,6 +1705,8 @@ function initSettings() {
     "reset-translate_nl": () => {
       $("#prompt-translate_nl").value = state.settings.defaults.prompts.translate_nl;
     },
+    "reset-ocr-models": () => renderOcrModelRows(state.settings.defaults.ocr_models),
+    "reset-ocr": () => { $("#prompt-ocr").value = state.settings.defaults.ocr_prompt; },
   };
   Object.entries(resets).forEach(([id, fn]) => $(`#${id}`).addEventListener("click", fn));
 }
@@ -1581,6 +1790,13 @@ function init() {
     const doc = activeDoc();
     if (doc) doc.model = $("#model").value;
     if (doc && state.llmAvailable) refreshEstimate();
+  });
+
+  $("#ocr-mode").addEventListener("change", () => {
+    $("#ocr-model").hidden = !$("#ocr-mode").checked;
+  });
+  $("#ocr-model").addEventListener("change", () => {
+    localStorage.setItem("ocrModel", $("#ocr-model").value);
   });
 
   loadConfig();

@@ -2141,3 +2141,210 @@ def test_frontend_has_one_celex_pattern():
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     js = open(os.path.join(root, "static", "app.js"), encoding="utf-8").read()
     assert js.count("[0-9][0-9]{4}[A-Z]{1,2}[0-9]{2,4}") == 1
+
+
+# ---------------------------------------------------------------------------
+# Wiskunde-modus: PDF pagina-voor-pagina door een vision-LLM (mdconv/ocr.py)
+# ---------------------------------------------------------------------------
+#
+# De gewone tekstextractie verliest LaTeX-wiskunde (sub-/superscripts,
+# `\underbrace`, de index i als Private-Use-glyph). De wiskunde-modus rendert
+# elke pagina naar een PNG en laat een vision-model die transcriberen. Deze
+# tests pinnen: paginasortering + paginagrens bij het rasteren, de
+# stream-orchestratie (join, voortgang, opgeteld tokengebruik, stil annuleren)
+# en de streaming-endpoint. Geen netwerk — `pdftoppm` en OpenRouter zijn
+# gemonkeypatcht.
+
+def _fake_poppler(monkeypatch, *, pages: int):
+    """Laat pdf_images denken dat poppler er is en `pdfinfo`/`pdftoppm` werken:
+    `pdfinfo` meldt `pages`, `pdftoppm` schrijft één PNG per pagina."""
+    import pathlib
+
+    from mdconv.sources import pdf_images
+
+    monkeypatch.setattr(pdf_images, "render_available", lambda: True)
+
+    def fake_run(args, *, timeout=None):
+        if args[0] == "pdfinfo":
+            return f"Title:  x\nPages:  {pages}\nPage size: 595 x 842 pts\n"
+        if args[0] == "pdftoppm":
+            prefix = pathlib.Path(args[-1])
+            for n in range(1, pages + 1):
+                prefix.with_name(f"{prefix.name}-{n}.png").write_bytes(f"PNG{n}".encode())
+            return ""
+        return ""
+
+    monkeypatch.setattr(pdf_images, "_run", fake_run)
+
+
+def test_render_pages_returns_one_png_per_page_in_order(monkeypatch):
+    from mdconv.sources import pdf_images
+
+    _fake_poppler(monkeypatch, pages=12)
+    pages = pdf_images.render_pages(b"%PDF-1.4", dpi=150, max_pages=100)
+    # 12 pagina's, en page-2 vóór page-10 (numeriek, niet lexicaal gesorteerd).
+    assert [p.decode() for p in pages] == [f"PNG{n}" for n in range(1, 13)]
+
+
+def test_render_pages_rejects_a_document_over_the_page_cap(monkeypatch):
+    from mdconv.errors import ConversionError
+    from mdconv.sources import pdf_images
+
+    _fake_poppler(monkeypatch, pages=250)
+    with pytest.raises(ConversionError, match="maximaal 100"):
+        pdf_images.render_pages(b"%PDF-1.4", dpi=150, max_pages=100)
+
+
+def _fake_ocr(monkeypatch, pages, page_stream):
+    """render_pages → `pages` (list[bytes]); openrouter.ocr_page_stream → `page_stream`."""
+    import mdconv.cleanup as cleanup_pkg
+    from mdconv import ocr
+    from mdconv.cleanup import config, openrouter
+
+    monkeypatch.setattr(ocr.pdf_images, "render_pages", lambda data, **kw: pages)
+    monkeypatch.setattr(ocr.pdf_images, "render_available", lambda: True)
+    monkeypatch.setattr(openrouter, "ocr_page_stream", page_stream)
+    monkeypatch.setattr(config, "is_available", lambda: True)
+    # api.py roept cleanup.is_available aan (bij import gebonden aan config.is_available).
+    monkeypatch.setattr(cleanup_pkg, "is_available", lambda: True)
+
+
+def test_ocr_pdf_stream_joins_pages_and_sums_usage(monkeypatch):
+    from mdconv import ocr
+    from mdconv.cleanup import openrouter
+
+    def page_stream(png, *, model, system, request_id=None):
+        yield f"## {png.decode()}"
+        yield openrouter.Usage({"prompt_tokens": 10, "completion_tokens": 4,
+                                "total_tokens": 14, "cost": 0.01})
+
+    _fake_ocr(monkeypatch, [b"p1", b"p2"], page_stream)
+    out = list(ocr.ocr_pdf_stream(b"%PDF", request_id="r1"))
+
+    text = "".join(x for x in out if isinstance(x, str))
+    assert text == "## p1\n\n## p2"
+    progress = [dict(x) for x in out if isinstance(x, openrouter.Progress)]
+    assert progress == [
+        {"produced_tokens": 1, "expected_tokens": 2},
+        {"produced_tokens": 2, "expected_tokens": 2},
+    ]
+    usage = [dict(x) for x in out if isinstance(x, openrouter.Usage)][-1]
+    assert usage == {"prompt_tokens": 20, "completion_tokens": 8,
+                     "total_tokens": 28, "cost": 0.02}
+
+
+def test_ocr_pdf_stream_stops_silently_on_cancel(monkeypatch):
+    from mdconv import ocr
+    from mdconv.cleanup import cancel
+
+    seen = []
+
+    def page_stream(png, *, model, system, request_id=None):
+        seen.append(png)
+        yield f"page {png.decode()}"
+        if png == b"p1":
+            cancel.request(request_id)  # simuleer een gelijktijdige /api/clean/cancel
+
+    _fake_ocr(monkeypatch, [b"p1", b"p2", b"p3"], page_stream)
+    out = list(ocr.ocr_pdf_stream(b"%PDF", request_id="rX"))
+
+    assert seen == [b"p1"]                       # pagina 2 en 3 niet meer opgehaald
+    assert not any(hasattr(x, "keys") and "total_tokens" in x for x in out)  # geen Usage-afsluiting
+    assert not cancel.is_cancelled("rX")         # de finally-clause heeft opgeruimd
+
+
+def test_ocr_pdf_stream_requires_a_key(monkeypatch):
+    from mdconv import ocr
+    from mdconv.cleanup import config
+    from mdconv.errors import ConversionError
+
+    monkeypatch.setattr(config, "is_available", lambda: False)
+    with pytest.raises(ConversionError, match="OpenRouter API-sleutel"):
+        list(ocr.ocr_pdf_stream(b"%PDF"))
+
+
+def test_api_convert_file_ocr_streams_transcription(client, monkeypatch):
+    import re
+
+    from mdconv.cleanup import openrouter
+
+    def page_stream(png, *, model, system, request_id=None):
+        yield f"$x_{png.decode()}$"
+        yield openrouter.Usage({"prompt_tokens": 5, "completion_tokens": 2,
+                                "total_tokens": 7, "cost": 0.001})
+
+    _fake_ocr(monkeypatch, [b"1", b"2"], page_stream)
+    r = client.post(
+        "/api/convert/file/ocr",
+        data={"file": (BytesIO(b"%PDF-1.4 fake"), "slides.pdf"),
+              "model": "qwen/qwen3.7-flash"},
+        content_type="multipart/form-data",
+    )
+    assert r.status_code == 200
+    body = r.get_data(as_text=True)
+    stripped = re.sub(r"\x00CLEAN_[A-Z]+\x00.*?\x00", "", body, flags=re.S)
+    assert stripped == "$x_1$\n\n$x_2$"
+    assert "\x00CLEAN_PROGRESS\x00" in body
+    assert "\x00CLEAN_USAGE\x00" in body
+
+
+def test_api_convert_file_ocr_rejects_non_pdf(client, monkeypatch):
+    from mdconv.cleanup import config
+    monkeypatch.setattr(config, "is_available", lambda: True)
+    r = client.post(
+        "/api/convert/file/ocr",
+        data={"file": (BytesIO(b"x"), "notes.docx")},
+        content_type="multipart/form-data",
+    )
+    assert r.status_code == 400
+    assert "PDF" in r.get_json()["error"]
+
+
+def test_api_convert_file_ocr_needs_a_key(client, monkeypatch):
+    from mdconv.cleanup import config
+    monkeypatch.setattr(config, "is_available", lambda: False)
+    r = client.post(
+        "/api/convert/file/ocr",
+        data={"file": (BytesIO(b"%PDF"), "a.pdf")},
+        content_type="multipart/form-data",
+    )
+    assert r.status_code == 400
+    assert "OpenRouter" in r.get_json()["error"]
+
+
+def test_config_and_settings_expose_ocr_models(client):
+    cfg = client.get("/api/config").get_json()
+    assert [m["id"] for m in cfg["ocr_models"]] == [
+        "qwen/qwen3.7-flash", "openai/gpt-5.6-luna-pro",
+    ]
+    assert "ocr_available" in cfg
+    settings = client.get("/api/settings").get_json()
+    assert settings["ocr_models"] and settings["ocr_prompt"]
+    assert settings["defaults"]["ocr_models"] and settings["defaults"]["ocr_prompt"]
+
+
+def test_ocr_settings_roundtrip_and_reset(isolated_settings):
+    cfg = isolated_settings
+    cfg.update_settings({
+        "ocr_models": [{"id": "vendor/vision-x", "label": "Vision X"}],
+        "ocr_prompt": "Transcribe carefully.",
+    })
+    assert [m["id"] for m in cfg.get_ocr_models()] == ["vendor/vision-x"]
+    assert cfg.resolve_ocr_model("vendor/vision-x") == "vendor/vision-x"
+    assert cfg.get_ocr_prompt() == "Transcribe carefully."
+    # Leeg = terug naar de ingebouwde standaard.
+    cfg.update_settings({"ocr_models": [], "ocr_prompt": ""})
+    assert cfg.get_ocr_models() == cfg.DEFAULT_OCR_MODELS
+    assert cfg.get_ocr_prompt() == cfg.prompts.OCR
+
+
+def test_pane_doc_has_ocr_controls():
+    """De front-end bouwt de wiskunde-modus-id's per conventie op; komt er één
+    niet meer overeen met index.html, dan faalt de JS stil."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    html = open(os.path.join(root, "templates", "index.html"), encoding="utf-8").read()
+    for element in (
+        'id="ocr-opts"', 'id="ocr-mode"', 'id="ocr-model"',
+        'id="settings-ocr-models"', 'id="settings-add-ocr-model"', 'id="prompt-ocr"',
+    ):
+        assert element in html, f"{element} ontbreekt in index.html"

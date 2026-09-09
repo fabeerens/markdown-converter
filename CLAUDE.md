@@ -9,7 +9,9 @@ De UI heeft vier tabbladen: **Jurisprudentie** (HvJ EU / EHRM / NL via ECLI of l
 (bestand(en) slepen óf link(s) naar een bestand plakken) en **Tekst plakken** (kale of
 verrijkte tekst rechtstreeks in een `contenteditable`-vak plakken/typen). Tabs 1 en 2
 posten beide naar `/api/convert/link` (auto-detectie); tab 3 naar `/api/convert/file` of
-`/api/convert/file-url`; tab 4 naar `/api/convert/text`. Tabs 1–3 ondersteunen **meerdere
+`/api/convert/file-url` (of, met de **wiskunde-modus** aan, naar de streaming-varianten
+`/api/convert/file/ocr` resp. `/api/convert/file-url/ocr` — zie "Wiskunde-modus" hieronder);
+tab 4 naar `/api/convert/text`. Tabs 1–3 ondersteunen **meerdere
 documenten tegelijk** (zie "Meerdere documenten" hieronder); tab 4 is één plakvak per keer
 — een batch van tekstvakken past niet bij hoe je knipt-en-plakt. Bij tabs 1–3 kun je
 bovendien een hele **lijst** in één keer aanleveren (zie "Batch-import" onder Front-end).
@@ -33,6 +35,7 @@ mdconv/
   api.py                   ALLE routes, dun: valideren → één domeinfunctie → JSON
   errors.py                ConversionError/ConfigError/UpstreamError (+ .status)
   net.py                   gedeelde gepoolde requests-Sessions (retries alleen op GET)
+  ocr.py                   wiskunde-modus: PDF pagina-voor-pagina door een vision-LLM
   state.py                 StateFile: mtime-gecachet lezen, flock + atomair schrijven
   render.py                gedeelde HTML→markdown: tidy, koppen promoveren, marker-tabellen
   version.py               lui berekend versienummer/buildteller voor de footer
@@ -346,6 +349,37 @@ accountregistratie namens de gebruiker):
     één zip met alle documenten en per document een eigen `attachments/<naam>/`-map. `attachments.get()` **verwijdert niets** — nogmaals downloaden mag
     gewoon; opruimen gebeurt lui, bij elke nieuwe `store()`-aanroep worden sets ouder dan
     2 uur weggegooid (geen cron/achtergrondtaak nodig voor deze single-user lokale tool).
+- **Wiskunde-modus** (`mdconv/ocr.py`, endpoints `/api/convert/file/ocr` +
+  `/api/convert/file-url/ocr`): een **opt-in** route bij Documentupload (checkbox `#ocr-mode`),
+  alleen voor PDF en alleen met een OpenRouter-sleutel. De gewone tekstextractie
+  (pdf-inspector/MarkItDown) leest de tekstlaag lineair; LaTeX-wiskunde uit een Beamer-PDF
+  komt daar onbruikbaar uit (sub-/superscripts weg, `\underbrace`/grote accolades als
+  glyph-brij, de index *i* als Private-Use-glyph `U+EBE9` zonder `ToUnicode`). De semantische
+  wiskunde staat niet in de tekstlaag — alleen visueel herlezen helpt.
+  - **`pdf_images.render_pages()`** rastert elke pagina met `pdftoppm -png -r <dpi>` (poppler,
+    dezelfde binaries als `extract_images`; `render_available()` checkt `pdftoppm`/`pdfinfo`).
+    `page_count()` (via `pdfinfo`) weigert eerst een PDF > `_MAX_PAGES` (100) — een bewust
+    trage modus (elke pagina = één apart vision-verzoek) hoort een harde grens te hebben.
+    `_DPI` = 200, bij te stellen met de env-var `OCR_DPI`. Paginasortering is **numeriek**
+    (`page-2` vóór `page-10`), niet lexicaal.
+  - **`openrouter.ocr_page_stream(png_bytes, …)`** is `stream_chunk` met een `image_url`
+    data-URI als user-content i.p.v. tekst — het model moet dus multimodaal zijn. Géén
+    "lege stream = fout"-check (een blanco pagina levert legitiem niets op); `finish_reason
+    == "length"` betekent hier dat één pagina niet in het uitvoerplafond paste.
+  - **`ocr.ocr_pdf_stream()`** spiegelt `cleanup.clean_stream`: pagina's ná elkaar
+    (documentvolgorde bij live meelezen), `\n\n` ertussen, één `Progress`-marker per pagina
+    (`produced_tokens` = pagina, `expected_tokens` = totaal), één opgeteld `Usage` aan het
+    eind, `_cancel.clear(request_id)` in een `finally`.
+  - **Streaming + annuleren hergebruiken de opschoon-infrastructuur volledig**: dezelfde
+    `_frame`/`STREAM_ERROR_SENTINEL` met de `CLEAN_`-tagnamen (bewust niet hernoemd — dan
+    hoeft `makeStreamParser` niet te wijzigen), dezelfde proces-brede `mdconv.cleanup.cancel`-
+    set en hetzelfde `/api/clean/cancel`-endpoint, en aan de front-end de `activeCleans`-Map
+    + `#cancel-clean`-knop.
+  - **Modellen + prompt staan in het instellingenpaneel** (`DEFAULT_OCR_MODELS`,
+    `prompts.OCR`, `ocr_models`/`ocr_prompt` in `settings.json`) met dezelfde "leeg =
+    standaard"-semantiek als de opschoonmodellen. `DEFAULT_OCR_MODELS`:
+    `qwen/qwen3.7-flash` en `openai/gpt-5.6-luna-pro`. Env-terugval `OCR_MODEL`. Deze prompt
+    zit **niet** in `prompts.DEFAULTS`/`PROFILES` (dat stuurt de opschoon-dropdown).
 - **Tekst plakken** (`pasted_text.py`, endpoint `/api/convert/text`): de front-end stuurt
   zowel `html` (`element.innerHTML` van het `contenteditable`-vak, dus de klembord-opmaak
   zoals de browser die bij plakken invoegt) als `text` (`element.innerText`, kaal) mee.
@@ -371,7 +405,8 @@ accountregistratie namens de gebruiker):
 ## AI-opschoning (`mdconv/cleanup/`)
 
 - Via **OpenRouter** (OpenAI-compatibele API), niet de Anthropic API. Plain `requests`.
-- Sleutel: `OPENROUTER_API_KEY` in `.env`. Optioneel `LLM_MODEL`, `OPENROUTER_BASE_URL`.
+- Sleutel: `OPENROUTER_API_KEY` in `.env`. Optioneel `LLM_MODEL`, `OPENROUTER_BASE_URL`,
+  `OCR_MODEL` (standaardmodel wiskunde-modus) en `OCR_DPI` (rasterresolutie, standaard 200).
 - Standaardmodel: **`~anthropic/claude-haiku-latest`** — de **tilde `~` hoort erbij** (OpenRouter's
   auto-updating "latest"-alias). Niet "corrigeren" naar de versie zonder tilde.
 - `config.base_url()` normaliseert (strip een eventuele `/chat/completions`), want de code plakt dat pad zelf.
@@ -627,6 +662,16 @@ document zelf stonden en uit elkaar liepen bij het wisselen van tabblad.
   `-2`-suffix (`_unique_name()`), anders zou het tweede het eerste overschrijven en was
   dat document stil verdwenen. `saveDownload()` is de gedeelde helper van
   `downloadActive()` en `downloadAll()`.
+- **Wiskunde-modus** (`#ocr-mode`-checkbox + `#ocr-model`-keuze bij Documentupload, alleen
+  zichtbaar bij `llm_available && ocr_available`): `uploadFiles()`/`fetchFileUrls()`
+  vertakken bij `ocrModeRequested()` naar `runOcr()`. Die verwerkt PDF's **ná elkaar** (niet
+  de 4-brede `runBatch`-pool — elke PDF is al N vision-verzoeken) via `streamOnePdf()`, dat
+  `runClean()` spiegelt: het document wordt **eerst leeg aangemaakt** (`addDoc({markdown:
+  "", activate: true})`) en loopt al streamend vol, met dezelfde `activeCleans`-Map,
+  `#cancel-clean`-knop, `makeStreamParser` en `setProgress` als het opschonen. De
+  bronvermelding (`wiskunde-OCR (<model>) • <naam>`) bouwt de front-end zelf op. Bij
+  annuleren blijft de tekst-tot-dan staan; komt er niets bruikbaars binnen, dan wordt het
+  lege tabblad weer opgeruimd (`closeDoc`).
 - **State per document**: `{id, title, filenameBase, source, kind, allowObsidian,
   obsidian, model, markdown, cleaned}` in `state.docs`. `obsidian`/`model` zijn **per
   document**, dus je kunt het ene document als Obsidian-notitie opschonen en het andere
@@ -734,12 +779,14 @@ regel), inclusief de vloeiende tabbalk-indicator.
   minuten op OpenRouter wacht; met alleen processen bezet zo'n verzoek een hele worker en
   staat de tool stil. `docker-compose.yml` bindt bewust op
   `127.0.0.1` — de tool heeft **geen auth**; publiek ontsluiten alleen achter reverse proxy + auth
-  (het `/api/convert/file-url`-endpoint is een SSRF-vector).
+  (`/api/convert/file-url` én `/api/convert/file-url/ocr` zijn SSRF-vectoren).
 - **poppler-utils** (apt) wordt in de Dockerfile meegeïnstalleerd voor het extraheren van
-  losse afbeeldingen (`mdconv/sources/pdf_images.py`). Lokaal (macOS via `run.sh`):
-  `brew install poppler`.
-- Env-vars via compose: `OPENROUTER_API_KEY`, `LLM_MODEL`, `OPENROUTER_BASE_URL`. Code behandelt
-  lege strings als "niet gezet" (`or DEFAULT`), zodat compose's `${VAR:-}` de defaults niet breekt.
+  losse afbeeldingen én het rasteren van pagina's voor de wiskunde-modus
+  (`mdconv/sources/pdf_images.py` — `pdfimages`/`pdfinfo`/`pdftoppm`). Lokaal (macOS via
+  `run.sh`): `brew install poppler`.
+- Env-vars via compose: `OPENROUTER_API_KEY`, `LLM_MODEL`, `OPENROUTER_BASE_URL`, `OCR_MODEL`,
+  `OCR_DPI`. Code behandelt lege strings als "niet gezet" (`or DEFAULT`), zodat compose's
+  `${VAR:-}` de defaults niet breekt.
 
 ## Versienummer (footer) — git-onafhankelijk
 - `VERSION`-bestand = handmatige major.minor.patch. Build-nummer + installatiedatum komen
@@ -757,17 +804,19 @@ regel), inclusief de vloeiende tabbalk-indicator.
   weggeschreven bestand nooit als geldige staat gelezen kan worden.
 
 ## Tests
-`.venv/bin/python -m pytest tests/ -q` — 184 karakteriseringstests die het gedrag
+`.venv/bin/python -m pytest tests/ -q` — 195 karakteriseringstests die het gedrag
 vastleggen in plaats van het te beschrijven: `detect_source`-precedentie, ELI→CELEX,
 de geconsolideerde-CELEX-afhandeling (datum behouden, preambule invoegen, en de vier
 terugvalpaden als dat niet lukt), de versie-terugvalladder (nieuwste versie op of vóór de
 gevraagde datum, nooit een latere, en een notitie die niet beweert dat een bestaande versie
 niet bestaat), de chunking-ladder (ook zonder witregels en met één te
 lang woord), de PDF-reflow, de Formex-parser, de settings-semantiek (leeg wist terug naar
-standaard), de batch-zip (eigen naam en eigen `attachments/`-map per document) en de
-Nederlandse foutmeldingen. Twee tests pinnen de front-end vast waar Python niet bij de
-JS kan: de id's die `app.js` per conventie opbouwt (`#bulk-<kind>-text` enz., per
-lijst-tabblad; `doc` zonder `-lang`) moeten in `index.html` bestaan, en het CELEX-patroon
+standaard), de batch-zip (eigen naam en eigen `attachments/`-map per document), de
+wiskunde-modus (paginasortering + paginagrens bij het rasteren, de stream-orchestratie:
+`\n\n`-join, voortgang per pagina, opgeteld tokengebruik, stil annuleren, en de
+streaming-endpoint) en de Nederlandse foutmeldingen. Enkele tests pinnen de front-end vast
+waar Python niet bij de JS kan: de id's die `app.js` per conventie opbouwt
+(`#bulk-<kind>-text`, `#ocr-mode` enz.) moeten in `index.html` bestaan, en het CELEX-patroon
 mag maar één keer in `app.js` voorkomen. Ze raken geen netwerk. Verander je de structuur, dan hoeven alleen de
 imports mee te verhuizen; blijft de suite groen, dan is het gedrag identiek.
 

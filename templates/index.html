@@ -110,6 +110,15 @@
           <input type="checkbox" id="extract-images">
           <span>Voor PDF's: losse ingesloten afbeeldingen meenemen als bijlagen</span>
         </label>
+        <div class="ocr-opts" id="ocr-opts" hidden>
+          <label class="checkbox" id="ocr-mode-wrap">
+            <input type="checkbox" id="ocr-mode">
+            <span>Wiskunde-modus: PDF's pagina-voor-pagina transcriberen met een vision-model
+              (Markdown + LaTeX-formules). Trager en kost OpenRouter-tokens; vervangt de snelle
+              tekstextractie.</span>
+          </label>
+          <select class="select" id="ocr-model" aria-label="Model voor de wiskunde-modus" hidden></select>
+        </div>
         <div class="or">of plak een of meer links naar bestanden</div>
         <div class="seg" role="group" aria-label="Invoervorm">
           <button type="button" class="seg-btn" id="mode-doc-rows" aria-pressed="true">Losse regels</button>
@@ -234,6 +243,18 @@
       </section>
 
       <section>
+        <h3>Wiskunde-OCR — modellen <button type="button" class="reset" id="reset-ocr-models">Standaardlijst</button></h3>
+        <p class="hint" style="margin:0 0 8px">
+          Modellen voor de wiskunde-modus bij Documentupload. Moeten multimodaal zijn
+          (afbeeldingen accepteren). Leeg = de standaardlijst.
+        </p>
+        <div class="rows" id="settings-ocr-models"></div>
+        <div class="row-actions">
+          <button type="button" class="btn btn-dashed" id="settings-add-ocr-model">+ Model toevoegen</button>
+        </div>
+      </section>
+
+      <section>
         <h3>Prompt — algemeen <button type="button" class="reset" id="reset-generic">Standaard</button></h3>
         <label class="visually-hidden" for="prompt-generic">Prompt voor algemene documenten</label>
         <textarea id="prompt-generic"></textarea>
@@ -249,6 +270,10 @@
         <h3 style="margin-top:16px">Prompt — Vertalen naar het Nederlands <button type="button" class="reset" id="reset-translate_nl">Standaard</button></h3>
         <label class="visually-hidden" for="prompt-translate_nl">Prompt voor de vertaling</label>
         <textarea id="prompt-translate_nl"></textarea>
+
+        <h3 style="margin-top:16px">Prompt — Wiskunde-modus (OCR) <button type="button" class="reset" id="reset-ocr">Standaard</button></h3>
+        <label class="visually-hidden" for="prompt-ocr">Prompt voor de wiskunde-transcriptie</label>
+        <textarea id="prompt-ocr"></textarea>
       </section>
 
       <div class="dialog-actions">

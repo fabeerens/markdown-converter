@@ -17,6 +17,7 @@ from . import chunking, config, openrouter, prompts
 # Publieke namen die de API-laag gebruikt.
 PROFILES = prompts.PROFILES
 get_model_choices = config.get_model_choices
+get_ocr_models = config.get_ocr_models
 get_chunk_tokens = config.get_chunk_tokens
 get_prompt = config.get_prompt
 settings_payload = config.settings_payload

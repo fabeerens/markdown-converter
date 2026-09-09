@@ -18,7 +18,7 @@ from urllib.parse import unquote, urlparse
 import requests
 from flask import Blueprint, Response, current_app, jsonify, render_template, request, send_file
 
-from . import attachments, cleanup, net, sources, version
+from . import attachments, cleanup, net, ocr, sources, version
 from .errors import ConversionError
 from .sources import pdf_images
 
@@ -74,11 +74,14 @@ def config():
     return jsonify(
         llm_available=cleanup.is_available(),
         models=cleanup.get_model_choices(),
+        ocr_models=cleanup.get_ocr_models(),
         profiles=list(cleanup.PROFILES),
         # Bepaalt of de UI de toggle "Losse afbeeldingen extraheren" bij
         # Documentupload aanbiedt — alleen zinvol als poppler-utils
         # (pdfimages/pdfinfo) daadwerkelijk geïnstalleerd is.
         extract_images_available=pdf_images.available(),
+        # Idem voor de wiskunde-modus: die rastert met pdftoppm.
+        ocr_available=pdf_images.render_available(),
     )
 
 
@@ -187,6 +190,99 @@ def _filename_from_url(url: str, content_type: str) -> str:
 
 
 # --------------------------------------------------------------------------
+# Wiskunde-modus: PDF pagina-voor-pagina door een vision-LLM (zie mdconv/ocr.py)
+# --------------------------------------------------------------------------
+
+def _ocr_guard(filename: str) -> None:
+    """Vooraf-validatie voor de wiskunde-modus; gooit een nette JSON-fout."""
+    if not filename.lower().endswith(".pdf"):
+        raise ConversionError("De wiskunde-modus werkt alleen met PDF-bestanden.")
+    if not cleanup.is_available():
+        raise ConversionError(
+            "Wiskunde-modus niet beschikbaar: geen OpenRouter API-sleutel. "
+            "Zet de omgevingsvariabele OPENROUTER_API_KEY en herstart de tool."
+        )
+    if not pdf_images.render_available():
+        raise ConversionError(
+            "Wiskunde-modus vereist poppler-utils (pdftoppm), dat niet op dit systeem is "
+            "geïnstalleerd. Zie CLAUDE.md voor installatie-instructies."
+        )
+
+
+def _ocr_stream_response(pdf_bytes: bytes, model, request_id):
+    """Streamt de getranscribeerde Markdown, met dezelfde frame-conventies als
+    /api/clean/stream (`_frame` / STREAM_ERROR_SENTINEL) zodat de front-end-
+    parser hergebruikt kan worden. De front-end bouwt zelf de bronvermelding op
+    (model + bestandsnaam)."""
+    def generate():
+        try:
+            for item in ocr.ocr_pdf_stream(pdf_bytes, model=model, request_id=request_id):
+                if isinstance(item, cleanup.Progress):
+                    yield _frame("PROGRESS", dict(item))
+                elif isinstance(item, cleanup.Usage):
+                    yield _frame("USAGE", dict(item))
+                else:
+                    yield item
+        except ConversionError as e:
+            yield STREAM_ERROR_SENTINEL + e.message
+        except Exception as e:  # noqa: BLE001 — moet als leesbare melding aankomen
+            yield STREAM_ERROR_SENTINEL + str(e)
+
+    response = Response(generate(), mimetype="text/plain")
+    response.headers["X-Accel-Buffering"] = "no"
+    response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
+@bp.post("/api/convert/file/ocr")
+def convert_file_ocr():
+    """Een geüploade PDF via de wiskunde-modus omzetten (streaming)."""
+    if "file" not in request.files:
+        raise ConversionError("Geen bestand ontvangen.")
+    upload = request.files["file"]
+    if not upload.filename:
+        raise ConversionError("Leeg bestand.")
+    _ocr_guard(upload.filename)
+    data = upload.read()
+    if not data.strip():
+        raise ConversionError("Het bestand is leeg.")
+    model = (request.form.get("model") or "").strip() or None
+    request_id = (request.form.get("request_id") or "").strip() or None
+    return _ocr_stream_response(data, model, request_id)
+
+
+@bp.post("/api/convert/file-url/ocr")
+def convert_file_url_ocr():
+    """Een PDF achter een link via de wiskunde-modus omzetten (streaming).
+
+    Let op: haalt een willekeurige URL op namens de server — dezelfde
+    SSRF-overweging als /api/convert/file-url (geen auth, niet zonder reverse
+    proxy + auth op internet).
+    """
+    data_in = _payload()
+    url = (data_in.get("url") or "").strip()
+    if not re.match(r"^https?://", url, re.I):
+        raise ConversionError("Voer een geldige URL in (beginnend met http:// of https://).")
+
+    try:
+        r = net.documents().get(url, timeout=_REMOTE_TIMEOUT)
+    except requests.exceptions.RequestException as e:
+        raise ConversionError(f"Kon het bestand niet ophalen: {e}") from e
+    if r.status_code != 200:
+        raise ConversionError(f"Kon het bestand niet ophalen (status {r.status_code}).")
+    if not r.content:
+        raise ConversionError("Het opgehaalde bestand is leeg.")
+    if len(r.content) > _MAX_REMOTE_BYTES:
+        raise ConversionError("Bestand is groter dan 40 MB.")
+
+    filename = _filename_from_url(url, r.headers.get("Content-Type", ""))
+    _ocr_guard(filename)
+    model = (data_in.get("model") or "").strip() or None
+    request_id = (data_in.get("request_id") or "").strip() or None
+    return _ocr_stream_response(r.content, model, request_id)
+
+
+# --------------------------------------------------------------------------
 # AI-opschoning
 # --------------------------------------------------------------------------
 
@@ -281,9 +377,10 @@ def clean_stream():
 
 @bp.post("/api/clean/cancel")
 def clean_cancel():
-    """Markeer een lopend /api/clean/stream-verzoek (zelfde `request_id`) als
-    geannuleerd. Best-effort en stil: een onbekende of al voltooide
-    `request_id` is geen fout — er is dan gewoon niets meer te annuleren."""
+    """Markeer een lopend streaming-verzoek (zelfde `request_id`) als geannuleerd
+    — zowel /api/clean/stream als de wiskunde-modus (/api/convert/file/ocr),
+    die dezelfde proces-brede annuleringsset gebruiken. Best-effort en stil: een
+    onbekende of al voltooide `request_id` is geen fout."""
     request_id = (_payload().get("request_id") or "").strip()
     if request_id:
         cleanup.cancel_request(request_id)
