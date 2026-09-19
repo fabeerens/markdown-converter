@@ -106,7 +106,7 @@ def convert_link():
     lang = (data.get("lang") or "NL").strip()
     if not query:
         raise ConversionError("Voer een CELEX-nummer, ECLI, of link in.")
-    return jsonify(sources.from_link(query, lang).as_json())
+    return jsonify(_doc_payload(sources.from_link(query, lang)))
 
 
 @bp.post("/api/convert/text")
@@ -117,7 +117,7 @@ def convert_text():
     text = data.get("text") or ""
     if not html.strip() and not text.strip():
         raise ConversionError("Plak eerst tekst in het vak.")
-    return jsonify(sources.from_pasted_text(html, text).as_json())
+    return jsonify(_doc_payload(sources.from_pasted_text(html, text)))
 
 
 def _doc_payload(doc) -> dict:
@@ -125,6 +125,10 @@ def _doc_payload(doc) -> dict:
     afbeeldingen uit een PDF zijn geëxtraheerd — de binaire data zelf gaat
     nooit in JSON mee, zie `mdconv/attachments.py`."""
     payload = doc.as_json()
+    # De herkomst (met de volledige bron-HTML) is voor de kennisbank, die haar
+    # buiten de UI om ophaalt. De browser doet er niets mee en downloadt een
+    # los `.md`-bestand; meesturen zou alleen het antwoord verdubbelen.
+    payload.pop("provenance", None)
     if doc.attachments:
         payload["attachments_token"] = attachments.store(doc.attachments)
         payload["attachment_count"] = len(doc.attachments)

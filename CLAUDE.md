@@ -137,7 +137,19 @@ accountregistratie namens de gebruiker):
     xhtml-skelet: `div.eli-main-title#tit_1` → `div.eli-subdivision#pbl_1` (de preambule) →
     `div.eli-subdivision#enc_1` (de artikelen). In een geconsolideerde versie ontbreekt precies
     `#pbl_1`. `_with_base_preamble()` haalt dat blok uit het origineel en zet het terug vóór
-    `#enc_1` — op zijn eigen plek, dus vóór Artikel 1, met één cursieve herkomstregel erboven.
+    `#enc_1` — op zijn eigen plek, dus vóór Artikel 1, met één herkomstnotitie erboven als
+    **blockquote met label** (`> **Overwegingen:** …`), niet als cursieve regel: een volledig
+    cursieve regel is in Markdown nadruk, geen herkomstvermelding, en een intakepoort die op
+    `^\*[^*\n]{20,}\*\s*$` filtert weigert zo'n bestand terecht.
+  - **De voetnootdefinities staan niet ín `#pbl_1` maar ernaast**, als `p.oj-note`-siblings
+    binnen `div.eli-container` (ná `#fnp_1` en een `hr.oj-note`). Wie alleen `#pbl_1` kopieert
+    neemt de overwegingen mét hun verwijzingen (1)(2)(3) mee maar laat de definities achter —
+    dode verwijzingen, en niets dat dat meldt. `_attach_preamble_notes()` volgt daarom de href
+    van elk anker bínnen `#pbl_1` naar zijn `p.oj-note`-ouder en verhuist alléén die noten, ná
+    de laatste `div.eli-subdivision[id^=rct_]` (dus vóór de vaststellingsformule, waar het
+    origineel ze ook heeft). Geen aantal in de code: de noten van de artikelen blijven vanzelf
+    achter, want die heeft de geconsolideerde tekst zelf al. De `hr` gaat bewust niet mee — die
+    zou een `---` midden in de preambule worden.
   - De CELEX van de basishandeling staat **machineleesbaar in het document zelf**: de eerste
     `►B`-pijl (`p.arrow > a`) linkt ernaartoe en draagt het nummer in zijn `title`-attribuut.
     `_base_celex()` leest dat; ontbreekt de pijl, dan wordt het nummer afgeleid (sector 0 → 3).
@@ -180,7 +192,7 @@ accountregistratie namens de gebruiker):
       iemand een willekeurige datum (bv. "vandaag"), dan is de nieuwste versie op of vóór die
       datum precies de versie die op dat moment gold. **Latere versies komen nooit in de plaats** —
       die verwerken wijzigingen die op de gevraagde datum nog niet golden.
-    - **Nooit stil.** Elke terugval zet een cursieve notitie bovenaan de tekst én noemt de
+    - **Nooit stil.** Elke terugval zet een notitie als blockquote bovenaan de tekst én noemt de
       afwijking in de bronvermelding, want stilzwijgend de oorspronkelijke handeling teruggeven
       is precies de val die deze code eerder maakte (zie de ELI-datum hierboven) — dan lijkt het
       origineel de geconsolideerde versie. `_fallback_reason()` levert die ene zin voor zowel de
@@ -190,13 +202,46 @@ accountregistratie namens de gebruiker):
       door elkaar liepen: geen eerdere versie / eerdere versie niet in deze taal / versielijst
       onbekend. De eerste versie beweerde in dezelfde alinea "geen eerdere versie" én somde de
       bestaande versies op.
+  - **CLG-markup is niet OJ-markup.** De geconsolideerde xhtml zet een lidnummer níét in een
+    tweekoloms tabel maar in div/span-markup: `<span class="no-parag">1.</span>` (254× in
+    02019R0881-20250204) met de tekst in de **volgende sibling** `div.norm.inline-element`, en
+    `<div class="grid-container grid-list">` met `grid-list-column-1`/`-2` (223×: 196 letters,
+    1 `c bis)`, 26 cijfers). Samen precies de 280 losse lidnummers die de conversie opleverde.
+    Beide vormen komen **0× voor in de basishandeling** — daar zijn het 326 echte `<table>`s.
+    `_normalise_clg_markup()` loopt daarom over de *markers* (niet over de containers, want
+    `div.norm` nest in zichzelf) en gebruikt `render.marker_prefix`/`prefix_into`, zodat een
+    CLG-marker regel-voor-regel hetzelfde rendert als een tabelmarker. Géén `_is_marker`-filter:
+    bij een tabel is de vorm het enige houvast, hier zegt de klassenaam het al — en dat filter
+    zou `c bis)` juist stil laten verdwijnen. Staat er een wijzigingsmarkering (`▼M1`) vóór de
+    tekst, dan wordt die eerst naar buiten getild: hij houdt zijn eigen regel, maar mag het
+    lidnummer niet opslokken.
+  - **Witruimte uit de bron is geen regeleinde.** De CLG-bron is pretty-printed, en markdownify
+    neemt een newline letterlijk over. Een voetnootanker (`(<a>\n<span>1</span>\n</a>)`) en een
+    inline `►M1` midden in een alinea vielen zo uiteen over drie regels — `strip=["a"]` haalt de
+    tag weg maar niet de regeleinden, en `tidy()` voegt regels nooit samen.
+    `_collapse_source_newlines()` maakt daar weer gewone witruimte van; binnen een nootanker
+    verdwijnt ze helemaal, anders zou `(1)` als `( 1 )` lezen.
+  - **De volgorde is de ingreep**, niet een detail. `_prepare_consolidated()` = markers
+    samenvoegen → preambule invoegen → witruimte normaliseren. Het samenvoegen selecteert op
+    CLG-klassen en mag de ingevoegde preambule (OJ-markup: `span.oj-super`) niet raken; het
+    normaliseren van witruimte geldt juist óók daarvoor, want anders breekt de net teruggezette
+    `p.oj-note` alsnog tussen nummer en tekst. Dat staat vast in de functiecompositie, niet in
+    een opmerking die iemand kan negeren.
+  - **Bewust beperkt tot sector 0 + datum.** De selectors zijn zelf-gated (0 treffers zonder die
+    klassen), dus verruimen is later één `if` minder. Nu al verruimen zet `_fetch_cellar_ecli`
+    (EU-rechtspraak) in de vuurlinie zonder dat daar een meting voor is.
+  - **Cellar 300 gaat door dezelfde poort.** `_fetch_multipart()` sloeg de hele voorbewerking
+    over, dus juist een grote geconsolideerde tekst kreeg preambule noch notitie. Elk onderdeel
+    loopt nu door `_prepare_consolidated()`, met `with_preamble=(index == 0)`: de preambule hoort
+    één keer, in de handeling zelf, niet nog eens bij elke bijlage.
   - `detect_source` heeft een **CELEX-uitsluiting** nodig bij de HUDOC-item-id-test:
     `01999L0001-20040501` bevat "001-20040501", precies de vorm van een HUDOC-id. Dezelfde
     volgorde-val zit in `deriveName()` in `app.js` (daar staat de CELEX-test daarom vóór de
     HUDOC-test).
 - **EUR-Lex koppen**: koppen komen als `<p>` binnen; `promote_headings` promoot volledig-geankerde
   regels ("Artikel N", "HOOFDSTUK I") naar `##`/`###`. Genummerde alinea's (overwegingen, arrest-
-  punten) staan in de xhtml als **tweekoloms-tabellen**; `_unwrap_marker_tables` zet die om naar
+  punten) staan in de xhtml als **tweekoloms-tabellen**; `_unwrap_marker_tables` — dat
+  **uitsluitend** op `<table>` met exact 2 directe cellen per rij werkt — zet die om naar
   alinea's/lijst-items (nummer ín het bestaande blok, niet nesten).
 - **HUDOC**: body via `hudoc.echr.coe.int/app/conversion/docx/html/body?library=ECHR&id={itemid}`.
   Een EHRM-**ECLI** → itemid via de zoek-API: `…/app/query/results?query=ecli:"<ECLI>"&select=itemid,ecli,languageisocode&rankingmodelid=11111_Ranking&sort=&facetquery=&start=0&length=30`
@@ -745,9 +790,11 @@ regel), inclusief de vloeiende tabbalk-indicator.
   weggeschreven bestand nooit als geldige staat gelezen kan worden.
 
 ## Tests
-`.venv/bin/python -m pytest tests/ -q` — 181 karakteriseringstests die het gedrag
+`.venv/bin/python -m pytest tests/ -q` — 192 karakteriseringstests die het gedrag
 vastleggen in plaats van het te beschrijven: `detect_source`-precedentie, ELI→CELEX,
-de geconsolideerde-CELEX-afhandeling (datum behouden, preambule invoegen, en de vier
+de CLG-markupnormalisatie (lidnummers, lettermarkers, voetnootankers), de
+voetnootdefinities die met de preambule meereizen, de notitievorm die een intakepoort
+passeert, de geconsolideerde-CELEX-afhandeling (datum behouden, preambule invoegen, en de vier
 terugvalpaden als dat niet lukt), de versie-terugvalladder (nieuwste versie op of vóór de
 gevraagde datum, nooit een latere, en een notitie die niet beweert dat een bestaande versie
 niet bestaat), de chunking-ladder (ook zonder witregels en met één te
@@ -767,6 +814,20 @@ oppikten — met threaded Flask en parallelle uploads was dat echt bereikbaar.
 - Alles lokaal (macOS-launcher) óf via Docker. **Geen build-stap**, geen Node.js: de UI is
   platte HTML/CSS/JS. De opmaak lijkt op Radix Themes, maar er is geen Radix-dependency.
 - Toelichtingen en UI-teksten zijn in het Nederlands.
+- **Bronspecifieke voorbewerking hoort in de bronmodule, niet in `render.py`.** Die module is
+  bewust **bronloos**: geen klassenamen, geen profielparameter. `html_to_markdown` wordt gedeeld
+  met `hudoc.py`, `container_to_markdown` met `wetten.py`, `pasted_text.py`,
+  `fr_conseil_constitutionnel.py` en `de_openlegaldata.py` — en twee daarvan lossen een bijna
+  identiek markerpatroon al zélf op (`span.numero-considerant`, `span.absatzRechts` via
+  `_merge_absatz_pairs()`). Het spoor dat je volgt: `wetten.py` strip't portal-ruis op de soup,
+  `fr_conseil_constitutionnel.py` kiest zijn eigen container, `eurlex.py` normaliseert CLG-markup
+  — allemaal vóór de gedeelde render. Er is een test die afdwingt dat CLG-klassenamen niet in
+  `render.py` terechtkomen.
+- **De herkomst is niet voor de UI.** Een bron levert naast de markdown een `Herkomst`
+  (`mdconv/herkomst.py`) met de bron-HTML en de geldigheid; de kennisbank van Sander haalt die
+  buiten de UI om op en schrijft haar als `<naam>.source.json`. `_doc_payload()` haalt haar
+  bewust uit het JSON-antwoord en de download blijft een los `.md`-bestand: een zip met een
+  zijbestand zou de gewone gebruiker alleen in de weg zitten. Een test legt dat vast.
 - Domeincode kent geen Flask: alleen `mdconv/api.py` importeert het. Fouten gaan als
   `ConversionError` met een Nederlandse boodschap naar boven.
 - Geen `.venv`, `.env` of secrets in versiebeheer (zie `.gitignore`).

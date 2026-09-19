@@ -14,6 +14,9 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from ..herkomst import Herkomst
+from ..source_structure import capture_source_documents, bind_structure
+
 from . import (
     be_juportal,
     de_openlegaldata,
@@ -71,9 +74,23 @@ class Document:
     source: str
     kind: str = KIND_DOCUMENT
     attachments: tuple = ()
+    # Wat er bij het omzetten opviel (bv. koppen die verdwenen). Gaat mee naar
+    # de UI én naar het herkomstbestand, zodat een afnemer er alsnog op kan
+    # afketsen als de gebruiker het wegklikt.
+    warnings: tuple[str, ...] = ()
+    # Waar dit vandaan komt; wordt naast de markdown als zijbestand geleverd.
+    provenance: Herkomst | None = None
 
     def as_json(self) -> dict:
-        return {"markdown": self.markdown, "source": self.source, "kind": self.kind}
+        payload = {
+            "markdown": self.markdown,
+            "source": self.source,
+            "kind": self.kind,
+            "warnings": list(self.warnings),
+        }
+        if self.provenance is not None:
+            payload["provenance"] = self.provenance.as_json()
+        return payload
 
 
 # --------------------------------------------------------------------------
@@ -112,20 +129,48 @@ def detect_source(query: str) -> str | None:
     return None
 
 
+def _uitpakken(resultaat) -> tuple[str, str, Herkomst | None]:
+    """Een bron mag `(markdown, bron)` of `(markdown, bron, herkomst)` teruggeven.
+
+    Zo hoeft niet elke bronmodule tegelijk om: wie nog geen herkomst kan leveren
+    blijft een paar teruggeven en krijgt `None`. Het contract is daarmee wel
+    losser dan "een tuple van twee" — er is een test die dat vastlegt.
+    """
+    markdown, note, *rest = resultaat
+    return markdown, note, (rest[0] if rest else None)
+
+
 def from_link(query: str, lang: str = "NL") -> Document:
     """Los een link/identifier op naar een document."""
-    source = detect_source(query)
-    if source == "rechtspraak":
-        markdown, note = rechtspraak.fetch(query)
-    elif source == "hudoc":
-        markdown, note = hudoc.fetch(query, lang)
-    elif source == "wetten":
-        markdown, note = wetten.fetch(query)
-    elif source == "national":
-        markdown, note = _national_source(query).fetch(query)
-    else:
-        markdown, note = eurlex.fetch_and_convert(query, lang)
-    return Document(markdown=markdown, source=note, kind=kind_for_source(note))
+    with capture_source_documents() as documents:
+        source = detect_source(query)
+        if source == "rechtspraak":
+            resultaat = rechtspraak.fetch(query)
+        elif source == "hudoc":
+            resultaat = hudoc.fetch(query, lang)
+        elif source == "wetten":
+            resultaat = wetten.fetch(query)
+        elif source == "national":
+            resultaat = _national_source(query).fetch(query)
+        else:
+            resultaat = eurlex.fetch_and_convert(query, lang)
+    markdown, note, herkomst = _uitpakken(resultaat)
+    if documents:
+        main = next((part for part in reversed(documents) if part["role"] != "preamble"), documents[0])
+        if herkomst is None:
+            identifier = main.get("identifier") or ""
+            herkomst = Herkomst(format="eurlex-html", language=(lang or "NL").lower(),
+                                celex=identifier if not identifier.startswith("ECLI:") else None,
+                                ecli=identifier if identifier.startswith("ECLI:") else None,
+                                source_url=main.get("source_url"), requested_url=query)
+        herkomst = bind_structure(herkomst, markdown, documents)
+    return Document(
+        markdown=markdown,
+        source=note,
+        kind=kind_for_source(note),
+        warnings=herkomst.waarschuwingen if herkomst else (),
+        provenance=herkomst,
+    )
 
 
 # --------------------------------------------------------------------------
