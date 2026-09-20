@@ -1,4 +1,4 @@
-"""Nederlandse wetgeving van wetten.overheid.nl.
+"""Nederlandse wetgeving uit officiële BWB-XML, met portal-HTML als terugval.
 
 Invoer mag een volledige wetten.overheid.nl-URL zijn of een BWB-identifier
 (eventueel met versiedatum):
@@ -6,8 +6,10 @@ Invoer mag een volledige wetten.overheid.nl-URL zijn of een BWB-identifier
   BWBR0040940
   BWBR0040940/2021-07-01
 
-Er is geen bruikbare XML-export; de portal-HTML is server-rendered en bevat de
-volledige tekst met echte kop-tags. De opbouw van de pagina:
+De hoofdroute kiest in het KOOP-manifest de toestand die op de peildatum gold,
+of bij een ingetrokken regeling de laatst geldende toestand. Identiteit en
+`@inwerkingtreding` worden hard gecontroleerd. Alleen wanneer die route niet
+beschikbaar is, volgt de bestaande portal-HTML-route hieronder:
 
     div#regeling
     ├── h1                                de citeertitel
@@ -31,17 +33,20 @@ het vórige artikel.
 
 from __future__ import annotations
 
+import hashlib
 import re
+import xml.etree.ElementTree as ET
 from urllib.parse import unquote
 
 from bs4 import BeautifulSoup
 
 from .. import net, verify
 from ..herkomst import Herkomst, vandaag
-from ..source_structure import source_structure, bind_structure
+from ..source_structure import source_structure, bind_structure, record_source
 from ..errors import ConversionError
 from ..render import collapse_ws, container_to_markdown
 from .wetten_footnotes import prepare_footnotes
+from . import bwb_xml
 
 # BWB-identifiers: BWBR (regelingen), BWBV (verdragen), BWBW, BWBS, …
 _BWB_RE = re.compile(r"BWB[A-Z]\d+", re.I)
@@ -51,6 +56,12 @@ _MENU_SELECTOR = 'ul[aria-label^="Lijst met mogelijke acties"]'
 
 _TIMEOUT = 60
 _MIN_USEFUL_LENGTH = 40
+_REPOSITORY = "https://repository.officiele-overheidspublicaties.nl/bwb"
+_BWB_MEDIA_TYPE = "application/xml"
+
+
+class _BwbXmlNietBeschikbaar(RuntimeError):
+    """Alleen een ontbrekende route mag naar portal-HTML terugvallen."""
 
 
 def matches(query: str) -> bool:
@@ -59,7 +70,18 @@ def matches(query: str) -> bool:
 
 
 def fetch(query: str) -> tuple[str, str, Herkomst]:
-    """Haal een regeling op; geeft (markdown, bronvermelding, herkomst)."""
+    """Probeer officiële BWB-XML; gebruik portal-HTML alleen als terugval."""
+    try:
+        return _fetch_bwb_xml(query)
+    except _BwbXmlNietBeschikbaar as exc:
+        markdown, label, herkomst = _fetch_html(query)
+        melding = f"BWB-XML niet beschikbaar ({exc}); HTML-route gebruikt."
+        return markdown, label, herkomst.met(
+            waarschuwingen=tuple((*herkomst.waarschuwingen, melding))
+        )
+
+
+def _query(query: str) -> tuple[str, str | None, str, str | None]:
     m = _BWB_RE.search(query)
     if not m:
         raise ConversionError(
@@ -74,6 +96,12 @@ def fetch(query: str) -> tuple[str, str, Herkomst]:
     # Een fragment (#Hoofdstuk1_Titeldeel1.1_Artikel1:1, …) betekent: alleen dat
     # onderdeel. De ids zijn volledige paden, niet kale artikelnummers.
     anchor = unquote(query.split("#", 1)[1]).strip() if "#" in query else None
+    return bwb, (date.group(0) if date else None), url, anchor
+
+
+def _fetch_html(query: str) -> tuple[str, str, Herkomst]:
+    """De bestaande portalroute, behouden als expliciete terugval."""
+    bwb, _, url, anchor = _query(query)
 
     r = net.documents().get(url, timeout=_TIMEOUT)
     if r.status_code != 200 or not r.text.strip():
@@ -104,6 +132,174 @@ def fetch(query: str) -> tuple[str, str, Herkomst]:
     if evidence is not None:
         provenance = bind_structure(provenance, markdown, [evidence])
     return markdown, label, provenance
+
+
+def _antwoordbytes(response) -> bytes:
+    inhoud = getattr(response, "content", None)
+    if inhoud is not None:
+        return bytes(inhoud)
+    return (getattr(response, "text", "") or "").encode(
+        getattr(response, "encoding", None) or "utf-8"
+    )
+
+
+def _volgnummer(label: str | None) -> int:
+    match = re.search(r"_(\d+)$", label or "")
+    return int(match.group(1)) if match else -1
+
+
+def kies_versie(manifest: bytes, peildatum: str) -> dict:
+    """Kies de toestand die gold, of de laatste vóór intrekking.
+
+    De XML-manifestatie en haar hash horen bij elkaar. De hash is alleen een
+    aantekening: BWBR0005252 bewijst dat KOOP daar verouderde bestandsgrootte
+    en bytes naast een inhoudelijk juiste toestand kan publiceren.
+    """
+    try:
+        root = ET.fromstring(manifest)
+    except ET.ParseError as exc:
+        raise _BwbXmlNietBeschikbaar(f"manifest is niet leesbaar: {exc}") from exc
+    versies = []
+    for expressie in root.iter("expression"):
+        metadata = expressie.find("metadata")
+        begin = metadata.findtext("datum_inwerkingtreding") if metadata is not None else None
+        eind = metadata.findtext("einddatum") if metadata is not None else None
+        xml_manifestatie = next(
+            (m for m in expressie.findall("manifestation")
+             if (m.get("label") or "").lower() == "xml"),
+            None,
+        )
+        item = xml_manifestatie.find("item") if xml_manifestatie is not None else None
+        if not begin or item is None or item.get("_deleted") == "true":
+            continue
+        versies.append({
+            "label": expressie.get("label"),
+            "begin": begin,
+            "eind": None if (eind or "9999").startswith("9999") else eind,
+            "bestand": item.get("label"),
+            "sha512": xml_manifestatie.findtext("metadata/hashcode"),
+            "ingetrokken_op": None,
+        })
+    if not versies:
+        raise _BwbXmlNietBeschikbaar("manifest bevat geen XML-toestanden")
+
+    def laatste(kandidaten):
+        return max(kandidaten, key=lambda v: (v["begin"], _volgnummer(v["label"])))
+
+    geldig = [
+        v for v in versies
+        if v["begin"] <= peildatum <= (v["eind"] or "9999-12-31")
+    ]
+    if geldig:
+        return laatste(geldig)
+    eerder = [v for v in versies if v["begin"] <= peildatum]
+    if eerder:
+        versie = dict(laatste(eerder))
+        versie["ingetrokken_op"] = versie["eind"]
+        return versie
+    eerste = min(versies, key=lambda v: v["begin"])
+    raise ConversionError(
+        f"Op {peildatum} bestond deze regeling nog niet; de eerste BWB-toestand "
+        f"geldt vanaf {eerste['begin']}."
+    )
+
+
+def _fetch_bwb_xml(query: str) -> tuple[str, str, Herkomst]:
+    bwb, gevraagde_datum, _, anchor = _query(query)
+    if anchor:
+        # De XML-omzetter levert bewust het hele document: een fragment knippen
+        # zonder het structurele pad zou de broneenheden en bewijsbytes scheiden.
+        raise _BwbXmlNietBeschikbaar("fragmentlinks worden nog niet uit BWB-XML geknipt")
+    peildatum = gevraagde_datum or vandaag()
+    manifest_url = f"{_REPOSITORY}/{bwb}/manifest.xml"
+    try:
+        manifest_response = net.documents().get(manifest_url, timeout=_TIMEOUT)
+    except Exception as exc:
+        raise _BwbXmlNietBeschikbaar(type(exc).__name__) from exc
+    if manifest_response.status_code != 200:
+        raise _BwbXmlNietBeschikbaar(f"manifest gaf HTTP {manifest_response.status_code}")
+    manifest = _antwoordbytes(manifest_response)
+    versie = kies_versie(manifest, peildatum)
+    xml_url = f"{_REPOSITORY}/{bwb}/{versie['label']}/xml/{versie['bestand']}"
+    try:
+        xml_response = net.documents().get(xml_url, timeout=_TIMEOUT)
+    except Exception as exc:
+        raise _BwbXmlNietBeschikbaar(type(exc).__name__) from exc
+    if xml_response.status_code != 200:
+        raise _BwbXmlNietBeschikbaar(f"toestand gaf HTTP {xml_response.status_code}")
+    data = _antwoordbytes(xml_response)
+    try:
+        root = ET.fromstring(data)
+    except ET.ParseError as exc:
+        raise ConversionError(f"De opgehaalde BWB-XML is niet leesbaar: {exc}") from exc
+    if root.tag != "toestand":
+        raise ConversionError(
+            f"Het opgehaalde bestand is geen BWB-toestand maar <{root.tag}>."
+        )
+    if root.get("bwb-id") != bwb:
+        raise ConversionError(
+            f"De BWB-toestand hoort bij {root.get('bwb-id')}, niet bij {bwb}."
+        )
+    if root.get("inwerkingtreding") != versie["begin"]:
+        raise ConversionError(
+            f"De BWB-toestand geldt vanaf {root.get('inwerkingtreding')}, terwijl "
+            f"het manifest {versie['begin']} aanwijst."
+        )
+
+    markdown, eenheden, onbekend, extra = bwb_xml.omzetten(data)
+    if onbekend:
+        raise ConversionError(f"BWB-XML bevat elementen zonder behandeling: {onbekend}.")
+    gemeten_sha512 = hashlib.sha512(data).hexdigest()
+    manifest_sha512 = (versie.get("sha512") or "").strip().lower() or None
+    wijkt_af = bool(manifest_sha512 and manifest_sha512 != gemeten_sha512)
+    waarschuwingen = ["Wetgeving is via de officiële BWB-XML van KOOP opgehaald."]
+    if wijkt_af:
+        waarschuwingen.append(
+            "De SHA-512 wijkt af van het KOOP-manifest; identiteit en versie van "
+            "de toestand zijn wel rechtstreeks gecontroleerd."
+        )
+    bron_url = getattr(xml_response, "url", "") or xml_url
+    record_source(
+        data,
+        media_type=_BWB_MEDIA_TYPE,
+        source_format="bwb-xml",
+        source_url=bron_url,
+        identifier=bwb,
+        language="nl",
+    )
+    titel = " ".join((root.findtext("wetgeving/citeertitel") or "").split()) or None
+    herkomst = Herkomst(
+        format="bwb-xml",
+        bwb=bwb,
+        title=titel,
+        language="nl",
+        version=versie["label"],
+        versie=versie["begin"],
+        geldend_van=versie["begin"],
+        geldend_tot=versie["eind"],
+        ingetrokken_op=versie["ingetrokken_op"],
+        source_url=f"https://wetten.overheid.nl/{bwb}/{versie['begin']}",
+        requested_url=query,
+        expired=extra["expired"],
+        koppen_bron=len([e for e in eenheden if e.soort in {
+            "boek", "deel", "titeldeel", "hoofdstuk", "afdeling", "paragraaf",
+            "subparagraaf", "sub-paragraaf", "artikel", "bijlage",
+        }]),
+        koppen_markdown=verify.tel_koppen_markdown(markdown),
+        waarschuwingen=tuple(waarschuwingen),
+        extra={
+            "manifest_url": manifest_url,
+            "xml_url": xml_url,
+            "xml_sha512_manifest": manifest_sha512,
+            "xml_sha512_gemeten": gemeten_sha512,
+            "xml_sha512_wijkt_af_van_manifest": wijkt_af,
+            "herhaalde_tabelcellen": extra["herhaalde_cellen"],
+        },
+    )
+    label = f"KOOP BWB-XML • {bwb}/{versie['begin']}"
+    if versie["ingetrokken_op"]:
+        label += f" • ingetrokken per {versie['ingetrokken_op']}"
+    return markdown, label, herkomst
 
 
 def _versie_uit_url(url: str, bwb: str) -> str | None:

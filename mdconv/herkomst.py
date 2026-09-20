@@ -60,6 +60,7 @@ class Herkomst:
     versie: str | None = None
     geldend_van: str | None = None
     geldend_tot: str | None = None
+    ingetrokken_op: str | None = None
 
     geraadpleegd: str = field(default_factory=vandaag)
     source_url: str | None = None
@@ -67,6 +68,10 @@ class Herkomst:
 
     # Meldingen die de bron zelf over deze versie doet, letterlijk overgenomen.
     toestand_meldingen: tuple[str, ...] = ()
+
+    # BWB-XML noemt per vervallen artikel de datum in de structuur. Deze kaart
+    # is autoritatiever dan een regex op de gerenderde melding.
+    expired: dict[str, str] = field(default_factory=dict)
 
     fetched_at: str = field(default_factory=nu)
     converter: str | None = None

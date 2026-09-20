@@ -41,7 +41,8 @@ mdconv/
     eurlex.py              CELEX/ELI/EU-ECLI → Formex, Cellar-HTML/portal als terugval
     rechtspraak.py         ECLI:NL → data.rechtspraak.nl XML → markdown
     hudoc.py               EHRM-ECLI/item-id → HUDOC zoek-API + HTML-body
-    wetten.py              BWB/wetten.overheid.nl portal-HTML → markdown
+    wetten.py              BWB-XML van KOOP → markdown; portal-HTML als terugval
+    bwb_xml.py             BWB-toestand → raw-vorm voor de kennisbank
     formex.py              losse Formex-XML-upload → algemene Markdown
     formex_xml.py          Cellar-Formex-zip → raw-vorm voor de kennisbank
     xml_gedeeld.py         fail-closed XML-tabellen en nummerankers
@@ -808,7 +809,7 @@ regel), inclusief de vloeiende tabbalk-indicator.
   weggeschreven bestand nooit als geldige staat gelezen kan worden.
 
 ## Tests
-`.venv/bin/python -m pytest tests/ -q` — 229 karakteriseringstests die het gedrag
+`.venv/bin/python -m pytest tests/ -q` — 242 karakteriseringstests die het gedrag
 vastleggen in plaats van het te beschrijven: `detect_source`-precedentie, ELI→CELEX,
 de CLG-markupnormalisatie (lidnummers, lettermarkers, voetnootankers), de
 voetnootdefinities die met de preambule meereizen, de notitievorm die een intakepoort
