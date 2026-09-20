@@ -102,11 +102,10 @@ class Herkomst:
 def als_zijbestand(provenance, *, bewerkt_met_ai: bool, markdown: str | None = None) -> str | None:
     """`<naam>.source.json` als tekst, of `None` als er geen herkomst is.
 
-    Bedoeld voor de kennisbank, die de converter buiten de UI om aanroept; de
-    download in de browser blijft een los `.md`-bestand. `bewerkt_met_ai` zegt
-    of het document door "Opschonen" of "Vertalen" is gegaan — dat is pas bij
-    het wegschrijven bekend. Met `markdown` wordt vastgelegd of de tekst sinds
-    de omzetting is gewijzigd.
+    Bedoeld voor de kennisbankbundel; andere browserdownloads blijven een los
+    `.md`-bestand. `bewerkt_met_ai` zegt of het document door "Opschonen" of
+    "Vertalen" is gegaan — dat is pas bij het wegschrijven bekend. Met
+    `markdown` wordt vastgelegd of de tekst sinds de omzetting is gewijzigd.
     """
     if provenance is None or provenance == {}:
         return None

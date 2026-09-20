@@ -78,7 +78,8 @@ function profileFor(doc) {
 
 function addDoc({
   title, filenameBase, source, kind, markdown, allowObsidian,
-  attachments_token, attachment_count, batchIndex = 0, activate = true,
+  attachments_token, attachment_count, bundle_token,
+  batchIndex = 0, activate = true,
 }) {
   const doc = {
     id: state.nextId++,
@@ -105,6 +106,9 @@ function addDoc({
     // bouwt i.p.v. een los .md-bestand.
     attachmentsToken: attachments_token || null,
     attachmentCount: attachment_count || 0,
+    // Bronbytes en herkomst blijven op de server; alleen dit tijdelijke token
+    // gaat door de browser en bouwt bij downloaden de uitpakbare kb-boom.
+    bundleToken: bundle_token || null,
   };
   state.docs.push(doc);
   // Tijdens een batch niet meteen openen: dan zou de editor tijdens het
@@ -822,9 +826,11 @@ function renderEditor() {
   $("#src").title = doc.source;
   updateLineNumbers();
 
-  $("#download").textContent = doc.attachmentsToken
-    ? `Download .zip (${doc.attachmentCount} afb.)`
-    : "Download .md";
+  $("#download").textContent = doc.bundleToken
+    ? "Download kennisbank .zip"
+    : doc.attachmentCount
+      ? `Download .zip (${doc.attachmentCount} afb.)`
+      : "Download .md";
 
   // "Opmaken voor Obsidian" staat altijd bij automatisch herkende rechtspraak,
   // en ook bij Documentupload/Tekst plakken — daar kán het een uitspraak zijn
@@ -1254,9 +1260,12 @@ async function saveDownload(body, filename) {
     setStatus(data.error || "Downloaden is mislukt.", "err");
     return;
   }
+  const blob = await response.blob();
+  const extension = blob.type === "application/zip" ? "zip" : "md";
+  const basename = filename.replace(/\.(?:md|zip)$/i, "");
   const link = document.createElement("a");
-  link.href = URL.createObjectURL(await response.blob());
-  link.download = filename;
+  link.href = URL.createObjectURL(blob);
+  link.download = `${basename}.${extension}`;
   link.click();
   URL.revokeObjectURL(link.href);
 }
@@ -1272,6 +1281,8 @@ async function downloadActive() {
     {
       markdown: doc.markdown, filename: doc.filenameBase,
       attachments_token: doc.attachmentsToken || undefined,
+      bundle_token: doc.bundleToken || undefined,
+      bewerkt_met_ai: doc.cleaned || doc.translated,
     },
     `${doc.filenameBase}.${doc.attachmentsToken ? "zip" : "md"}`
   );
@@ -1290,6 +1301,8 @@ async function downloadAll() {
         markdown: doc.markdown,
         filename: doc.filenameBase,
         attachments_token: doc.attachmentsToken || undefined,
+        bundle_token: doc.bundleToken || undefined,
+        bewerkt_met_ai: doc.cleaned || doc.translated,
       })),
     },
     `${name}.zip`

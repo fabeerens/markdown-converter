@@ -49,6 +49,7 @@ mdconv/
     pasted_text.py         handmatig geplakte tekst (kaal of verrijkte HTML) → markdown
     pdf_images.py           losse afbeeldingen uit een PDF (pdfimages/pdfinfo, poppler)
   attachments.py            tijdelijke, token-based opslag van geëxtraheerde afbeeldingen
+  kb_bundle.py              tijdelijke bronopslag + uitpakbare kb-download voor wetgeving
   cleanup/
     __init__.py            publieke ingangen: estimate(), clean(), clean_stream()
     config.py              standaarden + instellingen (modellen/deelgrootte/prompts)
@@ -399,6 +400,14 @@ accountregistratie namens de gebruiker):
     één zip met alle documenten en per document een eigen `attachments/<naam>/`-map. `attachments.get()` **verwijdert niets** — nogmaals downloaden mag
     gewoon; opruimen gebeurt lui, bij elke nieuwe `store()`-aanroep worden sets ouder dan
     2 uur weggegooid (geen cron/achtergrondtaak nodig voor deze single-user lokale tool).
+  - **Kennisbankbundel voor wetgeving** (`mdconv/kb_bundle.py`): BWB-documenten en
+    wetgevings-CELEX-nummers (sector 0/3) krijgen naast hun editorinhoud alleen een
+    tijdelijk `bundle_token`. Bij downloaden bouwt de server een zip met
+    `raw/<profiel>/<id>.md`, het herkomstzijbestand en de hashgebonden oorspronkelijke
+    HTML/XML/Formex-bron onder `raw/source-evidence/<id>/`. De teruggestuurde markdown
+    bepaalt bij dat moment `markdown_changed`; bronbytes en herkomst gaan nooit door de
+    conversie-JSON. ECLI's, voorstellen, documenten en geplakte tekst houden de platte
+    download. De tokens verlopen lui na twee uur, net als afbeeldingtokens.
 - **Tekst plakken** (`pasted_text.py`, endpoint `/api/convert/text`): de front-end stuurt
   zowel `html` (`element.innerHTML` van het `contenteditable`-vak, dus de klembord-opmaak
   zoals de browser die bij plakken invoegt) als `text` (`element.innerText`, kaal) mee.
@@ -663,7 +672,8 @@ document zelf stonden en uit elkaar liepen bij het wisselen van tabblad.
 - **"Alles downloaden (n)"** (`#download-all`, zichtbaar vanaf 2 documenten): bij een lijst
   van twintig is per document downloaden het nieuwe handwerk. `downloadAll()` stuurt alle
   documenten in één `documents`-array naar `/api/download`, dat er één zip van maakt —
-  `<naam>.md` per document, en de bijlagen van een document onder `attachments/<naam>/`,
+  voor wetgeving met een bundeltoken de volledige `raw/`-boom, anders `<naam>.md` per
+  document, en de bijlagen van een document onder `attachments/<naam>/`,
   want twee PDF's leveren allebei een `p01.png`. Gelijke documentnamen krijgen een
   `-2`-suffix (`_unique_name()`), anders zou het tweede het eerste overschrijven en was
   dat document stil verdwenen. `saveDownload()` is de gedeelde helper van
@@ -833,10 +843,10 @@ oppikten — met threaded Flask en parallelle uploads was dat echt bereikbaar.
   — allemaal vóór de gedeelde render. Er is een test die afdwingt dat CLG-klassenamen niet in
   `render.py` terechtkomen.
 - **De herkomst is niet voor de UI.** Een bron levert naast de markdown een `Herkomst`
-  (`mdconv/herkomst.py`) met de bron-HTML en de geldigheid; de kennisbank van Sander haalt die
-  buiten de UI om op en schrijft haar als `<naam>.source.json`. `_doc_payload()` haalt haar
-  bewust uit het JSON-antwoord en de download blijft een los `.md`-bestand: een zip met een
-  zijbestand zou de gewone gebruiker alleen in de weg zitten. Een test legt dat vast.
+  (`mdconv/herkomst.py`) met de bronbytes en de geldigheid. `_doc_payload()` haalt haar
+  bewust uit het JSON-antwoord. Alleen wetgeving met een kb-identiteit krijgt een opaak
+  `bundle_token`; de server maakt daar bij download de kb-zip en het `.source.json` van.
+  Andere documenten blijven een los `.md`-bestand. Tests leggen beide paden vast.
 - Domeincode kent geen Flask: alleen `mdconv/api.py` importeert het. Fouten gaan als
   `ConversionError` met een Nederlandse boodschap naar boven.
 - Geen `.venv`, `.env` of secrets in versiebeheer (zie `.gitignore`).

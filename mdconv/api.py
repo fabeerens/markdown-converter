@@ -18,7 +18,7 @@ from urllib.parse import unquote, urlparse
 import requests
 from flask import Blueprint, Response, current_app, jsonify, render_template, request, send_file
 
-from . import attachments, cleanup, net, sources, version
+from . import attachments, cleanup, kb_bundle, net, sources, version
 from .errors import ConversionError
 from .sources import pdf_images
 
@@ -125,9 +125,13 @@ def _doc_payload(doc) -> dict:
     afbeeldingen uit een PDF zijn geëxtraheerd — de binaire data zelf gaat
     nooit in JSON mee, zie `mdconv/attachments.py`."""
     payload = doc.as_json()
-    # De herkomst (met de volledige bron-HTML) is voor de kennisbank, die haar
-    # buiten de UI om ophaalt. De browser doet er niets mee en downloadt een
-    # los `.md`-bestand; meesturen zou alleen het antwoord verdubbelen.
+    if doc.provenance is not None:
+        token = kb_bundle.store(doc.provenance.as_json())
+        if token:
+            payload["bundle_token"] = token
+    # De herkomst (met de volledige bronbytes) blijft server-side. Voor
+    # wetgeving heeft de browser alleen het bundeltoken nodig; meesturen zou
+    # het antwoord verdubbelen en de bron onnodig in de browser bewaren.
     payload.pop("provenance", None)
     if doc.attachments:
         payload["attachments_token"] = attachments.store(doc.attachments)
@@ -328,6 +332,7 @@ def download():
 
     Drie vormen, in deze volgorde:
     - `documents: [...]` → alle opgehaalde documenten in één zip (batch-download);
+    - één wetgevingsdocument met `bundle_token` → een uitpakbare kb-zip;
     - één document mét `attachments_token` → een zip met de markdown en de
       `attachments/`-map (losse afbeeldingen uit een PDF, zie `mdconv/attachments.py`);
     - anders → een los `.md`-bestand.
@@ -338,6 +343,23 @@ def download():
         return _download_bundle(documents, data.get("filename"))
 
     name = _safe_name(data.get("filename"))
+    bundle_token = (data.get("bundle_token") or "").strip()
+    if bundle_token:
+        try:
+            gebouwd = kb_bundle.build(
+                bundle_token,
+                data.get("markdown", ""),
+                bewerkt_met_ai=data.get("bewerkt_met_ai") is True,
+            )
+        except (ValueError, TypeError) as exc:
+            raise ConversionError(f"Kennisbankbundel kon niet worden gebouwd: {exc}") from exc
+        if gebouwd is None:
+            raise ConversionError("De kennisbankbundel is verlopen; haal het document opnieuw op.")
+        stream, document_id = gebouwd
+        return send_file(
+            stream, mimetype="application/zip", as_attachment=True,
+            download_name=f"{document_id}.zip",
+        )
     directory = _attachment_dir(data.get("attachments_token"))
     if directory:
         buf = io.BytesIO()
@@ -369,6 +391,25 @@ def _download_bundle(documents: list, name):
     used: set = set()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         for entry in entries:
+            bundle_token = (entry.get("bundle_token") or "").strip()
+            if bundle_token:
+                try:
+                    gebouwd = kb_bundle.build(
+                        bundle_token,
+                        entry.get("markdown") or "",
+                        bewerkt_met_ai=entry.get("bewerkt_met_ai") is True,
+                    )
+                except (ValueError, TypeError) as exc:
+                    raise ConversionError(f"Kennisbankbundel kon niet worden gebouwd: {exc}") from exc
+                if gebouwd is None:
+                    raise ConversionError(
+                        "Een kennisbankbundel is verlopen; haal de documenten opnieuw op."
+                    )
+                binnenste, _ = gebouwd
+                with zipfile.ZipFile(binnenste) as kb_zip:
+                    for pad in kb_zip.namelist():
+                        zf.writestr(pad, kb_zip.read(pad))
+                continue
             base = _unique_name(_safe_name(entry.get("filename")), used)
             zf.writestr(f"{base}.md", entry.get("markdown") or "")
             directory = _attachment_dir(entry.get("attachments_token"))
