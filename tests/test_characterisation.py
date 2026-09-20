@@ -379,7 +379,7 @@ def test_version_missing_in_this_language_falls_back_to_the_base_act(monkeypatch
         monkeypatch, {"32024R2979": BASE_ACT},
         index={"02024R2979-20241204": {"GLE", "SWE"}},
     )
-    markdown, source = eurlex.fetch_and_convert("CELEX:02024R2979-20241204", "NL")
+    markdown, source, _ = eurlex.fetch_and_convert("CELEX:02024R2979-20241204", "NL")
 
     assert "niet in het Nederlands" in markdown
     assert "Iers en Zweeds" in markdown
@@ -405,7 +405,7 @@ def test_unknown_date_uses_the_newest_version_before_it(monkeypatch):
             "02014R0910-20241018": {"NLD"},
         },
     )
-    markdown, source = eurlex.fetch_and_convert("02014R0910-20250101", "NL")
+    markdown, source, _ = eurlex.fetch_and_convert("02014R0910-20250101", "NL")
 
     assert "18-10-2024" in markdown
     assert "CELEX:02014R0910-20241018" in source
@@ -424,7 +424,7 @@ def test_a_later_version_is_never_substituted(monkeypatch):
         {"02014R0910-20241018": CONSOLIDATED_ACT, "32014R0910": BASE_ACT},
         index={"02014R0910-20241018": {"NLD"}},
     )
-    markdown, source = eurlex.fetch_and_convert("02014R0910-20150101", "NL")
+    markdown, source, _ = eurlex.fetch_and_convert("02014R0910-20150101", "NL")
 
     assert not any(url.endswith("02014R0910-20241018") for url in calls)
     assert "oorspronkelijke handeling" in markdown
@@ -441,7 +441,7 @@ def test_an_earlier_version_in_another_language_is_not_denied(monkeypatch):
         monkeypatch, {"32014R0910": BASE_ACT},
         index={"02014R0910-20140917": {"ENG"}, "02014R0910-20241018": {"NLD"}},
     )
-    markdown, _ = eurlex.fetch_and_convert("02014R0910-20150101", "NL")
+    markdown, _, _ = eurlex.fetch_and_convert("02014R0910-20150101", "NL")
 
     assert "geen eerdere geconsolideerde versie van deze handeling" not in markdown
     assert "de eerdere geconsolideerde versies bestaan niet in het Nederlands" in markdown
@@ -453,7 +453,7 @@ def test_unreachable_metadata_still_yields_a_document(monkeypatch):
     from mdconv.sources import eurlex
 
     _fake_cellar_map(monkeypatch, {"32014R0910": BASE_ACT}, index=None)
-    markdown, source = eurlex.fetch_and_convert("02014R0910-20161231", "NL")
+    markdown, source, _ = eurlex.fetch_and_convert("02014R0910-20161231", "NL")
 
     assert "lijst met beschikbare versies ook niet" in markdown
     assert "oorspronkelijke handeling" in source
@@ -706,7 +706,7 @@ def test_the_fallback_note_is_a_labelled_blockquote_too(monkeypatch):
         monkeypatch, {"32024R2979": BASE_ACT},
         index={"02024R2979-20241204": {"GLE", "SWE"}},
     )
-    markdown, _ = eurlex.fetch_and_convert("CELEX:02024R2979-20241204", "NL")
+    markdown, _, _ = eurlex.fetch_and_convert("CELEX:02024R2979-20241204", "NL")
 
     assert markdown.startswith("> **Herkomst:** ")
     assert "niet in het Nederlands" in markdown

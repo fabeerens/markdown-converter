@@ -38,11 +38,13 @@ mdconv/
   version.py               lui berekend versienummer/buildteller voor de footer
   sources/
     __init__.py            Document-dataclass, detect_source-precedentie, from_link/from_file
-    eurlex.py              CELEX/ELI/EU-ECLI → Cellar, portal als terugval
+    eurlex.py              CELEX/ELI/EU-ECLI → Formex, Cellar-HTML/portal als terugval
     rechtspraak.py         ECLI:NL → data.rechtspraak.nl XML → markdown
     hudoc.py               EHRM-ECLI/item-id → HUDOC zoek-API + HTML-body
     wetten.py              BWB/wetten.overheid.nl portal-HTML → markdown
-    formex.py              Formex-XML → markdown (context expliciet, dus thread-safe)
+    formex.py              losse Formex-XML-upload → algemene Markdown
+    formex_xml.py          Cellar-Formex-zip → raw-vorm voor de kennisbank
+    xml_gedeeld.py         fail-closed XML-tabellen en nummerankers
     files.py               PDF via pdf-inspector, rest via MarkItDown (beide lui geladen)
     pasted_text.py         handmatig geplakte tekst (kaal of verrijkte HTML) → markdown
     pdf_images.py           losse afbeeldingen uit een PDF (pdfimages/pdfinfo, poppler)
@@ -107,7 +109,13 @@ accountregistratie namens de gebruiker):
 
 ## Belangrijke, niet-voor-de-hand-liggende details
 
-- **EUR-Lex fetch**: de portal-HTML (`/legal-content/…/HTML/`) blokkeert bots (HTTP 202, lege body;
+- **EUR-Lex fetch**: wetgeving probeert eerst de officiële Formex-manifestatie uit Cellar
+  (`Accept: application/zip;mtype=fmx4`, taal als ISO 639-2). Alleen `PK`-bytes activeren
+  die route. Een ontvangen zip wordt fail-closed gecontroleerd op documentvolgorde,
+  tekstbehoud, bladalinea's, tabellen en structurele eenheden; een niet-zipantwoord valt
+  terug op de bestaande HTML-ladder en legt die keuze in de herkomst vast. De bestaande
+  `sources/formex.py` blijft de tolerante parser voor een handmatig geüploade losse XML.
+  De portal-HTML (`/legal-content/…/HTML/`) blokkeert bots (HTTP 202, lege body;
   inmiddels een AWS WAF-JS-challenge, dus ook met retries permanent 202 — de portal is in de praktijk
   dood voor een simpele `requests`-scraper). Gebruik het **Cellar-archief** via content negotiation,
   `Accept: application/xhtml+xml, text/html;q=0.9`:
@@ -790,7 +798,7 @@ regel), inclusief de vloeiende tabbalk-indicator.
   weggeschreven bestand nooit als geldige staat gelezen kan worden.
 
 ## Tests
-`.venv/bin/python -m pytest tests/ -q` — 220 karakteriseringstests die het gedrag
+`.venv/bin/python -m pytest tests/ -q` — 229 karakteriseringstests die het gedrag
 vastleggen in plaats van het te beschrijven: `detect_source`-precedentie, ELI→CELEX,
 de CLG-markupnormalisatie (lidnummers, lettermarkers, voetnootankers), de
 voetnootdefinities die met de preambule meereizen, de notitievorm die een intakepoort
@@ -798,7 +806,8 @@ passeert, de geconsolideerde-CELEX-afhandeling (datum behouden, preambule invoeg
 terugvalpaden als dat niet lukt), de versie-terugvalladder (nieuwste versie op of vóór de
 gevraagde datum, nooit een latere, en een notitie die niet beweert dat een bestaande versie
 niet bestaat), de chunking-ladder (ook zonder witregels en met één te
-lang woord), de PDF-reflow, de Formex-parser, de settings-semantiek (leeg wist terug naar
+lang woord), de PDF-reflow, de losse Formex-parser en de Cellar-Formex-route (inclusief
+bronbytes, manifestidentiteit en fail-closed tabellen), de settings-semantiek (leeg wist terug naar
 standaard), de batch-zip (eigen naam en eigen `attachments/`-map per document) en de
 Nederlandse foutmeldingen. Twee tests pinnen de front-end vast waar Python niet bij de
 JS kan: de id's die `app.js` per conventie opbouwt (`#bulk-wet-text` enz.) moeten in

@@ -1,10 +1,11 @@
-"""Capture source HTML and table coordinates before a renderer mutates them.
+"""Capture source bytes and, for HTML, table coordinates before rendering.
 
 This is provenance, not a signature or an independent verification claim.
-The consuming kb rebuilds the grid from original_html with its own parser.
+The consuming kb rebuilds the structure from the original bytes with its own parser.
 """
 from __future__ import annotations
 
+import base64
 import hashlib
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -12,8 +13,10 @@ from contextvars import ContextVar
 _documents = ContextVar("source_structure_documents", default=None)
 
 
-def sha256(text):
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+def sha256(data):
+    if isinstance(data, str):
+        data = data.encode("utf-8")
+    return hashlib.sha256(data).hexdigest()
 
 
 def source_structure(html, container, *, selector, anchor=None):
@@ -44,14 +47,38 @@ def capture_source_documents():
         _documents.reset(token)
 
 
-def record_html(html, *, source_url, identifier=None, language=None, role="document"):
+def record_source(data, *, media_type, source_format, source_url,
+                  identifier=None, language=None, role="document"):
     documents = _documents.get()
     if documents is None:
         return
-    from bs4 import BeautifulSoup
-    evidence = source_structure(html, BeautifulSoup(html, "lxml"), selector="document")
+    if source_format == "html":
+        if isinstance(data, bytes):
+            data = data.decode("utf-8")
+        from bs4 import BeautifulSoup
+        evidence = source_structure(data, BeautifulSoup(data, "lxml"), selector="document")
+    else:
+        raw = data.encode("utf-8") if isinstance(data, str) else bytes(data)
+        evidence = {
+            "schema_version": 1,
+            "format": "binary-source",
+            "source_format": source_format,
+            "media_type": media_type,
+            "source_sha256": sha256(raw),
+            # JSON houdt de bytes exact vast. Opdracht 2 verhuist deze payload
+            # naar een server-side bundeltoken; tot die tijd blijft hij alleen
+            # in de afgeschermde herkomst en gaat hij niet door de browser.
+            "original_base64": base64.b64encode(raw).decode("ascii"),
+        }
     evidence.update(source_url=source_url, identifier=identifier, language=language, role=role)
     documents.append(evidence)
+
+
+def record_html(html, *, source_url, identifier=None, language=None, role="document"):
+    """Compatibele HTML-ingang; de bestaande capturevorm blijft bytegelijk."""
+    record_source(html, media_type="text/html", source_format="html",
+                  source_url=source_url, identifier=identifier,
+                  language=language, role=role)
 
 
 def bind_structure(provenance, markdown, documents):

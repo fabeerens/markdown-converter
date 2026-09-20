@@ -20,8 +20,10 @@ from bs4 import BeautifulSoup, NavigableString
 
 from .. import net
 from ..errors import ConversionError
-from ..source_structure import record_html
+from ..herkomst import Herkomst
+from ..source_structure import record_html, record_source
 from ..render import collapse_ws, html_to_markdown, marker_prefix, prefix_into
+from . import formex_xml
 
 # Een CELEX: sectorcijfer + jaar + documenttypeletter(s) + nummer, optioneel een
 # corrigendum-achtervoegsel `(01)` en — bij een geconsolideerde versie — de datum
@@ -62,6 +64,8 @@ _ELI_TYPE = {
 _CELLAR_TIMEOUT = 45
 _PORTAL_TIMEOUT = 30
 _PORTAL_ATTEMPTS = 6
+_FORMEX_MEDIA_TYPE = "application/zip;mtype=fmx4"
+_FORMEX_LANGUAGES = {"NL": "nld", "EN": "eng", "DE": "deu", "FR": "fra"}
 
 
 def extract_celex(text: str) -> str | None:
@@ -130,7 +134,7 @@ def eli_to_celex(text: str) -> str | None:
     return f"3{year}{letter}{int(num):04d}"
 
 
-def fetch_and_convert(text: str, lang: str = "NL") -> tuple[str, str]:
+def fetch_and_convert(text: str, lang: str = "NL") -> tuple:
     """Los de invoer op naar een document; geeft (markdown, bronvermelding)."""
     lang = (lang or "NL").upper()
 
@@ -153,11 +157,22 @@ def fetch_and_convert(text: str, lang: str = "NL") -> tuple[str, str]:
             "https://eur-lex.europa.eu/legal-content/NL/TXT/?uri=CELEX:32016R0679"
         )
 
+    # De officiële Formex-manifestatie staat vóór de HTML-ladder. Alleen een
+    # echte zip activeert de route; een HTML-/metadatarespons is een gewone
+    # miss. Een eenmaal ontvangen zip gaat wel fail-closed door de omzetter.
+    formex_result, formex_melding = _fetch_formex(celex, lang, requested_url=text)
+    if formex_result is not None:
+        return formex_result
+
     # Strategie 1: officiële inhoud uit Cellar (betrouwbaar).
     try:
         markdown = _fetch_cellar(celex, lang)
         if markdown and len(markdown.strip()) > 80:
-            return markdown, f"EUR-Lex (Cellar) • CELEX:{celex} • {lang}"
+            return (
+                markdown,
+                f"EUR-Lex (Cellar HTML) • CELEX:{celex} • {lang}",
+                _html_herkomst(celex, lang, text, formex_melding),
+            )
     except ConversionError:
         raise
     except Exception:
@@ -168,11 +183,109 @@ def fetch_and_convert(text: str, lang: str = "NL") -> tuple[str, str]:
     # netwerkfout; de metadata weet wat er wél is en wat daarvan het dichtst bij
     # de gevraagde versie ligt.
     if celex.startswith("0"):
-        return _consolidated_fallback(celex, lang)
+        markdown, bron = _consolidated_fallback(celex, lang)
+        return markdown, bron, _html_herkomst(celex, lang, text, formex_melding)
 
     # Strategie 2: de EUR-Lex portal (met herhaalpogingen bij HTTP 202).
     html = _fetch_portal_html(celex, lang)
-    return html_to_markdown(html), f"EUR-Lex portal • CELEX:{celex} • {lang}"
+    return (
+        html_to_markdown(html),
+        f"EUR-Lex portal HTML • CELEX:{celex} • {lang}",
+        _html_herkomst(celex, lang, text, formex_melding, portal=True),
+    )
+
+
+def _formex_headers(lang: str) -> dict[str, str]:
+    return {
+        "Accept": _FORMEX_MEDIA_TYPE,
+        "Accept-Language": _FORMEX_LANGUAGES.get(lang.upper(), lang.lower()),
+    }
+
+
+def _response_bytes(response) -> bytes:
+    inhoud = getattr(response, "content", None)
+    if inhoud is not None:
+        return bytes(inhoud)
+    tekst = getattr(response, "text", "")
+    return tekst.encode(getattr(response, "encoding", None) or "utf-8")
+
+
+def _fetch_formex(celex: str, lang: str, *, requested_url: str):
+    """Geef de Formex-uitkomst, of een melding waarmee HTML verdergaat."""
+    url = f"http://publications.europa.eu/resource/celex/{celex}"
+    try:
+        response = net.documents().get(
+            url, headers=_formex_headers(lang), timeout=_CELLAR_TIMEOUT, allow_redirects=True,
+        )
+    except Exception as exc:  # netwerk is de reden om de bestaande ladder te behouden
+        return None, f"Formex niet bereikbaar ({type(exc).__name__}); HTML-route gebruikt."
+    data = _response_bytes(response)
+    if response.status_code != 200 or not data.startswith(b"PK"):
+        reden = f"HTTP {response.status_code}" if response.status_code != 200 else "antwoord is geen zip"
+        return None, f"Formex niet beschikbaar ({reden}); HTML-route gebruikt."
+
+    bron_url = getattr(response, "url", "") or url
+    record_source(
+        data,
+        media_type=_FORMEX_MEDIA_TYPE,
+        source_format="formex",
+        source_url=bron_url,
+        identifier=celex,
+        language=lang,
+    )
+    markdown, eenheden, onbekend, extra = formex_xml.omzetten(data)
+    if onbekend:
+        # De walker weigert dit al; deze grendel voorkomt dat een latere
+        # versoepeling de download ongemerkt weer openzet.
+        raise ConversionError(f"Formex bevat elementen zonder behandeling: {onbekend}.")
+    metadata = extra["metadata"]
+    geconsolideerd = metadata.get("format") == "clg"
+    waarschuwingen = ["EUR-Lex is via de officiële Formex-manifestatie opgehaald."]
+    if geconsolideerd and not any(e.soort == "overweging" for e in eenheden):
+        # CONS.ACT bevat de considerans niet. Opdracht 5 voegt die van de
+        # basishandeling toe; tot die tijd mag dit verschil nooit stil zijn.
+        waarschuwingen.append(
+            "De geconsolideerde Formex bevat geen considerans; de overwegingen van de "
+            "basishandeling zijn nog niet ingevoegd."
+        )
+    herkomst = Herkomst(
+        format="clg" if geconsolideerd else "formex",
+        celex=celex,
+        language=metadata.get("language") or lang.lower(),
+        oj_reference=metadata.get("oj_reference"),
+        base_celex=metadata.get("base_celex"),
+        consolidation_date=metadata.get("consolidation_date"),
+        version=metadata.get("version"),
+        geldend_van=metadata.get("valid_from"),
+        geldend_tot=metadata.get("valid_until"),
+        source_url=bron_url,
+        requested_url=requested_url,
+        waarschuwingen=tuple(waarschuwingen),
+        extra={
+            "formex_eenheden": len(eenheden),
+            "herhaalde_tabelcellen": extra["herhaalde_cellen"],
+        },
+    )
+    return (
+        markdown,
+        f"EUR-Lex (Cellar Formex) • CELEX:{celex} • {lang}",
+        herkomst,
+    ), None
+
+
+def _html_herkomst(celex: str, lang: str, requested_url: str,
+                    formex_melding: str | None, *, portal: bool = False) -> Herkomst:
+    route = "EUR-Lex-portal" if portal else "Cellar"
+    waarschuwingen = tuple(x for x in (formex_melding, f"{route}-HTML-route gebruikt.") if x)
+    return Herkomst(
+        format="eurlex-html",
+        celex=celex,
+        language=lang.lower(),
+        source_url=(f"https://eur-lex.europa.eu/legal-content/{lang}/TXT/?uri=CELEX:{celex}"
+                    if portal else f"http://publications.europa.eu/resource/celex/{celex}"),
+        requested_url=requested_url,
+        waarschuwingen=waarschuwingen,
+    )
 
 
 def _cellar_headers(lang: str) -> dict[str, str]:

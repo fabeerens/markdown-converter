@@ -47,6 +47,14 @@ class Herkomst:
     title: str | None = None
     language: str | None = None
 
+    # Officiële XML-bronnen leveren deze velden rechtstreeks. De Engelse
+    # sleutels zijn bewust gelijk aan wat de kennisbank al uit een zijbestand
+    # leest (`extract_meta.py`); via `extra` zouden ze daar onzichtbaar zijn.
+    oj_reference: str | None = None
+    base_celex: str | None = None
+    consolidation_date: str | None = None
+    version: str | None = None
+
     # Welke versie, en sinds/tot wanneer die geldt. Leeg waar het begrip niet
     # bestaat: een uitspraak en een officiële bekendmaking wijzigen niet meer.
     versie: str | None = None

@@ -1,3 +1,4 @@
+import base64
 import io
 import json
 from concurrent.futures import ThreadPoolExecutor
@@ -8,7 +9,7 @@ import zipfile
 import pytest
 from mdconv import create_app
 from mdconv.herkomst import Herkomst, als_zijbestand
-from mdconv.source_structure import (capture_source_documents, record_html,
+from mdconv.source_structure import (capture_source_documents, record_html, record_source,
                                      bind_structure, sha256)
 from mdconv.sources import from_link
 from mdconv.sources import eurlex, wetten
@@ -26,6 +27,18 @@ def test_capture_is_isolated_between_concurrent_conversions():
         a, b = list(pool.map(run, ['alpha', 'beta']))
     assert [part['source_url'] for part in a] == ['alpha']
     assert [part['source_url'] for part in b] == ['beta']
+
+
+def test_binary_source_capture_preserves_exact_bytes_without_changing_html_shape():
+    raw = b'PK\x03\x04\x00formex'
+    with capture_source_documents() as documents:
+        record_source(raw, media_type='application/zip;mtype=fmx4',
+                      source_format='formex', source_url='https://example.test/formex')
+    saved = documents[0]
+    assert saved['schema_version'] == 1
+    assert saved['source_format'] == 'formex'
+    assert saved['source_sha256'] == sha256(raw)
+    assert base64.b64decode(saved['original_base64']) == raw
 
 
 def test_nested_capture_restores_outer_after_failure():
