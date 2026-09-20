@@ -55,6 +55,12 @@ class Herkomst:
     consolidation_date: str | None = None
     version: str | None = None
 
+    # Een geconsolideerde tekst heeft geen aanhef en geen overwegingen. Komen ze
+    # uit de basishandeling, dan staat hier haar CELEX; lukt dat niet, dan staat
+    # hier waarom. `extract_meta.py` leest beide letterlijk.
+    recitals_from: str | None = None
+    recitals_reason: str | None = None
+
     # Welke versie, en sinds/tot wanneer die geldt. Leeg waar het begrip niet
     # bestaat: een uitspraak en een officiële bekendmaking wijzigen niet meer.
     versie: str | None = None

@@ -97,33 +97,163 @@ def test_non_zip_formex_response_falls_back_to_html_with_a_warning(monkeypatch):
     assert any("HTML-route" in melding for melding in document.provenance.waarschuwingen)
 
 
-def test_consolidated_formex_metadata_is_literal_and_missing_recitals_are_reported(monkeypatch):
+def _cons_act(*, met_considerans: bool = False, met_noot: bool = True) -> bytes:
+    """Een geconsolideerde handeling zoals de Cellar hem levert: een lege PREAMBLE."""
     body = ACT.removeprefix(b"<ACT>").removesuffix(b"</ACT>")
     begin = body.index(b"<ENACTING.TERMS>")
-    zonder_considerans = body[:body.index(b"<PREAMBLE>")] + body[begin:]
-    cons = (
+    voor = body[:body.index(b"<PREAMBLE>")]
+    preambule = (body[body.index(b"<PREAMBLE>"):begin] if met_considerans
+                 else b"<PREAMBLE><PREAMBLE.INIT/><PREAMBLE.FINAL/></PREAMBLE>")
+    bepalingen = body[begin:]
+    if met_noot:
+        # Een eigen noot in de wettekst: haar nummering begint opnieuw bij (1),
+        # los van de noten van de considerans.
+        bepalingen = bepalingen.replace(
+            b"Deze verordening stelt regels vast.",
+            b'Deze verordening stelt regels vast.<NOTE NOTE.ID="E0900" TYPE="FOOTNOTE">'
+            b"<P>Een noot van de wettekst.</P></NOTE>",
+        )
+    return (
         b'<CONS.ACT><INFO.CONSLEG CONSLEG.REF="2019R0881" START.DATE="20250204" '
         b'END.DATE="99999999" PROD.SEQ="001.001.0"/><CONS.DOC>'
-        b'<BIB.INSTANCE><LG.DOC>NL</LG.DOC></BIB.INSTANCE>' + zonder_considerans
-        + b'</CONS.DOC></CONS.ACT>'
+        b"<BIB.INSTANCE><LG.DOC>NL</LG.DOC></BIB.INSTANCE>" + voor + preambule + bepalingen
+        + b"</CONS.DOC></CONS.ACT>"
     )
-    data = formex_zip(act=cons)
+
+
+def _basis_act(*, jaar: int = 2019, nummer: int = 881, met_overwegingen: bool = True) -> bytes:
+    """De basishandeling: BIB.INSTANCE/NO.DOC draagt haar identiteit, de PREAMBLE de considerans."""
+    overwegingen = (
+        b"<GR.CONSID><GR.CONSID.INIT>Overwegende hetgeen volgt:</GR.CONSID.INIT>"
+        b"<CONSID><NP><NO.P>(1)</NO.P><TXT>Een eerste overweging van de basishandeling"
+        b'<NOTE NOTE.ID="E0001" TYPE="FOOTNOTE"><P>PB C 227 van 28.6.2018, blz. 86.</P></NOTE>.</TXT></NP></CONSID>'
+        b"<CONSID><NP><NO.P>(2)</NO.P><TXT>Een tweede overweging.</TXT></NP></CONSID></GR.CONSID>"
+    ) if met_overwegingen else b""
+    return (
+        b"<ACT><BIB.INSTANCE><PAGE.FIRST>1</PAGE.FIRST>"
+        + f'<NO.DOC FORMAT="YN" TYPE="OJ"><NO.CURRENT>{nummer}</NO.CURRENT><YEAR>{jaar}</YEAR>'
+          "<COM>EU</COM></NO.DOC>".encode()
+        + b"</BIB.INSTANCE><TITLE><P>Verordening (EU) 2019/881</P></TITLE>"
+        b"<PREAMBLE><PREAMBLE.INIT>HET EUROPEES PARLEMENT EN DE RAAD,</PREAMBLE.INIT>"
+        b"<GR.VISA><VISA>Gezien het Verdrag,</VISA></GR.VISA>" + overwegingen
+        + b"<PREAMBLE.FINAL>HEBBEN DE VOLGENDE VERORDENING VASTGESTELD:</PREAMBLE.FINAL></PREAMBLE>"
+        b"<ENACTING.TERMS><ARTICLE IDENTIFIER=\"001\"><TI.ART>Artikel 1</TI.ART><ALINEA><P>Niet gebruikt.</P>"
+        b"</ALINEA></ARTICLE></ENACTING.TERMS></ACT>"
+    )
+
+
+def _cellar(monkeypatch, antwoorden: dict[str, bytes]):
+    """Een Cellar die per CELEX-nummer antwoordt; al het andere is een 404."""
     from mdconv.sources import eurlex
-    monkeypatch.setattr(
-        eurlex.net,
-        "documents",
-        lambda: SimpleNamespace(get=lambda *a, **k: SimpleNamespace(
-            status_code=200, content=data, url="https://example.test/clg"
-        )),
-    )
+
+    aanvragen: list[str] = []
+
+    def get(url, **kwargs):
+        aanvragen.append(url)
+        data = antwoorden.get(url.rsplit("/", 1)[-1])
+        if data is None:
+            return SimpleNamespace(status_code=404, content=b"", url=url)
+        return SimpleNamespace(status_code=200, content=data, url=url)
+
+    monkeypatch.setattr(eurlex.net, "documents", lambda: SimpleNamespace(get=get))
+    return aanvragen
+
+
+def test_consolidated_formex_metadata_is_literal_and_missing_recitals_are_reported(monkeypatch):
+    data = formex_zip(act=_cons_act())
+    aanvragen = _cellar(monkeypatch, {"02019R0881-20250204": data})
 
     document = from_link("02019R0881-20250204", "NL")
 
+    assert aanvragen[-1].endswith("/32019R0881")     # de basishandeling is gevraagd
     assert document.provenance.format == "clg"
     assert document.provenance.base_celex == "32019R0881"
     assert document.provenance.consolidation_date == "2025-02-04"
     assert document.provenance.version == "001.001.0"
+    # De basishandeling was niet op te halen: dat mag nooit stil zijn.
+    assert document.provenance.recitals_from is None
+    assert "32019R0881" in document.provenance.recitals_reason
+    assert "HTTP 404" in document.provenance.recitals_reason
     assert any("geen considerans" in melding for melding in document.provenance.waarschuwingen)
+    assert "(1) " not in document.markdown.split("\n\n---\n\n")[0][:80]
+
+
+def test_consolidated_formex_gets_the_preamble_of_the_base_act(monkeypatch):
+    data = formex_zip(act=_cons_act())
+    basis = formex_zip(act=_basis_act())
+    aanvragen = _cellar(monkeypatch, {"02019R0881-20250204": data, "32019R0881": basis})
+
+    document = from_link("02019R0881-20250204", "NL")
+
+    nbsp = "\u00a0"
+    regels = [r for r in document.markdown.split("\n") if r]
+    volgorde = [
+        "HET EUROPEES PARLEMENT EN DE RAAD,",
+        "Overwegende hetgeen volgt:",
+        "(1) Een eerste overweging van de basishandeling (1).",
+        "(2) Een tweede overweging.",
+        f"(1){nbsp}{nbsp}PB C 227 van 28.6.2018, blz. 86.",
+        "HEBBEN DE VOLGENDE VERORDENING VASTGESTELD:",
+        f"### Artikel{nbsp}1",
+    ]
+    posities = [regels.index(zin) for zin in volgorde]
+    assert posities == sorted(posities), "aanhef, overwegingen, noten van de considerans, formule, bepalingen"
+    # De noten van de wettekst beginnen opnieuw bij (1) en staan ná de bepalingen.
+    assert regels.count(f"(1){nbsp}{nbsp}Een noot van de wettekst.") == 1
+    assert regels.index(f"(1){nbsp}{nbsp}Een noot van de wettekst.") > posities[-1]
+
+    assert document.provenance.recitals_from == "32019R0881"
+    assert document.provenance.recitals_reason is None
+    assert any("oorspronkelijke handeling" in melding and "32019R0881" in melding
+               for melding in document.provenance.waarschuwingen)
+    assert not any("geen considerans" in melding for melding in document.provenance.waarschuwingen)
+    assert [u.rsplit("/", 1)[-1] for u in aanvragen] == ["02019R0881-20250204", "32019R0881"]
+
+    bronnen = document.provenance.extra["source_structure"]["sources"]
+    assert [(b["identifier"], b["role"]) for b in bronnen] == [
+        ("02019R0881-20250204", "document"), ("32019R0881", "preamble")]
+    assert base64.b64decode(bronnen[0]["original_base64"]) == data
+    assert base64.b64decode(bronnen[1]["original_base64"]) == basis
+
+
+def test_base_act_that_is_another_act_is_refused(monkeypatch):
+    _cellar(monkeypatch, {"02019R0881-20250204": formex_zip(act=_cons_act()),
+                          "32019R0881": formex_zip(act=_basis_act(nummer=999))})
+    with pytest.raises(ConversionError, match="werd gevraagd"):
+        from_link("02019R0881-20250204", "NL")
+
+
+def test_base_act_without_recitals_keeps_the_consolidated_text_with_a_reason(monkeypatch):
+    _cellar(monkeypatch, {"02019R0881-20250204": formex_zip(act=_cons_act()),
+                          "32019R0881": formex_zip(act=_basis_act(met_overwegingen=False))})
+    document = from_link("02019R0881-20250204", "NL")
+    assert document.provenance.recitals_from is None
+    assert "geen overwegingen" in document.provenance.recitals_reason
+    assert "HEBBEN DE VOLGENDE" not in document.markdown
+
+
+def test_a_base_act_is_refused_when_the_consolidated_text_has_its_own_recitals():
+    cons = formex_zip(act=_cons_act(met_considerans=True))
+    with pytest.raises(ConversionError, match="al een considerans"):
+        formex_xml.omzetten(cons, formex_zip(act=_basis_act()))
+
+
+def test_inserted_recitals_are_covered_by_the_text_preservation_check(monkeypatch):
+    monkeypatch.setattr(formex_xml.FormexOmzetter, "overweging", lambda self, el: None)
+    with pytest.raises(ConversionError, match="woordmultiset|structuurcontrole"):
+        formex_xml.omzetten(formex_zip(act=_cons_act()), formex_zip(act=_basis_act()))
+
+
+def test_emphasis_inside_a_word_does_not_split_the_word():
+    """`cyberbeveiliging<HT TYPE="BOLD">s</HT>certificering` is één woord in de bron."""
+    act = ACT.replace(
+        b"Deze verordening stelt regels vast.",
+        b'Deze verordening stelt cyberbeveiliging<HT TYPE="BOLD">s</HT>regels vast en <HT TYPE="BOLD">dit</HT> blijft vet.',
+    )
+    markdown = formex_xml.omzetten(formex_zip(act=act))[0]
+    assert "cyberbeveiligingsregels" in markdown
+    assert "**dit**" in markdown           # opmaak die niet aan een woord vastzit blijft staan
+    assert "**s**" not in markdown
 
 
 def test_manifest_and_zip_must_name_exactly_the_same_parts():
@@ -157,3 +287,16 @@ def test_nested_content_table_is_refused():
     act = ACT.replace(b"<P>Deze verordening stelt regels vast.</P>", tabel)
     with pytest.raises(ConversionError, match="Geneste inhoudstabel"):
         formex_xml.omzetten(formex_zip(act=act))
+
+
+def test_italic_in_a_heading_is_typography_and_does_not_reach_the_heading_line():
+    """Het Publicatieblad zet `HOOFDSTUK II` in een geconsolideerde tekst cursief.
+
+    De planner herkent een kop aan zijn kale vorm; `## *HOOFDSTUK II*` kreeg geen anker.
+    """
+    act = ACT.replace(b"<TI>HOOFDSTUK I</TI>", b'<TI><P><HT TYPE="ITALIC">HOOFDSTUK I</HT></P></TI>').replace(
+        b"<STI>Algemene bepalingen</STI>",
+        b'<STI><P><HT TYPE="BOLD"><HT TYPE="ITALIC">Algemene bepalingen</HT></HT></P></STI>')
+    markdown = formex_xml.omzetten(formex_zip(act=act))[0]
+    assert "\n## HOOFDSTUK I\n" in markdown
+    assert "\n**Algemene bepalingen**\n" in markdown

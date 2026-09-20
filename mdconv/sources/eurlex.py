@@ -210,21 +210,32 @@ def _response_bytes(response) -> bytes:
     return tekst.encode(getattr(response, "encoding", None) or "utf-8")
 
 
-def _fetch_formex(celex: str, lang: str, *, requested_url: str):
-    """Geef de Formex-uitkomst, of een melding waarmee HTML verdergaat."""
+def _formex_zip(celex: str, lang: str):
+    """`(bytes, bron_url, None)` bij een echte zip, anders `(None, None, (soort, detail))`.
+
+    `soort` is "niet bereikbaar" (het netwerk) of "niet beschikbaar" (de Cellar
+    antwoordt, maar niet met een zip); beide staan letterlijk in de melding.
+    """
     url = f"http://publications.europa.eu/resource/celex/{celex}"
     try:
         response = net.documents().get(
             url, headers=_formex_headers(lang), timeout=_CELLAR_TIMEOUT, allow_redirects=True,
         )
     except Exception as exc:  # netwerk is de reden om de bestaande ladder te behouden
-        return None, f"Formex niet bereikbaar ({type(exc).__name__}); HTML-route gebruikt."
+        return None, None, ("niet bereikbaar", type(exc).__name__)
     data = _response_bytes(response)
     if response.status_code != 200 or not data.startswith(b"PK"):
-        reden = f"HTTP {response.status_code}" if response.status_code != 200 else "antwoord is geen zip"
-        return None, f"Formex niet beschikbaar ({reden}); HTML-route gebruikt."
+        detail = f"HTTP {response.status_code}" if response.status_code != 200 else "antwoord is geen zip"
+        return None, None, ("niet beschikbaar", detail)
+    return data, getattr(response, "url", "") or url, None
 
-    bron_url = getattr(response, "url", "") or url
+
+def _fetch_formex(celex: str, lang: str, *, requested_url: str):
+    """Geef de Formex-uitkomst, of een melding waarmee HTML verdergaat."""
+    data, bron_url, fout = _formex_zip(celex, lang)
+    if data is None:
+        return None, f"Formex {fout[0]} ({fout[1]}); HTML-route gebruikt."
+
     record_source(
         data,
         media_type=_FORMEX_MEDIA_TYPE,
@@ -241,13 +252,43 @@ def _fetch_formex(celex: str, lang: str, *, requested_url: str):
     metadata = extra["metadata"]
     geconsolideerd = metadata.get("format") == "clg"
     waarschuwingen = ["EUR-Lex is via de officiële Formex-manifestatie opgehaald."]
+    recitals_from = recitals_reason = None
     if geconsolideerd and not any(e.soort == "overweging" for e in eenheden):
-        # CONS.ACT bevat de considerans niet. Opdracht 5 voegt die van de
-        # basishandeling toe; tot die tijd mag dit verschil nooit stil zijn.
-        waarschuwingen.append(
-            "De geconsolideerde Formex bevat geen considerans; de overwegingen van de "
-            "basishandeling zijn nog niet ingevoegd."
-        )
+        # CONS.ACT bevat de considerans niet. De HTML-route haalt die uit de
+        # basishandeling, en dat doet deze route ook. Lukt het niet, dan mag dat
+        # nooit stil zijn: zonder waarschuwing lijkt de tekst compleet terwijl
+        # alle rec-ankers ontbreken.
+        base = metadata.get("base_celex")
+        basis, basis_url, fout = _formex_zip(base, lang) if base else (None, None, ("onbekend", "geen basishandeling in de bron"))
+        preambule, reden_basis = (formex_xml.basis_preambule(basis, base) if basis is not None else (None, None))
+        if preambule is not None:
+            record_source(
+                basis,
+                media_type=_FORMEX_MEDIA_TYPE,
+                source_format="formex",
+                source_url=basis_url,
+                identifier=base,
+                language=lang,
+                role="preamble",
+            )
+            # Een ontvangen basishandeling die de controles niet haalt weigert
+            # de hele download, zoals bij de geconsolideerde zip zelf.
+            markdown, eenheden, onbekend, extra = formex_xml.omzetten(data, basis)
+            if onbekend:
+                raise ConversionError(f"Formex bevat elementen zonder behandeling: {onbekend}.")
+            metadata = extra["metadata"]
+            recitals_from = base
+            waarschuwingen.append(_PREAMBLE_NOTE.format(base=base))
+        else:
+            recitals_reason = (
+                f"de Formex van de basishandeling {base} is {fout[0]} ({fout[1]})" if basis is None
+                else reden_basis
+            )
+            waarschuwingen.append(
+                "De geconsolideerde Formex bevat geen considerans en die van de "
+                f"basishandeling kon niet worden ingevoegd: {recitals_reason}. "
+                "De overwegingen en hun rec-ankers ontbreken."
+            )
     herkomst = Herkomst(
         format="clg" if geconsolideerd else "formex",
         celex=celex,
@@ -256,6 +297,8 @@ def _fetch_formex(celex: str, lang: str, *, requested_url: str):
         base_celex=metadata.get("base_celex"),
         consolidation_date=metadata.get("consolidation_date"),
         version=metadata.get("version"),
+        recitals_from=recitals_from,
+        recitals_reason=recitals_reason,
         geldend_van=metadata.get("valid_from"),
         geldend_tot=metadata.get("valid_until"),
         source_url=bron_url,

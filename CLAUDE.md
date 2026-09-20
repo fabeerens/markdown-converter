@@ -117,6 +117,15 @@ accountregistratie namens de gebruiker):
   tekstbehoud, bladalinea's, tabellen en structurele eenheden; een niet-zipantwoord valt
   terug op de bestaande HTML-ladder en legt die keuze in de herkomst vast. De bestaande
   `sources/formex.py` blijft de tolerante parser voor een handmatig geüploade losse XML.
+  Een geconsolideerde tekst (`CONS.ACT`) heeft een lege `PREAMBLE`; de omzetter haalt dan de
+  Formex van de basishandeling (`INFO.CONSLEG/@CONSLEG.REF` → `3…`) en zet haar considerans
+  vóór de bepalingen, met de noten van die considerans als eigen reeks vóór de
+  vaststellingsformule (`Herkomst.recitals_from`, en de basiszip als bron met `role: "preamble"`).
+  Een basishandeling die een andere handeling blijkt te zijn (`BIB.INSTANCE/NO.DOC`) weigert de
+  download; een die niet op te halen is of geen overwegingen heeft laat de tekst zonder
+  considerans, met `Herkomst.recitals_reason` en een waarschuwing. Vet of cursief dat aan een
+  woord vastzit (`cyberbeveiliging<HT TYPE="BOLD">s</HT>certificering`) wordt niet geschreven,
+  en opmaak in een kop (`HOOFDSTUK II` cursief) ook niet: beide braken de herkenning in de kb.
   De portal-HTML (`/legal-content/…/HTML/`) blokkeert bots (HTTP 202, lege body;
   inmiddels een AWS WAF-JS-challenge, dus ook met retries permanent 202 — de portal is in de praktijk
   dood voor een simpele `requests`-scraper). Gebruik het **Cellar-archief** via content negotiation,
@@ -809,7 +818,7 @@ regel), inclusief de vloeiende tabbalk-indicator.
   weggeschreven bestand nooit als geldige staat gelezen kan worden.
 
 ## Tests
-`.venv/bin/python -m pytest tests/ -q` — 242 karakteriseringstests die het gedrag
+`.venv/bin/python -m pytest tests/ -q` — 249 karakteriseringstests die het gedrag
 vastleggen in plaats van het te beschrijven: `detect_source`-precedentie, ELI→CELEX,
 de CLG-markupnormalisatie (lidnummers, lettermarkers, voetnootankers), de
 voetnootdefinities die met de preambule meereizen, de notitievorm die een intakepoort

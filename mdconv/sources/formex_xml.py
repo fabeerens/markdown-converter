@@ -119,12 +119,12 @@ def _plat_bron(el) -> str:
     """Platte zichtbare tekst, los van de omzetter die de Markdown bouwt."""
     if el.tag in METADATA:
         return ""
-    delen = [el.text or ""]
+    uit = el.text or ""
     for kind in el:
         if kind.tag == "QUOT.START":
-            delen.append("“")
+            stuk = "“"
         elif kind.tag == "QUOT.END":
-            delen.append("”")
+            stuk = "”"
         elif kind.tag == "FT" and (kind.get("TYPE") or "").upper() == "NUMBER":
             cijfers = "".join(kind.itertext())
             if cijfers.isdigit() and len(cijfers) > 4:
@@ -132,16 +132,20 @@ def _plat_bron(el) -> str:
                 while cijfers:
                     groepen.insert(0, cijfers[-3:])
                     cijfers = cijfers[:-3]
-                delen.append(NBSP.join(groepen))
+                stuk = NBSP.join(groepen)
             else:
-                delen.append(_plat_bron(kind))
+                stuk = _plat_bron(kind)
         else:
-            delen.append(_plat_bron(kind))
-        delen.append(kind.tail or "")
-    # Formex gebruikt elementgrenzen soms ook als woordgrens zonder een
-    # letterlijke spatie in `.text` of `.tail` (bijvoorbeeld TITLE/TI gevolgd
-    # door een datum). Voor woordbehoud moet die grens zichtbaar blijven.
-    return " ".join(delen)
+            stuk = _plat_bron(kind)
+        # Formex gebruikt elementgrenzen soms ook als woordgrens zonder een
+        # letterlijke spatie in `.text` of `.tail` (bijvoorbeeld TITLE/TI gevolgd
+        # door een datum). Voor woordbehoud moet die grens zichtbaar blijven.
+        # Een `HT` is opmaak binnen de zin en geen grens: `cyberbeveiliging<HT
+        # TYPE="BOLD">s</HT>certificering` is één woord, en de Markdown schrijft
+        # het ook als één woord (zie `inline`).
+        uit += stuk if kind.tag == "HT" else f" {stuk} "
+        uit += kind.tail or ""
+    return uit
 
 
 def _woorden(tekst: str) -> list[str]:
@@ -201,6 +205,48 @@ def _bladalineas(onderdelen: list[tuple[str, ET.Element]]) -> list[tuple[str, li
     return uit
 
 
+def _celex_jaar_nummer(celex: str) -> tuple[int, int] | None:
+    """`32019R0881` -> (2019, 881); alleen de vorm van een handeling uit sector 3."""
+    m = re.fullmatch(r"3(\d{4})[A-Z]{1,2}(\d{4})", celex or "")
+    return (int(m.group(1)), int(m.group(2))) if m else None
+
+
+def basis_preambule(basis: bytes, base_celex: str | None) -> tuple[ET.Element | None, str | None]:
+    """De `PREAMBLE` van de basishandeling achter een geconsolideerde tekst.
+
+    Geeft `(element, None)`, of `(None, reden)` als de basishandeling geen
+    bruikbare considerans heeft. Dat tweede is geen bronfout: een oudere
+    handeling mag er geen hebben, en dan blijft de geconsolideerde tekst zonder,
+    met die reden in de herkomst.
+
+    Een zip die een **andere** handeling blijkt te zijn, wordt geweigerd. Dat is
+    wél een fout: elke overweging van een verkeerde handeling zou stil onder een
+    verordening komen te staan waar ze niet bij hoort. De identiteit komt uit de
+    handeling zelf (`BIB.INSTANCE/NO.DOC`, jaar en volgnummer), niet uit de URL
+    waarmee ze is opgehaald.
+    """
+    _, delen = _onderdelen(basis)
+    handelingen = [root for _, root in delen if root.tag == "ACT"]
+    if len(handelingen) != 1:
+        raise _xml_fout(f"de basishandeling bevat {len(handelingen)} handelingen (ACT); precies één is vereist")
+    handeling = handelingen[0]
+    verwacht = _celex_jaar_nummer(base_celex or "")
+    nodoc = handeling.find("BIB.INSTANCE/NO.DOC")
+    jaar = ws(nodoc.findtext("YEAR") or "") if nodoc is not None else ""
+    nummer = ws(nodoc.findtext("NO.CURRENT") or "") if nodoc is not None else ""
+    if verwacht is None or not (jaar.isdigit() and nummer.isdigit()):
+        return None, "de identiteit van de basishandeling is niet uit de bron vast te stellen"
+    if (int(jaar), int(nummer)) != verwacht:
+        raise _xml_fout(
+            f"de opgehaalde basishandeling is {nummer}/{jaar}, maar {base_celex} "
+            f"({verwacht[1]}/{verwacht[0]}) werd gevraagd"
+        )
+    preambule = handeling.find("PREAMBLE")
+    if preambule is None or next(preambule.iter("CONSID"), None) is None:
+        return None, "de basishandeling heeft in Formex geen overwegingen"
+    return preambule, None
+
+
 class FormexOmzetter:
     def __init__(self) -> None:
         self.u = Uitvoer()
@@ -210,6 +256,8 @@ class FormexOmzetter:
         self.herhaalde_cellen = 0
         self.bijlagen = 0
         self.metadata: dict = {}
+        self.basis: ET.Element | None = None       # PREAMBLE van de basishandeling
+        self.zonder: frozenset = frozenset()       # opmaaksoorten die nu niet geschreven worden
 
     def onbekend(self, context: str, el) -> None:
         """Weiger onbekende inhoud; een leeg technisch element mag verdwijnen."""
@@ -243,12 +291,22 @@ class FormexOmzetter:
 
     def inline(self, el) -> str:
         delen = [el.text or ""]
-        for kind in el:
-            delen.append(self.inline_el(kind))
+        kinderen = list(el)
+        for index, kind in enumerate(kinderen):
+            vorige = next((d[-1] for d in reversed(delen) if d), "")
+            volgende = (kind.tail or "")[:1]
+            if not volgende and index + 1 < len(kinderen):
+                volgende = (kinderen[index + 1].text or "")[:1]
+            # Vet of cursief dat aan een woord vastzit staat midden in dat woord
+            # (`cyberbeveiliging<HT TYPE="BOLD">s</HT>certificering`). Met
+            # sterretjes ertussen valt het woord in twee tokens uiteen en vindt de
+            # kennisbank het niet meer terug; de opmaak gaat dan liever verloren.
+            vast = vorige.isalnum() or volgende.isalnum()
+            delen.append(self.inline_el(kind, vast_aan_woord=vast))
             delen.append(kind.tail or "")
         return "".join(delen)
 
-    def inline_el(self, el) -> str:
+    def inline_el(self, el, vast_aan_woord: bool = False) -> str:
         tag = el.tag
         if tag == "NOTE":
             return self.noot(el)
@@ -263,6 +321,8 @@ class FormexOmzetter:
                 return binnen
             if soort == "UC":          # het Publicatieblad zet dit in kapitalen
                 return binnen.upper()
+            if vast_aan_woord or soort in self.zonder:
+                return binnen
             if soort == "ITALIC":
                 return f"*{ws(binnen)}*"
             if soort == "BOLD":
@@ -293,6 +353,22 @@ class FormexOmzetter:
         self.onbekend("inline", el)
         return ""
 
+    def kop_tekst(self, el, *soorten: str) -> str:
+        """Tekst van een kop of opschrift, zonder de genoemde opmaak (standaard alle).
+
+        Het Publicatieblad zet de koppen van een geconsolideerde tekst cursief
+        (`HOOFDSTUK II` als `<HT TYPE="ITALIC">`). De planner herkent een kop aan
+        zijn kale vorm, dus `## *HOOFDSTUK II*` kreeg geen anker. Opmaak in een
+        kop is typografie en geen inhoud; bij een opschrift blijft vet staan,
+        zoals de planner dat van een Publicatiebladtekst gewend is.
+        """
+        eerder = self.zonder
+        self.zonder = frozenset(soorten or ("ITALIC", "BOLD"))
+        try:
+            return ws(self.inline(el))
+        finally:
+            self.zonder = eerder
+
     def noot(self, el) -> str:
         """Een nootverwijzing; de definitie wacht op het einde van haar reeks."""
         sleutel = el.get("NOTE.REF") or el.get("NOTE.ID")
@@ -318,9 +394,11 @@ class FormexOmzetter:
 
     # ------------------------------------------------------------ documenten
 
-    def omzetten(self, data: bytes) -> Uitvoer:
+    def omzetten(self, data: bytes, basis: bytes | None = None) -> Uitvoer:
         doc, onderdelen = _onderdelen(data)
         self.controleer_elementen(onderdelen)
+        if basis is not None:
+            self.basis = self.kies_basis(onderdelen, basis)
         for index, (naam, root) in enumerate(onderdelen):
             if index:
                 self.u.blok("---")
@@ -331,8 +409,27 @@ class FormexOmzetter:
                 self.bijlage(root)
             else:
                 self.onbekend("document", root)
+        if self.basis is not None:
+            # De ingevoegde considerans is brontekst als elke andere: dezelfde
+            # controles op verlies, verdubbeling en verweving gelden ook voor haar.
+            onderdelen = onderdelen + [("basishandeling:PREAMBLE", self.basis)]
         self.zelfcontrole(onderdelen)
         return self.u
+
+    def kies_basis(self, onderdelen: list[tuple[str, ET.Element]], basis: bytes) -> ET.Element:
+        """De considerans van de basishandeling, voor een tekst die er zelf geen heeft."""
+        acts = [root for _, root in onderdelen if root.tag == "CONS.ACT"]
+        if len(acts) != 1:
+            raise _xml_fout("een basishandeling is alleen zinvol bij één geconsolideerde handeling (CONS.ACT)")
+        if next(acts[0].iter("CONSID"), None) is not None:
+            raise _xml_fout("de geconsolideerde tekst heeft zelf al een considerans; er komt geen tweede bij")
+        cons = acts[0].find("INFO.CONSLEG")
+        base_celex = self.celex_uit_conslegref(cons.get("CONSLEG.REF", "") if cons is not None else "")
+        preambule, reden = basis_preambule(basis, base_celex)
+        if preambule is None:
+            raise _xml_fout(reden or "de basishandeling levert geen considerans")
+        self.controleer_elementen([("basishandeling", preambule)])
+        return preambule
 
     def zelfcontrole(self, onderdelen: list[tuple[str, ET.Element]]) -> None:
         """Bewijs binnen deze route dat tekst en structurele eenheden aankomen."""
@@ -452,7 +549,10 @@ class FormexOmzetter:
                 for p in kind.iter("P"):
                     self.u.blok(ws(self.inline(p)))
             elif tag == "PREAMBLE":
-                self.preambule(kind)
+                if self.basis is not None:
+                    self.preambule_van_basis()
+                else:
+                    self.preambule(kind)
             elif tag == "ENACTING.TERMS":
                 self.bepalingen(kind, pad={})
             elif tag == "FINAL":
@@ -480,6 +580,29 @@ class FormexOmzetter:
                 continue
             else:
                 self.u.blok(ws(self.inline(kind)))
+
+    def preambule_van_basis(self) -> None:
+        """De considerans van de basishandeling, in de vorm die de HTML-route ook schrijft.
+
+        Een geconsolideerde tekst heeft geen aanhef en geen overwegingen; die
+        staan alleen in de handeling zelf. Zoals in het Publicatieblad-formaat
+        van een geconsolideerde tekst komt eerst de aanhef met de overwegingen,
+        dan de noten die erbij horen, en pas daarna de vaststellingsformule. De
+        noten van de considerans zijn een eigen reeks: die van de wettekst
+        beginnen daarna opnieuw bij (1), en `plan_structure` zoekt de grens op
+        de formule.
+        """
+        preambule = self.basis
+        formule = [k for k in preambule if k.tag == "PREAMBLE.FINAL"]
+        voor = ET.Element(preambule.tag)
+        voor.extend(k for k in preambule if k.tag != "PREAMBLE.FINAL")
+        self.nieuwe_nootreeks()
+        self.preambule(voor)
+        self.notenblok()
+        self.nieuwe_nootreeks()
+        for kind in formule:
+            self.u.blok(ws(self.inline(kind)))
+        self.metadata["recitals_from"] = self.metadata.get("base_celex")
 
     def overweging(self, el) -> None:
         np = el.find("NP")
@@ -517,8 +640,9 @@ class FormexOmzetter:
         for kind in el:
             if kind.tag == "DIVISION":
                 titel = kind.find("TITLE")
-                ti = ws(self.inline(titel.find("TI"))) if titel is not None and titel.find("TI") is not None else ""
-                sti = ws(self.inline(titel.find("STI"))) if titel is not None and titel.find("STI") is not None else ""
+                ti = self.kop_tekst(titel.find("TI")) if titel is not None and titel.find("TI") is not None else ""
+                sti = (self.kop_tekst(titel.find("STI"), "ITALIC")
+                       if titel is not None and titel.find("STI") is not None else "")
                 # Kop en opschrift op eigen regels, net als in het Publicatieblad:
                 # het profiel voegt ze zelf samen (instructie `merge_next`).
                 self.u.blok(f"## {ti}")
@@ -540,8 +664,8 @@ class FormexOmzetter:
                 self.onbekend("bepalingen", kind)
 
     def artikel(self, el) -> None:
-        ti = ws(self.inline(el.find("TI.ART"))) if el.find("TI.ART") is not None else "Artikel"
-        sti = ws(self.inline(el.find("STI.ART"))) if el.find("STI.ART") is not None else ""
+        ti = self.kop_tekst(el.find("TI.ART")) if el.find("TI.ART") is not None else "Artikel"
+        sti = self.kop_tekst(el.find("STI.ART"), "ITALIC") if el.find("STI.ART") is not None else ""
         m = re.match(r"Artikel\s+(.+)$", ti, re.I)
         anker = f"art-{nummer_anker(m.group(1))}" if m else f"art-{int(el.get('IDENTIFIER', '0'))}"
         self.u.blok(f"### {ti.replace(' ', NBSP)}")
@@ -745,8 +869,9 @@ class FormexOmzetter:
         self.bijlagen += 1
         self.nieuwe_nootreeks()      # de tabelnoten van een bijlage tellen opnieuw
         titel = root.find("TITLE")
-        ti = ws(self.inline(titel.find("TI"))) if titel is not None and titel.find("TI") is not None else "BIJLAGE"
-        sti = ws(self.inline(titel.find("STI"))) if titel is not None and titel.find("STI") is not None else ""
+        ti = self.kop_tekst(titel.find("TI")) if titel is not None and titel.find("TI") is not None else "BIJLAGE"
+        sti = (self.kop_tekst(titel.find("STI"), "ITALIC")
+               if titel is not None and titel.find("STI") is not None else "")
         m = re.match(r"BIJLAGE\s+(\S+)", ti, re.I)
         anker = f"annex-{nummer_anker(m.group(1), romeins_omrekenen=True)}" if m else f"annex-{self.bijlagen}"
         self.u.blok(f"## {ti.replace(' ', NBSP)}")
@@ -788,9 +913,13 @@ class FormexOmzetter:
                 self.inhoud(kind, basis=anker, teller=teller)
 
 
-def omzetten(data: bytes) -> tuple[str, list, dict, dict]:
-    """Zet één ongewijzigde Cellar-zip om naar de EUR-Lex-raw-vorm."""
+def omzetten(data: bytes, basis: bytes | None = None) -> tuple[str, list, dict, dict]:
+    """Zet één ongewijzigde Cellar-zip om naar de EUR-Lex-raw-vorm.
+
+    `basis` is de Cellar-zip van de basishandeling achter een geconsolideerde
+    tekst; alleen haar considerans komt mee, vóór de bepalingen.
+    """
     o = FormexOmzetter()
-    u = o.omzetten(data)
+    u = o.omzetten(data, basis)
     return u.markdown(), u.eenheden, u.onbekend, {"herhaalde_cellen": o.herhaalde_cellen,
                                                   "metadata": o.metadata}
