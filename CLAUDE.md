@@ -790,7 +790,7 @@ regel), inclusief de vloeiende tabbalk-indicator.
   weggeschreven bestand nooit als geldige staat gelezen kan worden.
 
 ## Tests
-`.venv/bin/python -m pytest tests/ -q` — 192 karakteriseringstests die het gedrag
+`.venv/bin/python -m pytest tests/ -q` — 220 karakteriseringstests die het gedrag
 vastleggen in plaats van het te beschrijven: `detect_source`-precedentie, ELI→CELEX,
 de CLG-markupnormalisatie (lidnummers, lettermarkers, voetnootankers), de
 voetnootdefinities die met de preambule meereizen, de notitievorm die een intakepoort
