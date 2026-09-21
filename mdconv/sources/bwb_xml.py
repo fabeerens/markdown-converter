@@ -68,6 +68,15 @@ class BwbOmzetter:
 
     # ---------- blokken ----------
     def omzetten(self, root) -> Uitvoer:
+        # Tekst die nog niet geldt mag nooit als geldend recht lezen. Bij een
+        # artikel zet `artikel()` er een regel onder de kop; voor elk ander
+        # onderdeel is er geen vorm, en dan weigeren we liever dan te raden.
+        for el in root.iter():
+            if el.tag != "artikel" and (el.get("status") or "").lower() == "nogniet":
+                raise ConversionError(
+                    f"<{el.tag}> heeft status nogniet; alleen bij een artikel weet de "
+                    "omzetter hoe een nog niet geldend onderdeel wordt getoond."
+                )
         wet = root.find("wetgeving")
         titel = wet.findtext("citeertitel") or ""
         self.u.blok(f"# {ws(titel)}")
@@ -169,6 +178,11 @@ class BwbOmzetter:
             jaar, maand, dag = inwerking.split("-")
             self.u.blok(f"[Vervallen per {dag}-{maand}-{jaar}]")
             self.expired[anker] = inwerking
+        elif status == "nogniet":
+            # De portal liet de tekst weg en zei dat dit onderdeel nog niet in
+            # werking is. Wij houden de tekst (het anker moet blijven bestaan),
+            # dus de melding moet er wel staan, in de vorm van `[Vervallen per …]`.
+            self.u.blok("[Nog niet in werking getreden.]")
         teller = {"lijsten": 0}
         for kind in el:
             if kind.tag == "lid":

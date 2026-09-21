@@ -75,6 +75,26 @@ def test_not_yet_effective_paragraph_keeps_text_without_new_anchor_unit():
     assert [e.anker for e in eenheden] == ["art-1"]
 
 
+def test_not_yet_effective_article_is_marked_under_its_heading_and_keeps_its_text():
+    """Tekst van een artikel dat nog niet geldt mag nooit als geldend recht lezen."""
+    xml = toestand(status="nogniet", artikel_inwerking="")
+    markdown = wetten.bwb_xml.omzetten(xml)[0]
+    kop, rest = markdown.split("Reikwijdte", 1)[1].split("\n", 1)
+    assert rest.lstrip("\n").startswith("[Nog niet in werking getreden.]\n\n1. Deze wet geldt.")
+
+
+def test_a_goed_article_gets_no_not_yet_in_force_marker():
+    assert "Nog niet in werking" not in wetten.bwb_xml.omzetten(toestand())[0]
+
+
+def test_not_yet_effective_status_on_anything_but_an_article_is_refused():
+    """Alleen bij een artikel weet de omzetter hoe hij dit toont; elders is het een weigering."""
+    xml = toestand().replace(b"<artikel ", b'<hoofdstuk status="nogniet" inwerking="2020-01-01"><kop><label>Hoofdstuk</label><nr>1</nr><titel>Eerste</titel></kop><artikel ', 1).replace(
+        b"</artikel>", b"</artikel></hoofdstuk>", 1)
+    with pytest.raises(ConversionError, match="nogniet"):
+        wetten.bwb_xml.omzetten(xml)
+
+
 def test_withdrawn_regulation_uses_last_version(monkeypatch):
     xml = toestand()
 
