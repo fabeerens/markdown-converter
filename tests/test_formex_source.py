@@ -97,8 +97,13 @@ def test_non_zip_formex_response_falls_back_to_html_with_a_warning(monkeypatch):
     assert any("HTML-route" in melding for melding in document.provenance.waarschuwingen)
 
 
-def _cons_act(*, met_considerans: bool = False, met_noot: bool = True) -> bytes:
-    """Een geconsolideerde handeling zoals de Cellar hem levert: een lege PREAMBLE."""
+def _cons_act(*, met_considerans: bool = False, met_noot: bool = True,
+              fam_comp: bytes = b"", markeringen: tuple[str, ...] = ()) -> bytes:
+    """Een geconsolideerde handeling zoals de Cellar hem levert: een lege PREAMBLE.
+
+    `fam_comp` is het blok met de vindplaats en de wijzigende handelingen;
+    `markeringen` zijn CELEX-nummers waarvoor een passage een `CLG.MDFO` krijgt.
+    """
     body = ACT.removeprefix(b"<ACT>").removesuffix(b"</ACT>")
     begin = body.index(b"<ENACTING.TERMS>")
     voor = body[:body.index(b"<PREAMBLE>")]
@@ -113,12 +118,157 @@ def _cons_act(*, met_considerans: bool = False, met_noot: bool = True) -> bytes:
             b'Deze verordening stelt regels vast.<NOTE NOTE.ID="E0900" TYPE="FOOTNOTE">'
             b"<P>Een noot van de wettekst.</P></NOTE>",
         )
+    if markeringen:
+        pis = b"".join(
+            f'<?CLG.MDFO ID="O{n}" IDREF="C{n}" ACTION="REPLACED" LEVEL="STRUCTURE" COMMAND="EXPLICIT" '
+            f'ACTIVE.DOC="{celex}" ACTIVE.LOC="AR:1;PT:1" MOD.LEVEL="1"?><?CLG.MDFC ID="C{n}" IDREF="O{n}"?>'.encode()
+            for n, celex in enumerate(markeringen, 1)
+        )
+        bepalingen = bepalingen.replace(b"<ITEM><NP><NO.P>b)", pis + b"<ITEM><NP><NO.P>b)")
     return (
         b'<CONS.ACT><INFO.CONSLEG CONSLEG.REF="2019R0881" START.DATE="20250204" '
         b'END.DATE="99999999" PROD.SEQ="001.001.0"/><CONS.DOC>'
-        b"<BIB.INSTANCE><LG.DOC>NL</LG.DOC></BIB.INSTANCE>" + voor + preambule + bepalingen
+        b"<BIB.INSTANCE><LG.DOC>NL</LG.DOC></BIB.INSTANCE>" + fam_comp + voor + preambule + bepalingen
         + b"</CONS.DOC></CONS.ACT>"
     )
+
+
+def _mod_act(*, nummer: str = "37", jaar: str = "2025", celex: str | None = "32025R0037",
+             leg_val: str | None = "REG", soort: str = "MOD") -> bytes:
+    """Eén `MOD.ACT` zoals de Cellar hem in `GR.MOD.ACT` zet."""
+    leg = f' LEG.VAL="{leg_val}"' if leg_val else ""
+    noceles = f"<NO.CELEX>{celex}</NO.CELEX>" if celex else ""
+    return (
+        f'<MOD.ACT TYPE="{soort}"{leg} EXISTS="YES"><BIB.DATA><BIB.INSTANCE.CONS><DOCUMENT.REF.CONS>'
+        f'<COLL>L</COLL><NO.DOC FORMAT="YN" TYPE="OJ"><NO.CURRENT>{nummer}</NO.CURRENT><YEAR>{jaar}</YEAR>'
+        f'<COM>EU</COM></NO.DOC><LG.OJ>NL</LG.OJ><PAGE.FIRST>1</PAGE.FIRST></DOCUMENT.REF.CONS>'
+        f'<DATE ISO="20250115">20250115</DATE></BIB.INSTANCE.CONS>{noceles}</BIB.DATA></MOD.ACT>'
+    ).encode()
+
+
+def _fam_comp(*wijzigingen: bytes, celex: str = "32019R0881", no_oj: str | None = "151",
+              pagina: str = "15", datum: str = "20190607") -> bytes:
+    """`FAM.COMP` met de vindplaats van de basishandeling en haar wijzigende handelingen."""
+    oj = f"<NO.OJ>{no_oj}</NO.OJ>" if no_oj else ""
+    return (
+        f'<FAM.COMP LEG.VAL="REG"><BIB.DATA><BIB.INSTANCE.CONS><DOCUMENT.REF.CONS><COLL>L</COLL>{oj}'
+        f'<YEAR>2019</YEAR><LG.OJ>NL</LG.OJ><PAGE.FIRST>{pagina}</PAGE.FIRST></DOCUMENT.REF.CONS>'
+        f'<DATE ISO="{datum}">{datum}</DATE><NO.DOC FORMAT="YN" TYPE="OJ"><NO.CURRENT>881</NO.CURRENT>'
+        f'<YEAR>2019</YEAR><COM>EU</COM></NO.DOC></BIB.INSTANCE.CONS><NO.CELEX>{celex}</NO.CELEX></BIB.DATA>'
+        f'<GR.MOD.ACT>'.encode() + b"".join(wijzigingen) + b"</GR.MOD.ACT></FAM.COMP>"
+    )
+
+
+def test_consolidated_formex_reads_the_base_citation_and_the_amending_acts_from_the_source(monkeypatch):
+    data = formex_zip(act=_cons_act(fam_comp=_fam_comp(_mod_act()), markeringen=("32025R0037",)))
+    _cellar(monkeypatch, {"02019R0881-20250204": data})
+
+    document = from_link("02019R0881-20250204", "NL")
+
+    # Dezelfde vorm als bij een handeling uit het Publicatieblad.
+    assert document.provenance.oj_reference == "PB L 151 van 7.6.2019, blz. 15"
+    assert document.provenance.amendments == ({"celex": "32025R0037", "shown": True},)
+    assert not any("GR.MOD.ACT" in m or "CLG.MDFO" in m or "FAM.COMP" in m
+                   for m in document.provenance.waarschuwingen)
+
+    # Het zijbestand in de vorm die `extract_meta.py` leest (`side["amendments"][i]["celex"]`).
+    from mdconv.herkomst import als_zijbestand
+    import json
+    zij = json.loads(als_zijbestand(document.provenance.as_json(), bewerkt_met_ai=False))
+    assert [a["celex"] for a in zij["amendments"]] == ["32025R0037"]
+    assert zij["amendments"][0].get("shown") is True
+    assert zij["oj_reference"] == "PB L 151 van 7.6.2019, blz. 15"
+    assert "corrections" not in zij     # niet gelezen, dus niet als "geen" beweerd
+
+
+def test_consolidated_formex_without_fam_comp_says_so_instead_of_inventing_a_citation(monkeypatch):
+    _cellar(monkeypatch, {"02019R0881-20250204": formex_zip(act=_cons_act())})
+    document = from_link("02019R0881-20250204", "NL")
+    assert document.provenance.oj_reference is None
+    assert document.provenance.amendments == ()
+    assert any("vindplaats" in m and "oj_reference is leeg" in m for m in document.provenance.waarschuwingen)
+
+
+def test_incomplete_citation_is_not_written_as_a_partial_one():
+    zonder_nummer = formex_zip(act=_cons_act(fam_comp=_fam_comp(no_oj=None)))
+    _, _, _, extra = formex_xml.omzetten(zonder_nummer)
+    assert extra["metadata"]["oj_reference"] is None
+    assert "NO.OJ" in extra["metadata"]["waarschuwingen"][0]
+
+
+def test_citation_of_another_act_than_the_consolidation_is_refused():
+    with pytest.raises(ConversionError, match="hoort bij 32016R0679"):
+        formex_xml.omzetten(formex_zip(act=_cons_act(fam_comp=_fam_comp(celex="32016R0679"))))
+
+
+def test_amendment_celex_letter_comes_from_leg_val_when_the_source_gives_no_celex():
+    fam = _fam_comp(_mod_act(celex=None, leg_val="DIR", nummer="7"),
+                    _mod_act(celex=None, leg_val="REG", nummer="1234", jaar="2021"),
+                    _mod_act(celex=None, leg_val="DEC", nummer="12", jaar="2019"))
+    _, _, _, extra = formex_xml.omzetten(formex_zip(act=_cons_act(fam_comp=fam)))
+    assert [a["celex"] for a in extra["metadata"]["amendments"]] == [
+        "32025L0007", "32021R1234", "32019D0012"]
+
+
+def test_amendment_whose_kind_and_celex_cannot_be_determined_is_reported_not_guessed():
+    fam = _fam_comp(_mod_act(celex=None, leg_val="ONBEKEND"), _mod_act(celex=None, leg_val=None))
+    _, _, _, extra = formex_xml.omzetten(formex_zip(act=_cons_act(fam_comp=fam)))
+    assert extra["metadata"]["amendments"] == []
+    meldingen = extra["metadata"]["waarschuwingen"]
+    assert sum("niet af te leiden" in m for m in meldingen) == 2
+
+
+def test_amendment_celex_that_contradicts_number_or_kind_is_refused():
+    # NO.CELEX zegt R, LEG.VAL zegt DIR: twee bronnen die het oneens zijn.
+    tegen_soort = _fam_comp(_mod_act(celex="32025R0037", leg_val="DIR"))
+    with pytest.raises(ConversionError, match="spreekt 32025L0037"):
+        formex_xml.omzetten(formex_zip(act=_cons_act(fam_comp=tegen_soort)))
+    tegen_nummer = _fam_comp(_mod_act(celex="32025R0038"))
+    with pytest.raises(ConversionError, match="spreekt NO.DOC 37/2025 tegen"):
+        formex_xml.omzetten(formex_zip(act=_cons_act(fam_comp=tegen_nummer)))
+    geen_celex = _fam_comp(_mod_act(celex="2025/37"))
+    with pytest.raises(ConversionError, match="geen CELEX-nummer"):
+        formex_xml.omzetten(formex_zip(act=_cons_act(fam_comp=geen_celex)))
+
+
+def test_amendment_without_a_mark_in_the_text_gets_no_shown_field():
+    # `shown: false` zou beweren dat de wijziging is overschreven; dat is voor
+    # Formex niet gemeten. De melding zegt het, en het veld ontbreekt.
+    _, _, _, extra = formex_xml.omzetten(formex_zip(act=_cons_act(fam_comp=_fam_comp(_mod_act()))))
+    assert extra["metadata"]["amendments"] == [{"celex": "32025R0037"}]
+    assert any("32025R0037" in m and "`shown` niet vastgesteld" in m
+               for m in extra["metadata"]["waarschuwingen"])
+
+
+def test_marks_that_name_an_act_outside_gr_mod_act_are_reported():
+    data = formex_zip(act=_cons_act(fam_comp=_fam_comp(_mod_act()), markeringen=("32025R0037", "32024R1183")))
+    _, _, _, extra = formex_xml.omzetten(data)
+    assert extra["metadata"]["amendments"] == [{"celex": "32025R0037", "shown": True}]
+    assert any("32024R1183" in m and "onvolledig" in m for m in extra["metadata"]["waarschuwingen"])
+
+
+def test_mod_act_that_is_not_a_modification_is_left_out_with_a_reason_and_duplicates_count_once():
+    fam = _fam_comp(_mod_act(), _mod_act(), _mod_act(celex="32025R0099", nummer="99", soort="COR"))
+    _, _, _, extra = formex_xml.omzetten(formex_zip(act=_cons_act(fam_comp=fam, markeringen=("32025R0037",))))
+    meta = extra["metadata"]
+    assert [a["celex"] for a in meta["amendments"]] == ["32025R0037"]
+    assert any("32025R0099" in m and "TYPE='COR'" in m for m in meta["waarschuwingen"])
+    assert any("meer dan eens" in m for m in meta["waarschuwingen"])
+
+
+def test_wijzigingsmarkeringen_are_counted_in_every_part_of_the_zip():
+    # Een handeling die alleen een bijlage wijzigt heeft haar markering in dat onderdeel.
+    zonder = b"<CONS.ANNEX><P>Tekst.</P></CONS.ANNEX>"
+    met = (b'<CONS.ANNEX><?CLG.MDFO ID="O1" IDREF="C1" ACTIVE.DOC="32025R0037"?><P>Tekst.</P>'
+           b'<?CLG.MDFC ID="C1" IDREF="O1"?></CONS.ANNEX>')
+    data = formex_zip(act=_cons_act(markeringen=("32025R0037",)),
+                      extra={"bijlage_1.xml": zonder, "bijlage_2.xml": met})
+    assert formex_xml._wijzigingsmarkeringen(data) == {"32025R0037": 2}
+
+
+def test_provenance_without_amendments_writes_an_empty_list():
+    from mdconv.herkomst import Herkomst
+    assert Herkomst(format="formex").as_json()["amendments"] == []
 
 
 def _basis_act(*, jaar: int = 2019, nummer: int = 881, met_overwegingen: bool = True) -> bytes:

@@ -57,6 +57,9 @@ STRUCTUUR_ELEMENTEN = {
     "TERM", "DEFINITION", "PREAMBLE.INIT", "PREAMBLE.FINAL", "GR.CONSID.INIT",
     "VISA", "SIGNATORY", "SIGNATURE", "COM",
 }
+# De letter van een CELEX-nummer volgens het soort handeling (`LEG.VAL`). Wat hier
+# niet in staat, is niet af te leiden en moet dan uit `NO.CELEX` komen.
+CELEX_LETTER = {"REG": "R", "DIR": "L", "DEC": "D"}
 BEKENDE_TEKSTELEMENTEN = METADATA | INLINE_TEKST | INLINE_TRANSPARANT | STRUCTUUR_ELEMENTEN
 
 
@@ -113,6 +116,48 @@ def _onderdelen(data: bytes) -> tuple[ET.Element, list[tuple[str, ET.Element]]]:
             except (ET.ParseError, KeyError) as exc:
                 raise _xml_fout(f"onderdeel {naam} is niet leesbaar ({exc})", exc)
         return doc, uit
+
+
+class _PiVerzamelaar(ET.TreeBuilder):
+    """Bewaart de `CLG.MDFO`-instructies die ElementTree normaal weggooit.
+
+    De consolidatie zet om elke gewijzigde passage `<?CLG.MDFO ... ACTIVE.DOC="32025R0037" ...?>`
+    en `<?CLG.MDFC ...?>`. Dat is de machineleesbare vorm van het ▼M-teken uit de
+    HTML-route: de tekst zelf draagt geen pijl, de instructie noemt de wijzigende handeling.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.actief: Counter = Counter()
+
+    def pi(self, target, data):
+        if target == "CLG.MDFO":
+            m = re.search(r'\bACTIVE\.DOC="([^"]*)"', data or "")
+            if m:
+                self.actief[m.group(1)] += 1
+
+
+def _wijzigingsmarkeringen(data: bytes) -> Counter:
+    """Per CELEX-nummer het aantal passages in alle onderdelen dat ermee is gemarkeerd.
+
+    Ook de bijlagen tellen mee: een handeling die alleen een bijlage wijzigt,
+    heeft haar markering in dat onderdeel en niet in de handeling zelf.
+    """
+    totaal: Counter = Counter()
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as zf:
+            for info in zf.infolist():
+                naam = info.filename.lower()
+                if info.is_dir() or not naam.endswith(".xml") or naam.endswith(".doc.xml"):
+                    continue
+                bouwer = _PiVerzamelaar()
+                parser = ET.XMLParser(target=bouwer)
+                parser.feed(zf.read(info))
+                parser.close()
+                totaal.update(bouwer.actief)
+    except (zipfile.BadZipFile, ET.ParseError, OSError) as exc:
+        raise _xml_fout(f"de wijzigingsmarkeringen zijn niet te lezen ({exc})", exc)
+    return totaal
 
 
 def _plat_bron(el) -> str:
@@ -256,6 +301,7 @@ class FormexOmzetter:
         self.herhaalde_cellen = 0
         self.bijlagen = 0
         self.metadata: dict = {}
+        self.markeringen: Counter = Counter()      # CELEX -> passages met een CLG.MDFO
         self.basis: ET.Element | None = None       # PREAMBLE van de basishandeling
         self.zonder: frozenset = frozenset()       # opmaaksoorten die nu niet geschreven worden
 
@@ -401,6 +447,7 @@ class FormexOmzetter:
     def omzetten(self, data: bytes, basis: bytes | None = None) -> Uitvoer:
         doc, onderdelen = _onderdelen(data)
         self.controleer_elementen(onderdelen)
+        self.markeringen = _wijzigingsmarkeringen(data)
         if basis is not None:
             self.basis = self.kies_basis(onderdelen, basis)
         for index, (naam, root) in enumerate(onderdelen):
@@ -515,6 +562,12 @@ class FormexOmzetter:
                              "language": taal.lower(),
                              "valid_from": self.iso(datum),
                              "valid_until": self.iso(cons.get("END.DATE", "")) or None}
+            document = root.find("CONS.DOC")
+            oj_reference, meldingen = self.vindplaats_basis(document, self.metadata["base_celex"])
+            amendments, meer = self.wijzigende_handelingen(document)
+            self.metadata["oj_reference"] = oj_reference
+            self.metadata["amendments"] = amendments
+            self.metadata["waarschuwingen"] = meldingen + meer
             self.u.blok(f"{ref} — {taal} — {stand} — {reeks}")
             return
         pub = doc.find(".//PUBLICATION.REF")
@@ -526,14 +579,143 @@ class FormexOmzetter:
         taal = (pub.findtext("LG.OJ") or "NL").upper()
         iso = (pub.find("DATE").get("ISO") if pub.find("DATE") is not None else "") or ""
         bladzijde = (bib.findtext("PAGE.FIRST") if bib is not None else "") or ""
-        datum = f"{int(iso[6:8])}.{int(iso[4:6])}.{iso[0:4]}" if len(iso) == 8 else iso
         self.metadata = {"format": "oj", "language": taal.lower(),
-                         "oj_reference": f"PB {coll} {nummer} van {datum}, blz. {bladzijde}"}
+                         "oj_reference": self.pb_vindplaats(coll, nummer, iso, bladzijde)}
         # Geen mastheadtabel in de uitvoer: die is opmaak van de gedrukte
         # bladzijde, geen inhoud, en als pipe-tabel zou hij als inhoudstabel
         # meetellen in het bronbewijs. De vindplaats staat in het zijbestand
         # (`oj_reference`), waar `extract_meta.py` hem ook leest.
         self.u.blok("---")
+
+    @staticmethod
+    def pb_vindplaats(coll: str, nummer: str, iso: str, bladzijde: str) -> str:
+        """`PB L 151 van 7.6.2019, blz. 15`: dezelfde vorm voor een handeling en een basishandeling."""
+        datum = f"{int(iso[6:8])}.{int(iso[4:6])}.{iso[0:4]}" if len(iso) == 8 else iso
+        return f"PB {coll} {nummer} van {datum}, blz. {bladzijde}"
+
+    def vindplaats_basis(self, document, base_celex: str | None) -> tuple[str | None, list[str]]:
+        """De vindplaats van de basishandeling uit `FAM.COMP/BIB.DATA/BIB.INSTANCE.CONS`.
+
+        Geeft `(vindplaats, [])` of `(None, [reden])`. Ontbreekt een onderdeel, dan
+        blijft de vindplaats leeg met een melding: een deel van een vindplaats is
+        geen vindplaats. Noemt het blok een **andere** handeling dan die van de
+        consolidatie, dan is dat een tegenspraak en weigert de omzetting.
+        """
+        data = document.find("FAM.COMP/BIB.DATA") if document is not None else None
+        instantie = data.find("BIB.INSTANCE.CONS") if data is not None else None
+        if instantie is None:
+            return None, ["De geconsolideerde Formex noemt de vindplaats van de basishandeling niet "
+                          "(FAM.COMP/BIB.DATA/BIB.INSTANCE.CONS ontbreekt); oj_reference is leeg."]
+        genoemd = ws(data.findtext("NO.CELEX") or "")
+        if base_celex and genoemd and genoemd != base_celex:
+            raise _xml_fout(f"de vindplaats in FAM.COMP hoort bij {genoemd}, "
+                            f"maar de consolidatie is van {base_celex}")
+        nodoc = instantie.find("NO.DOC")
+        verwacht = _celex_jaar_nummer(base_celex or "")
+        if nodoc is not None and verwacht is not None:
+            jaar, nummer = ws(nodoc.findtext("YEAR") or ""), ws(nodoc.findtext("NO.CURRENT") or "")
+            if jaar.isdigit() and nummer.isdigit() and (int(jaar), int(nummer)) != verwacht:
+                raise _xml_fout(f"de vindplaats in FAM.COMP hoort bij {nummer}/{jaar}, "
+                                f"maar de consolidatie is van {base_celex}")
+        ref = instantie.find("DOCUMENT.REF.CONS")
+        datum = instantie.find("DATE")
+        onderdelen = {
+            "COLL": ws(ref.findtext("COLL") or "") if ref is not None else "",
+            "NO.OJ": ws(ref.findtext("NO.OJ") or "") if ref is not None else "",
+            "PAGE.FIRST": ws(ref.findtext("PAGE.FIRST") or "") if ref is not None else "",
+            "DATE/@ISO": (datum.get("ISO") or "") if datum is not None else "",
+        }
+        ontbreekt = [naam for naam, waarde in onderdelen.items() if not waarde]
+        if ontbreekt or not (len(onderdelen["DATE/@ISO"]) == 8 and onderdelen["DATE/@ISO"].isdigit()):
+            return None, ["De vindplaats van de basishandeling in de geconsolideerde Formex is onvolledig "
+                          f"({', '.join(ontbreekt) or 'datum onleesbaar'}); oj_reference is leeg."]
+        return self.pb_vindplaats(onderdelen["COLL"], onderdelen["NO.OJ"],
+                                  onderdelen["DATE/@ISO"], onderdelen["PAGE.FIRST"]), []
+
+    @staticmethod
+    def celex_van_wijziging(mod) -> tuple[str | None, str | None]:
+        """Het CELEX-nummer van één wijzigende handeling, uit de bron en nooit geraden.
+
+        Twee onafhankelijke wegen die het eens moeten zijn: `NO.CELEX`, zoals de
+        bron het zelf noemt, en `3` + jaar + de letter van `LEG.VAL` + het
+        vierciferige volgnummer. Ze spreken elkaar tegen: weigeren. Ontbreekt de ene,
+        dan geldt de andere; ontbreken beide, dan `(None, reden)`.
+        """
+        data = mod.find("BIB.DATA")
+        genoemd = ws(data.findtext("NO.CELEX") or "") if data is not None else ""
+        nodoc = mod.find("BIB.DATA/BIB.INSTANCE.CONS/DOCUMENT.REF.CONS/NO.DOC")
+        jaar = ws(nodoc.findtext("YEAR") or "") if nodoc is not None else ""
+        nummer = ws(nodoc.findtext("NO.CURRENT") or "") if nodoc is not None else ""
+        heeft_nummer = len(jaar) == 4 and jaar.isdigit() and nummer.isdigit() and 0 < int(nummer) < 10000
+        letter = CELEX_LETTER.get(mod.get("LEG.VAL") or "")
+        gebouwd = f"3{jaar}{letter}{int(nummer):04d}" if heeft_nummer and letter else None
+        if genoemd:
+            m = re.fullmatch(r"3(\d{4})[A-Z](\d{4})", genoemd)
+            if not m:
+                raise _xml_fout(f"NO.CELEX {genoemd!r} van een wijzigende handeling is geen CELEX-nummer")
+            if heeft_nummer and (m.group(1), int(m.group(2))) != (jaar, int(nummer)):
+                raise _xml_fout(f"NO.CELEX {genoemd} van een wijzigende handeling spreekt "
+                                f"NO.DOC {nummer}/{jaar} tegen")
+            if gebouwd and gebouwd != genoemd:
+                raise _xml_fout(f"NO.CELEX {genoemd} van een wijzigende handeling spreekt "
+                                f"{gebouwd} (LEG.VAL {mod.get('LEG.VAL')}) tegen")
+            return genoemd, None
+        if gebouwd:
+            return gebouwd, None
+        return None, ("geen NO.CELEX en het nummer of het soort (LEG.VAL="
+                      f"{mod.get('LEG.VAL')!r}) is niet af te leiden")
+
+    def wijzigende_handelingen(self, document) -> tuple[list[dict], list[str]]:
+        """De wijzigende handelingen uit `FAM.COMP/GR.MOD.ACT`, in de vorm van het zijbestand.
+
+        Elk element heeft `celex`; `shown` staat er alleen als de tekst zelf zegt dat
+        een passage door deze handeling is gewijzigd (een `CLG.MDFO` met haar
+        CELEX-nummer). Zo bepaalt ook de HTML-route `shown`, uit het pijlteken. Dat de
+        markering *ontbreekt* is hier geen bewijs dat de wijziging is overschreven
+        (`shown: false`): dat is voor Formex niet gemeten, dus dan blijft het veld weg.
+        Wat niet als wijziging te lezen is, komt met een reden in de meldingen.
+        """
+        groep = document.find("FAM.COMP/GR.MOD.ACT") if document is not None else None
+        if groep is None:
+            return [], []
+        lijst: list[dict] = []
+        meldingen: list[str] = []
+        gezien: set[str] = set()
+        zonder_markering: list[str] = []
+        for mod in groep:
+            if mod.tag != "MOD.ACT":
+                meldingen.append(f"GR.MOD.ACT bevat {mod.tag}; dat is niet gelezen.")
+                continue
+            celex, reden = self.celex_van_wijziging(mod)
+            if mod.get("TYPE") != "MOD":
+                meldingen.append(f"MOD.ACT {celex or '(zonder CELEX-nummer)'} heeft TYPE={mod.get('TYPE')!r}, "
+                                 "geen wijziging; niet in amendments opgenomen.")
+                continue
+            if celex is None:
+                meldingen.append(f"Een wijzigende handeling is niet in amendments opgenomen: {reden}.")
+                continue
+            if celex in gezien:
+                meldingen.append(f"Wijzigende handeling {celex} staat meer dan eens in GR.MOD.ACT; eenmaal opgenomen.")
+                continue
+            gezien.add(celex)
+            entry: dict = {"celex": celex}
+            if self.markeringen.get(celex):
+                entry["shown"] = True
+            else:
+                zonder_markering.append(celex)
+            lijst.append(entry)
+        if zonder_markering:
+            meldingen.append(
+                f"Geen CLG.MDFO in de tekst noemt {', '.join(zonder_markering)}; van deze wijzigende "
+                "handeling(en) is `shown` niet vastgesteld."
+            )
+        onbekend = sorted(set(self.markeringen) - gezien)
+        if onbekend:
+            meldingen.append(
+                f"CLG.MDFO in de tekst noemt {', '.join(onbekend)}, dat niet als wijziging in "
+                "GR.MOD.ACT staat; amendments kan onvolledig zijn."
+            )
+        return lijst, meldingen
 
     @staticmethod
     def iso(datum: str) -> str | None:

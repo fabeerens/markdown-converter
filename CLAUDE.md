@@ -126,6 +126,21 @@ accountregistratie namens de gebruiker):
   considerans, met `Herkomst.recitals_reason` en een waarschuwing. Vet of cursief dat aan een
   woord vastzit (`cyberbeveiliging<HT TYPE="BOLD">s</HT>certificering`) wordt niet geschreven,
   en opmaak in een kop (`HOOFDSTUK II` cursief) ook niet: beide braken de herkenning in de kb.
+  Bij een geconsolideerde tekst leest de omzetter de vindplaats en de wijzigingen uit de bron,
+  niet uit de tekst: `CONS.DOC/FAM.COMP/BIB.DATA/BIB.INSTANCE.CONS` geeft `oj_reference` van de
+  basishandeling in dezelfde vorm als bij een Publicatieblad-handeling (`PB L 151 van 7.6.2019,
+  blz. 15`; een deel van een vindplaats wordt nooit geschreven, en een blok dat een andere
+  handeling noemt dan de consolidatie weigert), en `FAM.COMP/GR.MOD.ACT` geeft
+  `Herkomst.amendments`, de lijst die `extract_meta.py` als `side["amendments"]` leest. Elk element
+  heeft `celex`, uit `NO.CELEX` en gecontroleerd tegen `3` + `NO.DOC/YEAR` + de letter van
+  `LEG.VAL` (`REG`→R, `DIR`→L, `DEC`→D) + `NO.CURRENT` op vier cijfers; spreken ze elkaar
+  tegen, dan weigert de omzetting, is een van beide niet te bepalen, dan staat de handeling
+  niet in de lijst en zegt een waarschuwing waarom. `shown: true` staat er als een `CLG.MDFO`-
+  verwerkingsinstructie in de tekst (of een bijlage) `ACTIVE.DOC="<celex>"` noemt: de Formex-vorm
+  van het ▼M-teken, dat de tekst zelf niet draagt. Een handeling zonder zo'n instructie krijgt
+  geen `shown` (niet `false`: dat de wijziging is overschreven is voor Formex niet gemeten).
+  `corrections` schrijft de omzetter niet; een `MOD.ACT` met een ander `TYPE` dan `MOD` komt met
+  een waarschuwing niet in `amendments`.
   De portal-HTML (`/legal-content/…/HTML/`) blokkeert bots (HTTP 202, lege body;
   inmiddels een AWS WAF-JS-challenge, dus ook met retries permanent 202 — de portal is in de praktijk
   dood voor een simpele `requests`-scraper). Gebruik het **Cellar-archief** via content negotiation,

@@ -289,12 +289,16 @@ def _fetch_formex(celex: str, lang: str, *, requested_url: str):
                 f"basishandeling kon niet worden ingevoegd: {recitals_reason}. "
                 "De overwegingen en hun rec-ankers ontbreken."
             )
+    # De vindplaats en de wijzigende handelingen staan in de bron zelf; wat de
+    # omzetter daarbij niet kon lezen, komt als melding mee en is nooit stil.
+    waarschuwingen.extend(metadata.get("waarschuwingen", ()))
     herkomst = Herkomst(
         format="clg" if geconsolideerd else "formex",
         celex=celex,
         language=metadata.get("language") or lang.lower(),
         oj_reference=metadata.get("oj_reference"),
         base_celex=metadata.get("base_celex"),
+        amendments=tuple(metadata.get("amendments", ())),
         consolidation_date=metadata.get("consolidation_date"),
         version=metadata.get("version"),
         recitals_from=recitals_from,

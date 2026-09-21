@@ -55,6 +55,12 @@ class Herkomst:
     consolidation_date: str | None = None
     version: str | None = None
 
+    # Bij een geconsolideerde tekst de handelingen die haar hebben gewijzigd, in de
+    # vorm die `extract_meta.py` uit `side["amendments"]` leest: elk element heeft
+    # `celex`, en `shown` alleen als de bron zegt dat een passage van deze handeling
+    # in de tekst staat. Leeg waar het begrip niet bestaat, of niet gelezen is.
+    amendments: tuple[dict, ...] = ()
+
     # Een geconsolideerde tekst heeft geen aanhef en geen overwegingen. Komen ze
     # uit de basishandeling, dan staat hier haar CELEX; lukt dat niet, dan staat
     # hier waarom. `extract_meta.py` leest beide letterlijk.
@@ -101,6 +107,7 @@ class Herkomst:
         d = asdict(self)
         d["toestand_meldingen"] = list(self.toestand_meldingen)
         d["waarschuwingen"] = list(self.waarschuwingen)
+        d["amendments"] = [dict(a) for a in self.amendments]
         return d
 
     def met(self, **velden) -> "Herkomst":
