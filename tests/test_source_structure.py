@@ -52,7 +52,7 @@ def test_nested_capture_restores_outer_after_failure():
     assert [part['source_url'] for part in outer] == ['a', 'c']
 
 
-def test_sidecar_retains_source_and_binds_download_without_mutating_input():
+def test_sidecar_keeps_source_hash_and_tables_but_not_the_bytes_and_binds_download_without_mutating_input():
     with capture_source_documents() as documents:
         record_html('<table><tr><td rowspan="2">A</td></tr><tr></tr></table>', source_url='https://example.test/source')
     provenance = bind_structure(Herkomst(format='html', extra={'existing': 42}), 'Original', documents).as_json()
@@ -60,7 +60,10 @@ def test_sidecar_retains_source_and_binds_download_without_mutating_input():
     proof = saved['extra']['source_structure']
     assert saved['extra']['existing'] == 42
     assert saved['bewerkt_met_ai'] is True
-    assert proof['sources'][0]['source_sha256'] == sha256(proof['sources'][0]['original_html'])
+    # De bytes zitten in de bundel onder raw/source-evidence/; het zijbestand houdt de hash.
+    assert 'original_html' not in proof['sources'][0]
+    assert proof['sources'][0]['source_sha256'] == sha256(
+        provenance['extra']['source_structure']['sources'][0]['original_html'])
     assert proof['sources'][0]['tables'][0]['cells'][0]['rowspan'] == '2'
     assert proof['markdown_changed'] is True
     assert 'markdown_changed' not in provenance['extra']['source_structure']

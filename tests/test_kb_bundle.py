@@ -143,3 +143,18 @@ def test_batch_download_embeds_kb_tree_and_plain_document(client):
     with zipfile.ZipFile(io.BytesIO(result.data)) as archive:
         assert "raw/eurlex/32022R1925.md" in archive.namelist()
         assert "rapport.md" in archive.namelist()
+
+
+def test_sidecar_keeps_the_source_hash_but_not_the_source_bytes():
+    """De bytes staan al onder raw/source-evidence/; in het zijbestand waren ze een dubbele kopie."""
+    bron = b"PK\x03\x04exacte bronbytes"
+    provenance = herkomst(bron=bron)
+    token = kb_bundle.store(provenance)
+    stream, _ = kb_bundle.build(token, "# Oorspronkelijk", bewerkt_met_ai=False)
+    with zipfile.ZipFile(stream) as archive:
+        zij = json.loads(archive.read("raw/eurlex/32022R1925.source.json"))
+        assert archive.read(f"raw/source-evidence/32022R1925/{hashlib.sha256(bron).hexdigest()}.fmx4.zip") == bron
+    bronnen = zij["extra"]["source_structure"]["sources"]
+    assert bronnen[0]["source_sha256"] == hashlib.sha256(bron).hexdigest()
+    assert "original_base64" not in bronnen[0] and "original_html" not in bronnen[0]
+    assert base64.b64encode(bron).decode() not in json.dumps(zij)

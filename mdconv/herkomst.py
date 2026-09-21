@@ -124,6 +124,15 @@ def als_zijbestand(provenance, *, bewerkt_met_ai: bool, markdown: str | None = N
         raise ValueError("Herkomst moet een JSON-object zijn.")
     # Via JSON kopiëren, zodat het aanvullen de herkomst van de aanroeper niet raakt.
     result = json.loads(json.dumps(provenance, ensure_ascii=False))
+    # De bronbytes staan in de bundel onder raw/source-evidence/, met hun hash
+    # hier; ze ook in het zijbestand zetten was een tweede kopie (tot 840 KB per
+    # wet). De aanroeper houdt de volledige herkomst, dus de bundel blijft bouwbaar.
+    extra = result.get("extra")
+    bewijs = extra.get("source_structure") if isinstance(extra, dict) else None
+    for bron in (bewijs.get("sources") if isinstance(bewijs, dict) else None) or []:
+        if isinstance(bron, dict):
+            bron.pop("original_html", None)
+            bron.pop("original_base64", None)
     result["bewerkt_met_ai"] = bool(bewerkt_met_ai or result.get("bewerkt_met_ai"))
     if markdown is not None:
         from .source_structure import sha256
