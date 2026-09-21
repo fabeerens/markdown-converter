@@ -341,6 +341,10 @@ class FormexOmzetter:
             return self.inline(el)
         if tag in METADATA:
             return ""
+        if tag == "NO.P":
+            # Een NP binnen een geciteerde wijziging (QUOT.S) loopt hier inline
+            # door; zonder scheiding stond `“67)Verordening` aaneen.
+            return self.inline(el) + " "
         if tag == "P":
             return " " + self.inline(el) + " "
         if tag in ("LIST", "ITEM"):
@@ -802,11 +806,22 @@ class FormexOmzetter:
     # ------------------------------------------------------------ tabellen
 
     def cel_tekst(self, cel) -> str:
-        delen = []
-        if (cel.text or "").strip():
-            delen.append(cel.text)
+        """De tekst van een cel. Blokken (lijst, punt, alinea) staan gescheiden door
+        een spatie; wat inline in de tekst staat, zoals een aanhalingsteken of
+        opmaak, sluit aan zonder scheiding. Eerst stond overal een spatie tussen,
+        en dat gaf `“ smart home ” -apparaat`."""
+        delen: list[str] = []
+        lopend: list[str] = [cel.text or ""]
+
+        def sluit() -> None:
+            tekst = ws("".join(lopend))
+            lopend.clear()
+            if tekst:
+                delen.append(tekst)
+
         for kind in cel:
             if kind.tag == "LIST":
+                sluit()
                 genummerd = kind.get("TYPE", "").upper() not in ONGENUMMERD
                 for item in kind.findall("ITEM"):
                     np = item.find("NP")
@@ -817,15 +832,17 @@ class FormexOmzetter:
                     else:
                         delen.append(("" if genummerd else "- ") + ws(self.inline(item)))
             elif kind.tag == "NP":
+                sluit()
                 nr = ws(self.inline(kind.find("NO.P"))) if kind.find("NO.P") is not None else ""
                 txt = ws(self.inline(kind.find("TXT"))) if kind.find("TXT") is not None else ""
                 delen.append(f"{nr} {txt}".strip())
             elif kind.tag in ("P", "ALINEA"):
+                sluit()
                 delen.append(self.cel_tekst(kind))
             else:
-                delen.append(self.inline_el(kind))
-            if (kind.tail or "").strip():
-                delen.append(kind.tail)
+                lopend.append(self.inline_el(kind))
+            lopend.append(kind.tail or "")
+        sluit()
         return ws(" ".join(d for d in delen if d))
 
     def tabel(self, el) -> None:

@@ -300,3 +300,32 @@ def test_italic_in_a_heading_is_typography_and_does_not_reach_the_heading_line()
     markdown = formex_xml.omzetten(formex_zip(act=act))[0]
     assert "\n## HOOFDSTUK I\n" in markdown
     assert "\n**Algemene bepalingen**\n" in markdown
+
+
+def test_a_numbered_point_inside_a_quoted_amendment_keeps_a_space_after_its_number():
+    """`“67)Verordening` stond aaneen: NO.P en TXT van een NP in QUOT.S liepen zonder spatie in elkaar.
+
+    De woorden waren gelijk, dus geen enkele controle zag het; de tekst las wel slecht.
+    """
+    act = ACT.replace(
+        b"</ARTICLE>",
+        b'<ALINEA><P>Aan de bijlage wordt het volgende punt toegevoegd:</P><QUOT.S LEVEL="1">'
+        b'<LIST TYPE="ARAB"><ITEM><NP><NO.P><QUOT.START CODE="201C" ID="Q1" REF.END="E1"/>67)</NO.P>'
+        b'<TXT>Verordening (EU) 2022/1925<QUOT.END CODE="201D" ID="E1" REF.START="Q1"/></TXT></NP></ITEM>'
+        b'</LIST></QUOT.S></ALINEA></ARTICLE>', 1)
+    markdown = formex_xml.omzetten(formex_zip(act=act))[0]
+    assert "“67) Verordening (EU) 2022/1925”" in markdown
+    assert "67)Verordening" not in markdown
+
+
+def test_quotation_marks_and_emphasis_inside_a_table_cell_do_not_get_spaces():
+    """`“ smart home ” -apparaat`: in een cel kreeg elk inline element spaties om zich heen."""
+    act = ACT.replace(
+        b"</ARTICLE>",
+        b'<ALINEA><TBL COLS="2" NO.SEQ="0001"><CORPUS><ROW TYPE="HEADER"><CELL COL="1">Naam</CELL>'
+        b'<CELL COL="2">Omschrijving</CELL></ROW><ROW><CELL COL="1">Assistent</CELL><CELL COL="2">een knop of een '
+        b'<QUOT.START CODE="201C" ID="Q1" REF.END="E1"/>smart home<QUOT.END CODE="201D" ID="E1" REF.START="Q1"/>-apparaat, '
+        b'<HT TYPE="BOLD">vet</HT> en dan door.</CELL></ROW></CORPUS></TBL></ALINEA></ARTICLE>', 1)
+    markdown = formex_xml.omzetten(formex_zip(act=act))[0]
+    assert "een knop of een “smart home”-apparaat, **vet** en dan door." in markdown
+    assert "“ smart" not in markdown
