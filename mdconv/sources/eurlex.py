@@ -23,7 +23,7 @@ from ..errors import ConversionError
 from ..herkomst import Herkomst
 from ..source_structure import record_html, record_source
 from ..render import collapse_ws, html_to_markdown, marker_prefix, prefix_into
-from . import formex_xml
+from . import formex_hof, formex_xml
 
 # Een CELEX: sectorcijfer + jaar + documenttypeletter(s) + nummer, optioneel een
 # corrigendum-achtervoegsel `(01)` en — bij een geconsolideerde versie — de datum
@@ -138,16 +138,10 @@ def fetch_and_convert(text: str, lang: str = "NL") -> tuple:
     """Los de invoer op naar een document; geeft (markdown, bronvermelding)."""
     lang = (lang or "NL").upper()
 
-    # EU-rechtspraak op ECLI: via het Cellar-ECLI-endpoint.
+    # EU-rechtspraak op ECLI: de Cellar geeft de Formex ook op de ECLI zelf.
     ecli_m = _EU_ECLI_RE.search(text)
     if ecli_m:
-        ecli = ecli_m.group(0).upper()
-        markdown = _fetch_cellar_ecli(ecli, lang)
-        if markdown and len(markdown.strip()) > 80:
-            return markdown, f"EUR-Lex (Cellar) • {ecli} • {lang}"
-        raise ConversionError(
-            f"Kon {ecli} niet ophalen bij EUR-Lex (mogelijk niet beschikbaar in taal {lang})."
-        )
+        return _fetch_hof(ecli_m.group(0).upper(), lang, requested_url=text)
 
     celex = extract_celex(text) or eli_to_celex(text)
     if not celex:
@@ -156,6 +150,12 @@ def fetch_and_convert(text: str, lang: str = "NL") -> tuple:
             "Voorbeeld: 32016R0679 of "
             "https://eur-lex.europa.eu/legal-content/NL/TXT/?uri=CELEX:32016R0679"
         )
+
+    # Sector 6 is rechtspraak van de Unie. Die heeft een eigen Formex-vorm en een
+    # eigen omzetter; de wetgevingsroute hieronder weigert haar (geen `.doc.xml`),
+    # en dat kwam als een onbegrijpelijke Formex-melding bij de gebruiker terecht.
+    if celex.startswith("6"):
+        return _fetch_hof(celex, lang, requested_url=text)
 
     # De officiële Formex-manifestatie staat vóór de HTML-ladder. Alleen een
     # echte zip activeert de route; een HTML-/metadatarespons is een gewone
@@ -318,6 +318,76 @@ def _fetch_formex(celex: str, lang: str, *, requested_url: str):
         f"EUR-Lex (Cellar Formex) • CELEX:{celex} • {lang}",
         herkomst,
     ), None
+
+
+def _fetch_hof(ident: str, lang: str, *, requested_url: str):
+    """Rechtspraak van de Unie: alleen uit de officiële Formex, of een weigering.
+
+    Er is bewust geen terugval op de Curia-HTML. Twee routes per bron betekent twee
+    omzetters die allebei bewezen moeten worden, en de HTML van het Hof heeft in de
+    kennisbank juist de blokkades opgeleverd die de Formex bij de bron oplost (het
+    dictum als lay-outtabel, de procestaalnoot zonder definitie). Een arrest van
+    een paar dagen oud heeft nog geen Formex; dan is de weigering de juiste
+    uitkomst en de reden staat erbij.
+    """
+    if ident.upper().startswith("ECLI:"):
+        url = f"http://publications.europa.eu/resource/ecli/{quote(ident, safe='')}"
+    else:
+        url = f"http://publications.europa.eu/resource/celex/{ident}"
+    try:
+        response = net.documents().get(
+            url, headers=_formex_headers(lang), timeout=_CELLAR_TIMEOUT, allow_redirects=True,
+        )
+    except Exception as exc:
+        raise ConversionError(
+            f"De Cellar is niet bereikbaar ({type(exc).__name__}); {ident} is niet opgehaald."
+        ) from exc
+    data = _response_bytes(response)
+    if response.status_code != 200 or not data.startswith(b"PK"):
+        detail = (f"HTTP {response.status_code}" if response.status_code != 200
+                  else "het antwoord is geen zip")
+        raise ConversionError(
+            f"Voor {ident} is geen Formex-manifestatie in de Cellar ({detail}) in taal "
+            f"{lang}. Een arrest van de laatste dagen of weken staat er nog niet; "
+            "probeer het later opnieuw. Er is geen terugval op HTML."
+        )
+    bron_url = getattr(response, "url", "") or url
+    markdown, meta = formex_hof.omzetten(data, ident)
+    # Pas na de identiteitscontrole vastleggen: een bron die een ander arrest blijkt
+    # te zijn hoort niet als bewijs bij deze aanvraag te staan.
+    record_source(
+        data,
+        media_type=_FORMEX_MEDIA_TYPE,
+        source_format="formex-hvj",
+        source_url=bron_url,
+        identifier=meta["ecli"] or meta["celex"],
+        language=lang,
+    )
+    waarschuwingen = ["EUR-Lex is via de officiële Formex-manifestatie opgehaald."]
+    if not meta["ecli"]:
+        waarschuwingen.append(
+            "De bron noemt geen ECLI; het CELEX-nummer is de identiteit van dit document.")
+    if meta["opmaak_weggelaten"]:
+        waarschuwingen.append(
+            f"{meta['opmaak_weggelaten']} keer vet of cursief niet overgenomen; de tekst blijft.")
+    herkomst = Herkomst(
+        format="formex-hvj",
+        celex=meta["celex"],
+        ecli=meta["ecli"],
+        title=" ".join(meta["titelregels"]) or None,
+        language=meta["taal"] or lang.lower(),
+        source_url=bron_url,
+        requested_url=requested_url,
+        koppen_bron=len(meta["secties"]),
+        koppen_markdown=len(meta["secties"]),
+        waarschuwingen=tuple(waarschuwingen),
+        extra={k: meta[k] for k in ("zaaknummers", "auteur", "partijen", "overige_partijen",
+                                    "secties", "paginakop", "soort", "noten", "bronbestand",
+                                    "titelregels", "datum", "procestaal",
+                                    "dictum_inleiding")},
+    )
+    label = ident if ident.upper().startswith("ECLI:") else f"CELEX:{ident}"
+    return markdown, f"EUR-Lex (Cellar Formex) • {label} • {lang}", herkomst
 
 
 def _html_herkomst(celex: str, lang: str, requested_url: str,
@@ -917,24 +987,6 @@ def _note_tag(soup, text: str, label: str):
     p.append(NavigableString(f" {text}"))
     quote.append(p)
     return quote
-
-
-def _fetch_cellar_ecli(ecli: str, lang: str) -> str | None:
-    """EU-rechtspraak uit Cellar, geadresseerd op ECLI, of None.
-
-    De ECLI moet url-encoded (`ECLI%3AEU%3AC%3A…`), anders geeft Cellar 404.
-    """
-    url = f"http://publications.europa.eu/resource/ecli/{quote(ecli, safe='')}"
-    r = net.documents().get(
-        url, headers=_cellar_headers(lang), timeout=_CELLAR_TIMEOUT, allow_redirects=True,
-    )
-    if r.status_code == 200:
-        html = net.decoded_text(r)
-        record_html(html, source_url=getattr(r, "url", "") or url, identifier=ecli, language=lang)
-        return html_to_markdown(html)
-    if r.status_code == 300:
-        return _fetch_multipart(r.text, lang, ecli)
-    return None
 
 
 # Cellar meldt "multiple choices" ook voor documenten die uit meerdere
