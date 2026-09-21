@@ -151,7 +151,11 @@ def convert_file():
     if not data.strip():
         raise ConversionError("Het bestand is leeg.")
     extract_images = request.form.get("extract_images") == "1"
-    doc = sources.from_file(data, upload.filename, extract_images=extract_images)
+    # Optioneel en alleen achterkant: zonder documentnummer blijft de download een los
+    # `.md`-bestand. De voorkant heeft er (nog) geen veld voor.
+    document_id = (request.form.get("document_id") or "").strip() or None
+    extra = {"document_id": document_id} if document_id else {}
+    doc = sources.from_file(data, upload.filename, extract_images=extract_images, **extra)
     return jsonify(_doc_payload(doc))
 
 
@@ -181,7 +185,9 @@ def convert_file_url():
 
     filename = _filename_from_url(url, r.headers.get("Content-Type", ""))
     extract_images = data_in.get("extract_images") is True
-    doc = sources.from_file_bytes(r.content, filename, url, extract_images=extract_images)
+    document_id = (data_in.get("document_id") or "").strip() or None
+    doc = sources.from_file_bytes(r.content, filename, url, extract_images=extract_images,
+                                  document_id=document_id, source_url=url)
     return jsonify(_doc_payload(doc))
 
 

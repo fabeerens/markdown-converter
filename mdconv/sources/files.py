@@ -36,7 +36,8 @@ SUPPORTED_EXTENSIONS = [
 # pdf-inspector levert al nette alinea's.
 _REFLOW_EXTENSIONS = {".pdf", ".txt"}
 
-# pdf-inspector's classificatie voor een PDF zonder bruikbare tekstlaag.
+# pdf-inspector's classificatie voor een PDF zonder bruikbare tekstlaag; een
+# weigering, geen terugval.
 _NO_TEXT_LAYER = {"scanned", "image_based"}
 
 ENGINE_PDF_INSPECTOR = "pdf-inspector"
@@ -86,7 +87,12 @@ def convert(data: bytes, filename: str = "") -> tuple[str, str]:
 
 
 def _convert_pdf(data: bytes) -> str | None:
-    """PDF via pdf-inspector. None betekent: val terug op MarkItDown."""
+    """PDF via pdf-inspector. None betekent: val terug op MarkItDown.
+
+    Een PDF zonder tekstlaag is géén reden om terug te vallen: MarkItDown doet
+    evenmin OCR en zou een leeg of vrijwel leeg resultaat als gelukte omzetting
+    presenteren. Dat is een weigering met reden (`ConversionError`).
+    """
     try:
         import pdf_inspector
     except ImportError:  # pragma: no cover — dependency ontbreekt
@@ -96,9 +102,16 @@ def _convert_pdf(data: bytes) -> str | None:
     except Exception:  # noqa: BLE001 — corrupte PDF: laat MarkItDown het proberen
         return None
     if result.pdf_type in _NO_TEXT_LAYER:
-        return None
+        raise _geen_tekstlaag(result.pdf_type)
     markdown = (result.markdown or "").strip()
     return markdown + "\n" if markdown else None
+
+
+def _geen_tekstlaag(pdf_type: str) -> ConversionError:
+    return ConversionError(
+        f"Deze PDF heeft geen tekstlaag ({pdf_type}): het is een scan of een afbeelding, en "
+        "deze tool doet geen OCR. Lever een PDF met tekstlaag, of het Word-bestand of de "
+        "officiële XML van dit document.")
 
 
 def convert_pdf_pages(data: bytes) -> list[str] | None:
@@ -106,8 +119,9 @@ def convert_pdf_pages(data: bytes) -> list[str] | None:
     samengevoegd — nodig om een afbeelding op de pagina te kunnen plaatsen
     waar hij ook echt uit kwam (`sources._attach_pdf_images_inline`), i.p.v.
     alles onderaan het document te dumpen. None betekent hetzelfde als bij
-    `_convert_pdf`: geen bruikbare tekstlaag, of pdf-inspector ontbreekt —
-    de aanroeper valt dan terug op de gewone (samengevoegde) route.
+    `_convert_pdf`: een PDF zonder tekstlaag is een weigering; ontbreekt
+    pdf-inspector of geeft hij geen tekst, dan valt de aanroeper terug op de
+    gewone (samengevoegde) route.
 
     Zelfde classificatie-gate als `_convert_pdf` (`pdf_type` via
     `classify_pdf_bytes`, niet via `process_pdf_bytes`, want dat laatste zou
@@ -124,7 +138,7 @@ def convert_pdf_pages(data: bytes) -> list[str] | None:
     except Exception:  # noqa: BLE001 — corrupte PDF: laat de aanroeper terugvallen
         return None
     if classification.pdf_type in _NO_TEXT_LAYER:
-        return None
+        raise _geen_tekstlaag(classification.pdf_type)
     try:
         result = pdf_inspector.extract_pages_markdown_bytes(data)
     except Exception:  # noqa: BLE001
@@ -198,3 +212,43 @@ def reflow(text: str) -> str:
         out_blocks.append("\n".join(merged))
 
     return "\n\n".join(out_blocks)
+
+
+# --------------------------------------------------------------------------
+# Kwaliteit van een PDF-omzetting
+# --------------------------------------------------------------------------
+
+# Dezelfde drie tellingen als de kennisbank in `classify.py` gebruikt, hier
+# opnieuw geschreven: de kennisbank hoeft de kwaliteit dan niet te schatten, en de
+# twee schattingen blijven onafhankelijk. `poor` schakelt in de kennisbank twee van
+# de grofste opschoonregels in (V1b en H2), dus de telling gaat mee, niet alleen
+# het oordeel.
+_OPENGEBROKEN = re.compile(r"\b[A-Z]\s[a-z]{2,}\b")
+_AFBREKING_REGELEINDE = re.compile(r"\w[-\u00ad]\n\w")
+# Een afbreking midden in een regel. De Nederlandse samentrekking (`kop- en
+# voetteksten`) is spelling en geen conversieschade.
+_AFBREKING_IN_REGEL = re.compile(r"\b\w{2,}-\s(?!en\b|of\b|tot\b|dan\b|noch\b|c\.q\.)\w{2,}\b")
+_PAGINAROMMEL = re.compile(
+    r"^ {0,3}#{1,6}\s*\d{1,4}\s*/\s*\d{1,4}\s*$|"
+    r"^\s*P\s?a\s?g\s?i\s?n\s?a\s*\d{1,4}\s*(?:van|of|/)\s*\d{1,4}\s*$",
+    re.M | re.I)
+
+
+def pdf_kwaliteit(markdown: str) -> dict:
+    """`{"source_quality": good|fair|poor, "signalen": {...}}` voor een PDF-omzetting."""
+    per_k = max(len(markdown.split("\n")), 1) / 1000
+    signalen = {
+        "opengebroken_woorden": len(_OPENGEBROKEN.findall(markdown)),
+        "afbrekingen_regeleinde": len(_AFBREKING_REGELEINDE.findall(markdown)),
+        "afbrekingen_in_regel": len(_AFBREKING_IN_REGEL.findall(markdown)),
+        "paginarommel": len(_PAGINAROMMEL.findall(markdown)),
+    }
+    score = (signalen["opengebroken_woorden"] + signalen["afbrekingen_in_regel"]) / per_k
+    signalen["score_per_1000_regels"] = round(score, 1)
+    if score >= 20:
+        niveau = "poor"
+    elif score >= 3 or signalen["afbrekingen_regeleinde"] or signalen["paginarommel"]:
+        niveau = "fair"
+    else:
+        niveau = "good"
+    return {"source_quality": niveau, "signalen": signalen}

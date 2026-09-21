@@ -38,19 +38,24 @@ mdconv/
   version.py               lui berekend versienummer/buildteller voor de footer
   sources/
     __init__.py            Document-dataclass, detect_source-precedentie, from_link/from_file
-    eurlex.py              CELEX/ELI/EU-ECLI → Formex, Cellar-HTML/portal als terugval
-    rechtspraak.py         ECLI:NL → data.rechtspraak.nl XML → markdown
-    hudoc.py               EHRM-ECLI/item-id → HUDOC zoek-API + HTML-body
+    eurlex.py              CELEX/ELI → Formex, Cellar-HTML/portal als terugval; EU-ECLI en sector-6-CELEX → formex_hof, zonder terugval
+    formex_hof.py          Cellar-Formex van een arrest/beschikking (JUDGMENT/ORDER) → raw-vorm voor de kennisbank
+    rechtspraak.py         ECLI:NL → data.rechtspraak.nl XML → raw-vorm + herkomst + bronbewijs
+    hudoc.py               EHRM-ECLI/item-id → HUDOC zoek-API (metadata) + DOCX, zonder terugval
+    hudoc_docx.py          HUDOC-Word-bestand → raw-vorm voor de kennisbank
     wetten.py              BWB-XML van KOOP → markdown; portal-HTML als terugval
     bwb_xml.py             BWB-toestand → raw-vorm voor de kennisbank
     formex.py              losse Formex-XML-upload → algemene Markdown
     formex_xml.py          Cellar-Formex-zip → raw-vorm voor de kennisbank
     xml_gedeeld.py         fail-closed XML-tabellen en nummerankers
-    files.py               PDF via pdf-inspector, rest via MarkItDown (beide lui geladen)
+    files.py               PDF via pdf-inspector (een PDF zonder tekstlaag is een weigering, geen terugval), rest via MarkItDown (beide lui geladen); `pdf_kwaliteit()` meet de omzetting
+    docx.py                Word-bestand → raw-vorm; generieke lezer met een `Kaart` per uitgever (HUDOC = `hudoc_docx.py`), koppen uit `outlineLvl`/`Heading N`, noten native, weigert wat het niet kent
+    html_document.py       HTML-pagina → raw-vorm; container `<main>` → `<article>` → `[role=main]` en weigert als dat niet eenduidig is; bewaart alleen de gekozen inhoud als bron
+    officiele_bekendmakingen.py  Kamerstuk (`kst-…`) → officiële XML van KOOP + `metadata.xml`; geen XML = weigeren, nooit terugval op de PDF
     pasted_text.py         handmatig geplakte tekst (kaal of verrijkte HTML) → markdown
     pdf_images.py           losse afbeeldingen uit een PDF (pdfimages/pdfinfo, poppler)
   attachments.py            tijdelijke, token-based opslag van geëxtraheerde afbeeldingen
-  kb_bundle.py              tijdelijke bronopslag + uitpakbare kb-download voor wetgeving
+  kb_bundle.py              tijdelijke bronopslag + uitpakbare kb-download (wetgeving, rechtspraak, en documenten met een documentnummer)
   cleanup/
     __init__.py            publieke ingangen: estimate(), clean(), clean_stream()
     config.py              standaarden + instellingen (modellen/deelgrootte/prompts)
@@ -76,6 +81,7 @@ soort), zodat de route niets over engines of classificatie hoeft te weten.
 | CELEX (`32016R0679`), EUR-Lex link, **ELI-link** (`/eli/reg/2016/679/oj`), **`ECLI:EU:…`** | EUR-Lex |
 | **Geconsolideerde versie**: CELEX met datum (`02014R0910-20241018`) of gedateerde ELI (`/eli/reg/2014/910/2024-10-18`) | EUR-Lex (+ overwegingen uit de basishandeling) |
 | **`ECLI:NL:…`** of rechtspraak.nl-link | Rechtspraak.nl |
+| **Publicatie-id** (`kst-34851-4`) of officielebekendmakingen.nl-link | Officiële Bekendmakingen (alleen Kamerstukken; XML of weigering) |
 | HUDOC-link, item-id (`001-…`), **`ECLI:CE:ECHR:…`** | HUDOC (EHRM) |
 | wetten.overheid.nl-link of **BWB-nummer** (`BWBR0040940`) | wetten.overheid.nl |
 | **`ECLI:DE:…`** (Duitse rechtspraak) | OpenLegalData (terugval: rechtsprechung-im-internet.de) |
@@ -262,8 +268,9 @@ accountregistratie namens de gebruiker):
     `p.oj-note` alsnog tussen nummer en tekst. Dat staat vast in de functiecompositie, niet in
     een opmerking die iemand kan negeren.
   - **Bewust beperkt tot sector 0 + datum.** De selectors zijn zelf-gated (0 treffers zonder die
-    klassen), dus verruimen is later één `if` minder. Nu al verruimen zet `_fetch_cellar_ecli`
-    (EU-rechtspraak) in de vuurlinie zonder dat daar een meting voor is.
+    klassen), dus verruimen is later één `if` minder. Nu al verruimen zet de
+    EU-rechtspraakroute (`_fetch_hof`, sinds 21 september 2026 Formex) in de vuurlinie zonder dat
+    daar een meting voor is.
   - **Cellar 300 gaat door dezelfde poort.** `_fetch_multipart()` sloeg de hele voorbewerking
     over, dus juist een grote geconsolideerde tekst kreeg preambule noch notitie. Elk onderdeel
     loopt nu door `_prepare_consolidated()`, met `with_preamble=(index == 0)`: de preambule hoort
@@ -277,13 +284,53 @@ accountregistratie namens de gebruiker):
   punten) staan in de xhtml als **tweekoloms-tabellen**; `_unwrap_marker_tables` — dat
   **uitsluitend** op `<table>` met exact 2 directe cellen per rij werkt — zet die om naar
   alinea's/lijst-items (nummer ín het bestaande blok, niet nesten).
-- **HUDOC**: body via `hudoc.echr.coe.int/app/conversion/docx/html/body?library=ECHR&id={itemid}`.
-  Een EHRM-**ECLI** → itemid via de zoek-API: `…/app/query/results?query=ecli:"<ECLI>"&select=itemid,ecli,languageisocode&rankingmodelid=11111_Ranking&sort=&facetquery=&start=0&length=30`
-  (die extra params zijn **verplicht**, anders 404; `select` is komma-gescheiden, kleine letters).
-  Eén ECLI → meerdere docs (EN=HEJUD, FR=HFJUD, vertalingen=HJUD<TAAL>). Kies op taal, val terug op
-  ENG→FRE. Veel vertalingen hebben **geen HTML-body (204)** → probeer kandidaten op volgorde.
+- **HUDOC** (sinds 21 september 2026 via de DOCX): de tekst komt uit
+  `hudoc.echr.coe.int/app/conversion/docx/?library=ECHR&id={itemid}&filename={itemid}.docx`,
+  de metadata uit de zoek-API. Die is kieskeurig: `…/app/query/results` met `query`, `select`
+  (komma-gescheiden, kleine letters), `sort`, `start`, `length`, `rankingmodelid=11111_Ranking` en
+  `facetquery` (laat er één weg en je krijgt 404), én een browser-`User-Agent` (de standaard van
+  urllib krijgt 403). 403/429 is een beperking op het aantal verzoeken en geen "niet gevonden":
+  `hudoc._get` herhaalt één keer na vier seconden en meldt het daarna als storing. Eén ECLI →
+  meerdere documenten (EN=`HEJUD`, FR=`HFJUD`, vertalingen, samenvattingen); alleen het Engelse
+  origineel wordt ondersteund, de rest is een weigering met de soort erbij. `id` is de ECLI uit
+  de API, geen slug. Sommige uitspraken geven bij het Word-bestand HTTP 500 (gemeten, ook recente
+  zoals `001-160044`); dat is een weigering met die reden, geen terugval op de HTML-body.
+  `hudoc_docx.py` leest `word/document.xml` met `zipfile` en `xml.etree`: koppen uit de stijl
+  (`KOP`-tabel, allemaal `##`), randnummer `N.` plus **één gewone spatie** (de bron heeft twee
+  harde spaties; het profiel herkent het randnummer alleen zo), voetnoten native en genummerd in
+  de volgorde van hun verwijzing, velden met hun opgeslagen resultaat, en een gate tegen een
+  regelbestand (minder dan 50% van de alinea's eindigt op een leesteken). Wat het weigert:
+  een stijl zonder eigen behandeling, Word-autonummering die geen opsommingsteken is (het
+  nummer staat dan niet in de tekst; gemeten in 3 van 35, waaronder Big Brother Watch),
+  Franse uitspraken, beslissingen en samenvattingen. De zelfcontrole telt de woorden in de bron
+  met een eigen doorloop en eist gelijke woordverzamelingen en aaneengesloten bladalinea's.
+- **Hof van Justitie en Gerecht** (sinds 21 september 2026 via Formex): `eurlex._fetch_hof` vraagt
+  `application/zip;mtype=fmx4` met `Accept-Language: nld` op de ECLI-resource of het CELEX-nummer
+  en geeft de zip aan `formex_hof.omzetten`. Een arrest dat nog geen Formex heeft levert 404 en
+  wordt geweigerd, met de reden erbij; er is bewust geen terugval op de Curia-HTML. Rechtspraak
+  heeft een andere Formex-vorm dan wetgeving: geen `.doc.xml`, één XML met wortel `JUDGMENT` of
+  `ORDER`. De raw-vorm is die van het profiel: kale sectieregels, `NO.P` plus één spatie voor een
+  overweging, `NO.P` plus **drie harde spaties** voor een geciteerd punt (binnen `QUOT.S` of een
+  lijst — zonder dat onderscheid krijgt een geciteerde bijlage `ro`-ankers), het dictum uit
+  `JURISDICTION/INTRO` als alinea's, de procestaalnoot als `[^procestaal]` met een definitie. De
+  zelfcontrole is dezelfde als bij `hudoc_docx`. Weigeringen: `CONCLUSION`, `OPINION`,
+  `JUDGMENT.NP`, `CASE`, `REPORT.HEARING`, `SUMMARY.*`, een zip met meer dan één XML of met een
+  afbeelding, een onbekende aanhalingscode en `DLIST`. Gemeten op 143 Cellar-zips: 73 arresten of
+  beschikkingen in één XML, 71 omgezet.
 - **Rechtspraak.nl**: `https://data.rechtspraak.nl/uitspraken/content?id={ECLI}` geeft schone XML
-  (`<uitspraak>` met `section`/`title`/`parablock`/`para`).
+  (`<uitspraak>` met `section`/`title`/`parablock`/`para`), en die XML **is** het bronbewijs:
+  `record_source(..., source_format="rechtspraak-xml")`, met een `Herkomst` op de ECLI en een
+  kb-bundel. Wat de route bewust niet doet: `<emphasis>` levert geen `**`/`*` op (een kop als
+  `**De beslissing**` matcht `SECTION_ANCHORS` aan de kb-kant niet meer) en kopniveaus volgen de
+  nesting van de bron. Wat ze weigert in plaats van raadt: een inhoudsafbeelding (`imagedata`
+  met `depth` > 2 — gemeten over 300 uitspraken is de verdeling bimodaal: 66 spacers van 1–2
+  pixels tegen 28 foto's van 16 pixels en hoger), een element met tekst zonder eigen
+  behandeling, een tabel die niet rechthoekig te maken is, en een ECLI die niet is wie hij zegt
+  (`dcterms:identifier` moet de gevraagde ECLI zijn). Noten worden native: `<footnote-ref
+  linkend>` → `[^n]`, `<footnote label>` → `[^n]: …`. Genummerde lijsten (`orderedlist`) krijgen
+  de tekens die `numeration` noemt; die gegenereerde markers worden apart geteld, zodat de
+  woordcontrole ze niet voor brontekst aanziet — net als de kopieën van een overspannen
+  tabelcel.
 - **wetten.overheid.nl**: geen bruikbare XML-export gevonden; de **portal-HTML** is server-rendered
   en bevat de volledige tekst in `#regeling` (h1 titel, h3 hoofdstuk, h4 artikel). `wetten.py` pakt
   die container, strip't werkbalk-ruis (`[class*=action--]`, `.visually-hidden`) en markdownify't.
@@ -425,14 +472,21 @@ accountregistratie namens de gebruiker):
     één zip met alle documenten en per document een eigen `attachments/<naam>/`-map. `attachments.get()` **verwijdert niets** — nogmaals downloaden mag
     gewoon; opruimen gebeurt lui, bij elke nieuwe `store()`-aanroep worden sets ouder dan
     2 uur weggegooid (geen cron/achtergrondtaak nodig voor deze single-user lokale tool).
-  - **Kennisbankbundel voor wetgeving** (`mdconv/kb_bundle.py`): BWB-documenten en
-    wetgevings-CELEX-nummers (sector 0/3) krijgen naast hun editorinhoud alleen een
-    tijdelijk `bundle_token`. Bij downloaden bouwt de server een zip met
+  - **Kennisbankbundel** (`mdconv/kb_bundle.py`): BWB-documenten, wetgevings-CELEX-
+    nummers (sector 0/3) en uitspraken met een ECLI krijgen naast hun editorinhoud alleen
+    een tijdelijk `bundle_token`. Bij downloaden bouwt de server een zip met
     `raw/<profiel>/<id>.md`, het herkomstzijbestand en de hashgebonden oorspronkelijke
     HTML/XML/Formex-bron onder `raw/source-evidence/<id>/`. De teruggestuurde markdown
     bepaalt bij dat moment `markdown_changed`; bronbytes en herkomst gaan nooit door de
-    conversie-JSON. ECLI's, voorstellen, documenten en geplakte tekst houden de platte
-    download. De tokens verlopen lui na twee uur, net als afbeeldingtokens.
+    conversie-JSON. Een bundel draagt twee namen: `document_id` is de identiteit zoals de
+    kennisbank hem in `id` zet (`ECLI:NL:RBROT:2025:15669`), `pad_id` diezelfde identiteit
+    als bestandsnaam (`ECLI-NL-RBROT-2025-15669`) — dubbele punten zijn geen bestandsnaam.
+    Een CELEX uit sector 6 zonder ECLI in de herkomst wordt zelf de identiteit (`SKILL.md`
+    schrijft dat voor het Hof voor); een ECLI wordt nooit uit een patroon opgebouwd. De
+    bundel-extensie volgt het bronformaat: `fmx4.zip` voor `formex` en `formex-hvj`, `xml` voor
+    `bwb-xml` en `rechtspraak-xml`, `docx` voor `hudoc-docx`.
+    Voorstellen, documenten en geplakte tekst houden de platte download. De tokens
+    verlopen lui na twee uur, net als afbeeldingtokens.
 - **Tekst plakken** (`pasted_text.py`, endpoint `/api/convert/text`): de front-end stuurt
   zowel `html` (`element.innerHTML` van het `contenteditable`-vak, dus de klembord-opmaak
   zoals de browser die bij plakken invoegt) als `text` (`element.innerText`, kaal) mee.
@@ -833,7 +887,7 @@ regel), inclusief de vloeiende tabbalk-indicator.
   weggeschreven bestand nooit als geldige staat gelezen kan worden.
 
 ## Tests
-`.venv/bin/python -m pytest tests/ -q` — 249 karakteriseringstests die het gedrag
+`.venv/bin/python -m pytest tests/ -q` — 355 karakteriseringstests die het gedrag
 vastleggen in plaats van het te beschrijven: `detect_source`-precedentie, ELI→CELEX,
 de CLG-markupnormalisatie (lidnummers, lettermarkers, voetnootankers), de
 voetnootdefinities die met de preambule meereizen, de notitievorm die een intakepoort
@@ -869,9 +923,29 @@ oppikten — met threaded Flask en parallelle uploads was dat echt bereikbaar.
   `render.py` terechtkomen.
 - **De herkomst is niet voor de UI.** Een bron levert naast de markdown een `Herkomst`
   (`mdconv/herkomst.py`) met de bronbytes en de geldigheid. `_doc_payload()` haalt haar
-  bewust uit het JSON-antwoord. Alleen wetgeving met een kb-identiteit krijgt een opaak
-  `bundle_token`; de server maakt daar bij download de kb-zip en het `.source.json` van.
+  bewust uit het JSON-antwoord. Alleen een document met een kb-identiteit — wetgeving op
+  BWB of CELEX, een uitspraak op ECLI — krijgt een opaak `bundle_token`; de server maakt daar bij download de kb-zip en het `.source.json` van.
   Andere documenten blijven een los `.md`-bestand. Tests leggen beide paden vast.
 - Domeincode kent geen Flask: alleen `mdconv/api.py` importeert het. Fouten gaan als
   `ConversionError` met een Nederlandse boodschap naar boven.
 - Geen `.venv`, `.env` of secrets in versiebeheer (zie `.gitignore`).
+
+
+## Documenten voor de kennisbank (profiel `documenten`)
+
+Een geüpload bestand of een link naar een Kamerstuk komt als document in de kennisbank, met bronbewijs waar de bron een boom heeft. Wat de route doet hangt af van het formaat:
+
+| Invoer | Route | Bewaarde bron (`source_format`) | Weigert bij |
+|---|---|---|---|
+| `kst-…` of link | `officiele_bekendmakingen.py` | `op-xml` | geen XML (404), ander worteldocument dan `kamerstuk`, een element zonder behandeling, een woordtelling die niet klopt |
+| `.docx` | `docx.py` (`WORD_KAART`) | `docx` | stijl zonder herkomst naar `Normal`, automatische nummering, tekstvak/afbeelding, eindnoot, bijgehouden wijziging, samengevoegde cel, tabel in tabel |
+| `.html`/`.htm` | `html_document.py` | `html` (de gekozen container, niet de hele pagina) | geen eenduidige `<main>`/`<article>`/`[role=main]`, samengevoegde cellen zonder sluitend raster |
+| `.pdf` | pdf-inspector | `pdf` (alleen als herkomst; de kennisbank herberekent er niets uit) | geen tekstlaag (scan) |
+
+**Het documentnummer komt nooit uit de bestandsnaam.** `from_file(..., document_id=…)` en de API-velden `document_id` (form-veld bij `/api/convert/file`, JSON-veld bij `/api/convert/file-url`) leveren de slug (`identifiers.md` van de kennisbank: `a-z`, `0-9`, `-`). Zonder slug blijft de download een los `.md`; bij een Kamerstuk levert de bron de slug (`kst-<dossier>-nr-<n>` uit `metadata.xml`). **De voorkant heeft er (nog) geen veld voor** (AGENTS.md, regel 5): tot iemand daar om vraagt, is de API het enige pad.
+
+**Zonder documentnummer valt een weigering terug op MarkItDown, zichtbaar.** De strikte route mag een pagina met twee `<article>`s of een Word-bestand met automatische nummering niet zomaar laten stoppen met werken voor wie alleen een `.md` wil. `sources._terugval()` zet de reden in `Document.warnings` en legt niets vast als bron. Met een documentnummer is de weigering het antwoord.
+
+**Noten zijn native** (`[^1]` en `[^1]: …`), zoals bij de rechtspraak, en niet de `(n)`-vorm die een eerste lezing van AGENTS.md regel 3 suggereert: het documenten-profiel koppelt `(n)` alleen met een aangewezen notenblok, terwijl de kern native noten al aankan. Een tabelnoot in de KOOP-XML heet `t<tabel>-<nr>` (elke tabel telt opnieuw bij 1).
+
+Gemeten op 11 Kamerstukken van KOOP: 5 komen door (waaronder `kst-34851-3`, 65.815 woorden, 102 noten); de weigeringen zijn `box`, `datumtekst`, `voorstel-wet`, `aanhef`, `label` in een kop en `dossierref` in een alinea: vocabulaire dat niet is gemeten en dus niet wordt geraden. Van zeven echte Word-modelovereenkomsten (ARVODI van PIANOo, een model van NVRR) komt er geen enkele door: zes hebben een tekstvak (`mc:AlternateContent`), één automatische nummering. De EHRM-Word-bestanden komen wel door de generieke kaart (42 koppen tegenover 0 bij MarkItDown).

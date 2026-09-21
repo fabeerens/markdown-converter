@@ -43,6 +43,11 @@ class Herkomst:
     celex: str | None = None
     ecli: str | None = None
     bestandsnaam: str | None = None
+    # De identiteit van een document zonder officieel nummer: een slug volgens
+    # `identifiers.md` van de kennisbank (`edpb-guidelines-05-2020`,
+    # `kst-34851-nr-4`). Die komt van de gebruiker of uit de metadata van de
+    # bron, nooit uit een patroon op de bestandsnaam.
+    document_id: str | None = None
 
     title: str | None = None
     language: str | None = None

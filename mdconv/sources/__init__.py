@@ -14,17 +14,22 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from ..errors import ConversionError
 from ..herkomst import Herkomst
-from ..source_structure import capture_source_documents, bind_structure
+from ..kb_bundle import DOCUMENT_ID
+from ..source_structure import capture_source_documents, bind_structure, record_source
 
 from . import (
     be_juportal,
     de_openlegaldata,
+    docx,
     eurlex,
     files,
     formex,
     fr_conseil_constitutionnel,
+    html_document,
     hudoc,
+    officiele_bekendmakingen,
     pasted_text,
     pdf_images,
     rechtspraak,
@@ -98,7 +103,7 @@ class Document:
 # --------------------------------------------------------------------------
 
 def detect_source(query: str) -> str | None:
-    """'rechtspraak', 'hudoc', 'wetten', of None (→ EUR-Lex).
+    """'rechtspraak', 'hudoc', 'wetten', 'officiele-bekendmakingen', of None (→ EUR-Lex).
 
     De volgorde is bewust: een EHRM-ECLI of HUDOC-link wint van alles, want die
     bevat cijfergroepen die anders als iets anders gelezen worden. Een los
@@ -108,6 +113,10 @@ def detect_source(query: str) -> str | None:
     q = query.strip()
     low = q.lower()
 
+    # Een publicatie-id (`kst-34851-4`) of een link naar de Officiële Bekendmakingen. Voorop,
+    # want de herkenning is streng (volledig geankerd of op de host) en de rest is dat niet.
+    if officiele_bekendmakingen.matches(q):
+        return "officiele-bekendmakingen"
     if hudoc.ECHR_ECLI_RE.search(q) or "hudoc.echr.coe.int" in low:
         return "hudoc"
     if wetten.matches(q):
@@ -150,6 +159,8 @@ def from_link(query: str, lang: str = "NL") -> Document:
             resultaat = hudoc.fetch(query, lang)
         elif source == "wetten":
             resultaat = wetten.fetch(query)
+        elif source == "officiele-bekendmakingen":
+            resultaat = officiele_bekendmakingen.fetch(query)
         elif source == "national":
             resultaat = _national_source(query).fetch(query)
         else:
@@ -192,8 +203,17 @@ def looks_like_formex(data: bytes) -> bool:
     return b"<" in head[:200] and any(m in head for m in _FORMEX_MARKERS)
 
 
-def from_file(data: bytes, filename: str, *, extract_images: bool = False) -> Document:
+def from_file(data: bytes, filename: str, *, extract_images: bool = False,
+              document_id: str | None = None, source_url: str | None = None) -> Document:
     """Zet een geüpload bestand om naar een document.
+
+    `document_id` is de slug waaronder de kennisbank dit document kent
+    (`edpb-guidelines-05-2020`). Zonder slug blijft de download een los
+    `.md`-bestand; met slug, en met een bron die de kennisbank kan bewaren (een
+    PDF, een HTML-pagina), krijgt het document een herkomst en dus een
+    kennisbankbundel. De slug wordt nooit uit de bestandsnaam afgeleid: een naam
+    als `rapport-def-v3.pdf` zegt niets over de identiteit, en een gegokte
+    identiteit is een document dat onder de verkeerde naam in de kennisbank landt.
 
     `extract_images=True` haalt bij een PDF ook losse ingesloten afbeeldingen
     eruit (grafieken, screenshots — hele-pagina-scans uitgesloten, zie
@@ -208,26 +228,69 @@ def from_file(data: bytes, filename: str, *, extract_images: bool = False) -> Do
     geïnstalleerd is) wordt deze vlag genegeerd, precies zoals de UI 'm ook
     alleen bij PDF-invoer toont.
     """
-    if filename.lower().endswith(".xml") and looks_like_formex(data):
+    if document_id is not None and not DOCUMENT_ID.match(document_id):
+        raise ConversionError(
+            f"Ongeldig documentnummer {document_id!r}: een slug bestaat uit kleine letters, "
+            "cijfers en koppeltekens (bijvoorbeeld edpb-guidelines-05-2020).")
+    with capture_source_documents() as documenten:
+        doc, extra = _omzetten(data, filename, extract_images=extract_images,
+                               document_id=document_id, source_url=source_url)
+    if not documenten:
+        return doc
+    herkomst = Herkomst(
+        format=documenten[-1]["source_format"] if documenten[-1].get("source_format") else "html-document",
+        document_id=document_id, bestandsnaam=filename, source_url=source_url,
+        requested_url=source_url, waarschuwingen=doc.warnings,
+        extra=extra,
+    )
+    herkomst = bind_structure(herkomst, doc.markdown, documenten)
+    return Document(markdown=doc.markdown, source=doc.source, kind=doc.kind,
+                    attachments=doc.attachments, warnings=doc.warnings, provenance=herkomst)
+
+
+def _omzetten(data: bytes, filename: str, *, extract_images: bool, document_id: str | None,
+              source_url: str | None) -> tuple[Document, dict]:
+    """Het omzetten zelf; geeft het document en de herkomstvelden van deze bron terug."""
+    naam = filename.lower()
+    if naam.endswith(".xml") and looks_like_formex(data):
         markdown = formex.convert_formex(data)
         if len(markdown.strip()) >= _FORMEX_MIN_LENGTH:
-            return Document(markdown=markdown, source=f"Formex XML • {filename}")
+            return Document(markdown=markdown, source=f"Formex XML • {filename}"), {}
 
-    if extract_images and filename.lower().endswith(".pdf") and pdf_images.available():
+    if naam.endswith((".html", ".htm")):
+        try:
+            markdown, waarschuwingen, extra = html_document.convert(
+                data, source_url=source_url, identifier=document_id)
+        except ConversionError as fout:
+            return _terugval(data, filename, fout, document_id)
+        return Document(markdown=markdown, source=f"HTML • {filename}",
+                        warnings=waarschuwingen), extra
+
+    if naam.endswith(".docx"):
+        try:
+            markdown, meta = docx.convert(data)
+        except ConversionError as fout:
+            return _terugval(data, filename, fout, document_id)
+        record_source(data, media_type=_DOCX_MEDIA_TYPE, source_format="docx",
+                      source_url=source_url or "", identifier=document_id)
+        return Document(markdown=markdown, source=f"Word • {filename}"), {"docx": meta}
+
+    if extract_images and naam.endswith(".pdf") and pdf_images.available():
         pages = files.convert_pdf_pages(data)
         if pages is not None:
             markdown, attachments = _attach_pdf_images_inline(pages, data)
             engine = files.ENGINE_PDF_INSPECTOR
             if attachments:
                 engine = f"{engine} + {len(attachments)} afbeelding(en)"
+            extra = _leg_pdf_vast(data, markdown, source_url, document_id)
             return Document(
                 markdown=markdown, source=f"{engine} • {filename}", attachments=attachments
-            )
+            ), extra
 
     markdown, engine = files.convert(data, filename)
 
     attachments: tuple[Attachment, ...] = ()
-    if extract_images and filename.lower().endswith(".pdf") and pdf_images.available():
+    if extract_images and naam.endswith(".pdf") and pdf_images.available():
         # Hier belanden we alleen als convert_pdf_pages() hierboven None gaf
         # (geen tekstlaag) — geen paginagrenzen bekend, dus terug naar de
         # oude, grove plaatsing: alles onderaan.
@@ -237,7 +300,47 @@ def from_file(data: bytes, filename: str, *, extract_images: bool = False) -> Do
             markdown = f"{markdown.rstrip()}\n\n## Bijlagen\n\n{embeds}\n"
             engine = f"{engine} + {len(attachments)} afbeelding(en)"
 
-    return Document(markdown=markdown, source=f"{engine} • {filename}", attachments=attachments)
+    extra = {}
+    if naam.endswith(".pdf"):
+        extra = _leg_pdf_vast(data, markdown, source_url, document_id)
+    return Document(markdown=markdown, source=f"{engine} • {filename}",
+                    attachments=attachments), extra
+
+
+_DOCX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+
+def _terugval(data: bytes, filename: str, fout: ConversionError,
+              document_id: str | None) -> tuple[Document, dict]:
+    """De strikte route weigerde; wat er dan gebeurt hangt af van wat de gebruiker wil.
+
+    Met een `document_id` wil de gebruiker een kennisbankbundel, en die is alleen zinvol
+    als de structuur uit de bron zelf komt: dan is de weigering het antwoord, met de
+    reden. Zonder `document_id` is dit de losse markdown-download die deze tool altijd
+    al leverde, en die mag niet plotseling ophouden te werken voor een pagina met twee
+    `<article>`s of een Word-bestand met automatische nummering. Dan valt de omzetting
+    terug op MarkItDown, en de gebruiker leest in de waarschuwing waarom hij géén
+    kennisbankbundel krijgt. Niets wordt vastgelegd als bron: er is dan niets te bewijzen.
+    """
+    if document_id:
+        raise fout
+    markdown, engine = files.convert(data, filename)
+    return Document(markdown=markdown, source=f"{engine} • {filename}",
+                    warnings=(f"{fout} De tekst is met {engine} omgezet zonder de structuur van de "
+                              "bron; er is geen kennisbankbundel.",)), {}
+
+
+def _leg_pdf_vast(data: bytes, markdown: str, source_url: str | None, document_id: str | None) -> dict:
+    """Bewaar de PDF-bytes en meet de kwaliteit van de omzetting.
+
+    Een PDF heeft geen boom: de kennisbank kan er geen structuur uit herberekenen, dus
+    de bytes gaan mee als herkomst (URL, hash) en niet als bewijs. De meting van de
+    omzetting gaat in het zijbestand, zodat de kennisbank `source_quality` niet opnieuw
+    hoeft te schatten.
+    """
+    record_source(data, media_type="application/pdf", source_format="pdf",
+                  source_url=source_url or "", identifier=document_id)
+    return {"kwaliteit": files.pdf_kwaliteit(markdown)}
 
 
 def _attach_pdf_images(data: bytes) -> tuple[Attachment, ...]:
@@ -286,13 +389,15 @@ def _attach_pdf_images_inline(pages: list[str], data: bytes) -> tuple[str, tuple
     return markdown, tuple(attachments)
 
 
-def from_file_bytes(data: bytes, filename: str, label: str, *, extract_images: bool = False) -> Document:
+def from_file_bytes(data: bytes, filename: str, label: str, *, extract_images: bool = False,
+                    document_id: str | None = None, source_url: str | None = None) -> Document:
     """Als `from_file`, maar met een eigen bronvermelding (bv. de URL)."""
-    doc = from_file(data, filename, extract_images=extract_images)
+    doc = from_file(data, filename, extract_images=extract_images,
+                    document_id=document_id, source_url=source_url)
     engine = doc.source.split(" • ", 1)[0]
     return Document(
         markdown=doc.markdown, source=f"{engine} • {label}", kind=doc.kind,
-        attachments=doc.attachments,
+        attachments=doc.attachments, warnings=doc.warnings, provenance=doc.provenance,
     )
 
 

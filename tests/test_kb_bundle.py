@@ -44,15 +44,31 @@ def herkomst(*, document_id="32022R1925", bron=b"PK\x03\x04formex"):
     ).as_json()
 
 
-def test_profile_and_identity_are_derived_only_for_legislation():
-    assert kb_bundle.identiteit({"bwb": "BWBR0040940"}) == ("wetten-nl", "BWBR0040940")
-    assert kb_bundle.identiteit({"celex": "32022R1925"}) == ("eurlex", "32022R1925")
+def test_profile_and_identity_are_derived_for_legislation_and_case_law():
+    assert kb_bundle.identiteit({"bwb": "BWBR0040940"}) == ("wetten-nl", "BWBR0040940", "BWBR0040940")
+    assert kb_bundle.identiteit({"celex": "32022R1925"}) == ("eurlex", "32022R1925", "32022R1925")
     assert kb_bundle.identiteit({"celex": "02019R0881-20250204",
-                                 "base_celex": "32019R0881"}) == ("eurlex", "32019R0881")
-    assert kb_bundle.identiteit({"celex": "62019CJ0311"}) is None
+                                 "base_celex": "32019R0881"}) == ("eurlex", "32019R0881", "32019R0881")
+    # Een uitspraak wordt op haar ECLI geïdentificeerd; de padnaam is dezelfde
+    # identiteit met koppeltekens, zoals raw/ en work/ in de kennisbank heten.
+    assert kb_bundle.identiteit({"ecli": "ECLI:NL:HR:2026:1"}) == (
+        "jurisprudentie", "ECLI:NL:HR:2026:1", "ECLI-NL-HR-2026-1")
+    assert kb_bundle.identiteit({"ecli": "ECLI:EU:C:2020:559", "celex": "62018CJ0311"}) == (
+        "jurisprudentie", "ECLI:EU:C:2020:559", "ECLI-EU-C-2020-559")
+    # Noemt de bron zelf geen ECLI, dan is het CELEX-nummer uit sector 6 de identiteit
+    # (SKILL.md: "anders het CELEX-nummer (Hof)"). Een ECLI wordt nooit opgebouwd.
+    assert kb_bundle.identiteit({"celex": "61956CJ0002"}) == (
+        "jurisprudentie", "61956CJ0002", "61956CJ0002")
     assert kb_bundle.identiteit({"celex": "52025PC0837"}) is None
-    assert kb_bundle.identiteit({"ecli": "ECLI:NL:HR:2026:1"}) is None
     assert kb_bundle.identiteit({"bestandsnaam": "rapport.pdf"}) is None
+    assert kb_bundle.identiteit({"ecli": "  "}) is None
+    # Een document zonder officieel nummer heeft een slug (identifiers.md). Die komt van
+    # de gebruiker of uit de bron, en wordt hier alleen gecontroleerd; een slug die de
+    # regels niet haalt is geen bundel, geen gok.
+    assert kb_bundle.identiteit({"document_id": "edpb-guidelines-05-2020"}) == (
+        "documenten", "edpb-guidelines-05-2020", "edpb-guidelines-05-2020")
+    assert kb_bundle.identiteit({"document_id": "Rapport 2024"}) is None
+    assert kb_bundle.identiteit({"document_id": "rapport--2024"}) is None
 
 
 def test_bundle_paths_hash_source_and_mark_edited_markdown():
@@ -61,9 +77,9 @@ def test_bundle_paths_hash_source_and_mark_edited_markdown():
     token = kb_bundle.store(provenance)
     gebouwd = kb_bundle.build(token, "# Bewerkt", bewerkt_met_ai=False)
     assert gebouwd is not None
-    stream, document_id = gebouwd
+    stream, pad_id = gebouwd
     digest = hashlib.sha256(bron).hexdigest()
-    assert document_id == "32022R1925"
+    assert pad_id == "32022R1925"
 
     with zipfile.ZipFile(stream) as archive:
         assert set(archive.namelist()) == {
@@ -105,15 +121,60 @@ def test_api_keeps_provenance_server_side_and_returns_kb_zip(client):
 def test_document_without_kb_identity_keeps_plain_download(client):
     from mdconv.api import _doc_payload
 
+    # Geplakte tekst en losse bestanden houden de platte download: er is geen
+    # identiteit waaronder de kennisbank ze zou kunnen plaatsen.
     document = Document(
-        "# Arrest", "test",
-        provenance=Herkomst(format="rechtspraak-xml", ecli="ECLI:NL:HR:2026:1"),
+        "# Notitie", "test",
+        provenance=Herkomst(format="pasted", bestandsnaam="notitie.md"),
     )
     payload = _doc_payload(document)
     assert "bundle_token" not in payload
-    result = client.post("/api/download", json={**payload, "filename": "arrest"})
+    result = client.post("/api/download", json={**payload, "filename": "notitie"})
     assert result.content_type.startswith("text/markdown")
-    assert "arrest.md" in result.headers["Content-Disposition"]
+    assert "notitie.md" in result.headers["Content-Disposition"]
+
+
+def test_case_law_bundle_uses_the_ecli_with_hyphens_as_filename(client):
+    from mdconv.api import _doc_payload
+
+    bron = b"<open-rechtspraak/>"
+    bewijs = {
+        "schema_version": 1, "format": "binary-source", "source_format": "rechtspraak-xml",
+        "media_type": "application/xml", "source_sha256": hashlib.sha256(bron).hexdigest(),
+        "original_base64": base64.b64encode(bron).decode("ascii"),
+        "source_url": "https://data.rechtspraak.nl/uitspraken/content?id=ECLI:NL:HR:2026:1",
+        "identifier": "ECLI:NL:HR:2026:1", "language": "nl", "role": "document",
+    }
+    provenance = bind_structure(
+        Herkomst(format="rechtspraak-xml", ecli="ECLI:NL:HR:2026:1", language="nl",
+                 source_url=bewijs["source_url"], requested_url=bewijs["source_url"]),
+        "# Arrest", [bewijs],
+    ).as_json()
+    document = Document("# Arrest", "test", provenance=Herkomst(**{
+        key: tuple(value) if key in {"toestand_meldingen", "waarschuwingen"} else value
+        for key, value in provenance.items()
+    }))
+    payload = _doc_payload(document)
+    assert "bundle_token" in payload
+
+    result = client.post("/api/download", json={
+        "markdown": "# Arrest", "filename": "arrest",
+        "bundle_token": payload["bundle_token"],
+    })
+    assert result.status_code == 200
+    assert result.content_type == "application/zip"
+    assert "ECLI-NL-HR-2026-1.zip" in result.headers["Content-Disposition"]
+    digest = hashlib.sha256(bron).hexdigest()
+    with zipfile.ZipFile(io.BytesIO(result.data)) as archive:
+        assert set(archive.namelist()) == {
+            "raw/jurisprudentie/ECLI-NL-HR-2026-1.md",
+            "raw/jurisprudentie/ECLI-NL-HR-2026-1.source.json",
+            "raw/source-evidence/ECLI-NL-HR-2026-1/fetch.json",
+            f"raw/source-evidence/ECLI-NL-HR-2026-1/{digest}.xml",
+        }
+        fetch = json.loads(archive.read("raw/source-evidence/ECLI-NL-HR-2026-1/fetch.json"))
+        assert fetch["source_format"] == "rechtspraak-xml"
+        assert fetch["media_type"] == "application/xml"
 
 
 def test_attachment_download_keeps_its_zip_type_and_name(client):
