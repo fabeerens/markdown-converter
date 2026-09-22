@@ -36,6 +36,10 @@ bewerken, opschonen met AI (elk document met zijn eigen profiel/model) en los te
 Mislukt een van de documenten (bv. een ongeldige ECLI), dan blijft de rest gewoon beschikbaar;
 de status onder de knop toont wat wel en niet is gelukt.
 
+Heb je een hele **lijst**? Bij zowel Jurisprudentie als Wetgeving plak je die in één keer in een
+invoerregel (die splitst zich uit over losse regels) of via **Lijst plakken**, met één taalkeuze
+voor de hele lijst. Opsommingstekens, koppen en dubbele regels worden er zelf uitgehaald.
+
 De tool volgt automatisch de **licht/donker-instelling van je systeem** — er is geen knop,
 je hoeft niets te kiezen.
 

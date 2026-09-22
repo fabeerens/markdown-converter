@@ -57,7 +57,7 @@ const RE_HUDOC = /\b00\d-\d{3,}\b/;
 /* Op welke tabbladen een geplakte lijst zich uitsplitst over de invoerrijen.
    Uitbreiden = hier een tabblad bijzetten (en, voor het losse tekstvak,
    initListMode() aanroepen in init()). */
-const LIST_PASTE_KINDS = new Set(["wet"]);
+const LIST_PASTE_KINDS = new Set(["jur", "wet"]);
 
 /** Enkelvoud/meervoud per tabblad, voor "18 regelingen herkend". */
 const LIST_NOUN = {
@@ -386,7 +386,7 @@ function pickIdentifier(line) {
   const url = line.match(RE_URL);
   // Sluitleestekens van een markdown-link of een prozaregel horen niet bij de URL.
   if (url) return url[0].replace(/[.,;:!?)\]}>"'»]+$/, "");
-  for (const pattern of [RE_ECLI, RE_BWB, RE_CELEX]) {
+  for (const pattern of [RE_ECLI, RE_BWB, RE_CELEX, RE_HUDOC]) {
     const hit = line.match(pattern);
     if (hit) return hit[0];
   }
@@ -1547,6 +1547,7 @@ function init() {
   initRows("wet", () => fetchLinks("wet"));
   initRows("doc", fetchFileUrls);
   // Ná initRows: het lijst-tekstvak deelt de submit-handler van de rijen.
+  initListMode("jur");
   initListMode("wet");
 
   $("#fetch-jur").addEventListener("click", () => fetchLinks("jur"));

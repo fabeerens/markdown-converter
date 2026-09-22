@@ -717,8 +717,10 @@ document zelf stonden en uit elkaar liepen bij het wisselen van tabblad.
     ophalen niet meespringt met elk document dat binnenkomt (dat volgde de
     afrondingsvolgorde); pas `finishBatch()` opent het eerste document van de lijst. De
     tab verschijnt wél meteen (`renderDocTabs()`), zodat je de lijst ziet vollopen.
-- **Batch-import: een lijst aanleveren** (alleen Wetgeving; `LIST_PASTE_KINDS` is de
-  enige plek om dat uit te breiden). Twee wegen naar dezelfde lijst:
+- **Batch-import: een lijst aanleveren** (Wetgeving en Jurisprudentie; `LIST_PASTE_KINDS`
+  plus een `initListMode(kind)`-aanroep en de `#bulk-<kind>-*`-id's in `index.html` zijn
+  de plekken om dat uit te breiden — `test_list_paste_kinds_match_initialised_list_modes`
+  bewaakt dat ze gelijk blijven). Twee wegen naar dezelfde lijst:
   - **Plakken splitst zich uit over de rijen.** Plak je meerdere regels in één
     invoerveld, dan vult regel 1 dat veld en verschijnt er voor elke volgende regel een
     nieuwe rij (`spreadList()`), met de taalkeuze van de rij waarin je plakte. Alleen bij
@@ -729,12 +731,12 @@ document zelf stonden en uit elkaar liepen bij het wisselen van tabblad.
     taalkeuze voor de hele lijst. Rijen en tekstvak zijn **twee weergaven van dezelfde
     lijst**: `switchListMode()` neemt de inhoud mee in beide richtingen, zodat je nooit
     werk kwijt bent en "Ophalen" altijd leest wat je op dat moment ziet. De gekozen
-    weergave blijft bewaard in `localStorage` (`listMode:wet`). Enter maakt in een
+    weergave blijft bewaard in `localStorage` (`listMode:wet` / `listMode:jur`). Enter maakt in een
     tekstvak een regel, dus **Cmd/Ctrl+Enter** haalt op.
   - **De parser is vergevingsgezind maar voorspelbaar** (`parseList()`/
     `pickIdentifier()`), per regel in deze volgorde: een URL in de regel (dus een
     geplakte bullet mét omringende tekst werkt gewoon, sluitleestekens van een
-    markdown-link of prozapunt gaan eraf), anders een ECLI/BWB/CELEX in de regel, anders
+    markdown-link of prozapunt gaan eraf), anders een ECLI/BWB/CELEX/HUDOC-item-id in de regel, anders
     de regel zelf zonder opsommingsteken of nummering. Onbekende invoer wordt dus **nooit
     stil weggegooid** — die gaat door naar de server, die in het Nederlands uitlegt wat
     er mis is. Lege regels en markdown-koppen (`## EU-wetgeving`) worden overgeslagen,

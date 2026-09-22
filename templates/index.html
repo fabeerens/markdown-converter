@@ -32,7 +32,20 @@
     <!-- Jurisprudentie -->
     <section class="pane" data-pane="jur" id="pane-jur" role="tabpanel" aria-label="Jurisprudentie">
       <div class="card">
+        <div class="seg" role="group" aria-label="Invoervorm">
+          <button type="button" class="seg-btn" id="mode-jur-rows" aria-pressed="true">Losse regels</button>
+          <button type="button" class="seg-btn" id="mode-jur-bulk" aria-pressed="false">Lijst plakken</button>
+        </div>
         <div class="rows" id="rows-jur"></div>
+        <div class="bulk" id="bulk-jur" hidden>
+          <label class="visually-hidden" for="bulk-jur-text">Lijst met ECLI's, HUDOC-links of item-id's</label>
+          <textarea id="bulk-jur-text" spellcheck="false"
+                    placeholder="Eén per regel — plak hier een hele lijst:&#10;&#10;ECLI:NL:HR:2012:BQ9251&#10;ECLI:EU:C:2025:645&#10;- Uitspraak Rechtbank Rotterdam, zie https://uitspraken.rechtspraak.nl/details?id=ECLI:NL:RBROT:2025:15669&#10;&#10;Opsommingstekens, omringende tekst en dubbele regels worden er zelf uitgehaald."></textarea>
+          <div class="bulk-bar">
+            <span class="count" id="bulk-jur-count"></span>
+            <select class="select lang" id="bulk-jur-lang" aria-label="Taal voor de hele lijst"></select>
+          </div>
+        </div>
         <div class="row-actions">
           <button type="button" class="btn btn-dashed" id="add-jur">+ Document toevoegen</button>
           <button type="button" class="btn btn-solid btn-lg" id="fetch-jur">Ophalen</button>
@@ -44,6 +57,9 @@
         <strong>Nederlandse rechtspraak</strong> (<code>ECLI:NL:…</code> of rechtspraak.nl-link).
         De taalkeuze bepaalt de versie of vertaling. Voeg meerdere documenten toe om ze in
         één keer op te halen — elk komt in een eigen tabblad.
+        Heb je een <strong>lijst</strong>? Plak die in één keer — in een invoerregel
+        (die splitst zich dan uit over losse regels) of via <strong>Lijst plakken</strong>
+        hierboven, met één taalkeuze voor de hele lijst.
       </p>
     </section>
 

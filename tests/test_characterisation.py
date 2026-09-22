@@ -2420,18 +2420,32 @@ def test_download_bundle_without_documents_explains_itself_in_dutch(client):
     assert "documenten" in r.get_json()["error"]
 
 
-def test_wetgeving_offers_both_input_forms():
+@pytest.mark.parametrize("kind", ["jur", "wet"])
+def test_list_tabs_offer_both_input_forms(kind):
     """De front-end bouwt de id's van het lijst-tekstvak per conventie op
     (`#bulk-${kind}-text` enz.). Wordt er in de template één omgenoemd, dan
-    faalt de JS stil — daarom staan ze hier vast."""
+    faalt de JS stil — daarom staan ze hier vast, voor elk tabblad met lijstinvoer."""
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     html = open(os.path.join(root, "templates", "index.html"), encoding="utf-8").read()
     for element in (
-        'id="mode-wet-rows"', 'id="mode-wet-bulk"',
-        'id="bulk-wet"', 'id="bulk-wet-text"', 'id="bulk-wet-lang"',
-        'id="bulk-wet-count"', 'id="download-all"',
+        f'id="mode-{kind}-rows"', f'id="mode-{kind}-bulk"',
+        f'id="bulk-{kind}"', f'id="bulk-{kind}-text"', f'id="bulk-{kind}-lang"',
+        f'id="bulk-{kind}-count"', 'id="download-all"',
     ):
         assert element in html, f"{element} ontbreekt in index.html"
+
+
+def test_list_paste_kinds_match_initialised_list_modes():
+    """`LIST_PASTE_KINDS` (plakken splitst uit over de rijen) en `initListMode()`
+    (het tekstvak) horen bij dezelfde tabbladen: een tabblad met alleen de
+    ene helft geeft een halve lijstfunctie zonder foutmelding."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    js = open(os.path.join(root, "static", "app.js"), encoding="utf-8").read()
+    declared = re.search(r"LIST_PASTE_KINDS\s*=\s*new Set\(\[([^\]]*)\]\)", js)
+    assert declared, "LIST_PASTE_KINDS niet gevonden in app.js"
+    paste_kinds = set(re.findall(r'"(\w+)"', declared.group(1)))
+    list_modes = set(re.findall(r'initListMode\("(\w+)"\)', js))
+    assert paste_kinds == list_modes
 
 
 def test_frontend_has_one_celex_pattern():
