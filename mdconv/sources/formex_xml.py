@@ -975,10 +975,19 @@ class FormexOmzetter:
                 if kind.tag not in ("NO.P", "TXT"):
                     self.inhoud(kind, anker or basis, {"lijsten": 0})
         elif tag in ("LIST", "DLIST"):
-            genummerd = tag == "LIST" and (el.get("TYPE", "").upper() not in ONGENUMMERD)
-            if genummerd:
-                teller["lijsten"] += 1
-            extra = f"al{teller['lijsten']}-" if genummerd and teller["lijsten"] > 1 else ""
+            if tag == "DLIST":
+                # Een DLIST draagt zijn nummer in de PREFIX (`16)`) en is dus
+                # altijd genummerd. Tot 22 september 2026 stond hier `tag ==
+                # "LIST" and ...`, waardoor een DLIST nooit een basis meekreeg
+                # en geen van de 26 definitiepunten van artikel 4 AVG een
+                # structuureenheid had. De `al2-`-vorm telt alleen LIST'en:
+                # die hoort bij een tweede opsomming in hetzelfde lid.
+                genummerd, extra = True, ""
+            else:
+                genummerd = el.get("TYPE", "").upper() not in ONGENUMMERD
+                if genummerd:
+                    teller["lijsten"] += 1
+                extra = f"al{teller['lijsten']}-" if genummerd and teller["lijsten"] > 1 else ""
             if isinstance(prefix, list) and prefix[0]:
                 # Een lid dat meteen met een opsomming begint: het nummer krijgt
                 # een eigen regel, zoals het Publicatieblad het zet.
@@ -991,17 +1000,60 @@ class FormexOmzetter:
         else:
             self.onbekend("inhoud", el)
 
+    def definitiepunt(self, item, basis: str) -> None:
+        """Eén `DLIST.ITEM`: `16) “hoofdvestiging” …` als eigen alinea.
+
+        Draagt de `DEFINITION` zelf een opsomming of een tabel, dan blijft die
+        een opsomming: de kopregel loopt tot het eerste structurele kind en de
+        onderdelen hangen daaronder. Tot 22 september 2026 ging `DEFINITION`
+        altijd door `inline()`, waardoor artikel 4 AVG punt 16, 22 en 23 en
+        artikel 3 LED punt 7 als één alinea werden geschreven; de planner zag
+        `a)` en `b)` dan als onderdeel van het artikel in plaats van van het
+        punt, en het bronbewijs vond de samengevoegde regel niet terug.
+        """
+        term = ws(self.inline(item.find("TERM"))) if item.find("TERM") is not None else ""
+        prefix = ws(self.inline(item.find("PREFIX"))) if item.find("PREFIX") is not None else ""
+        definitie = item.find("DEFINITION")
+        anker = f"{basis}-{nummer_anker(prefix)}" if basis and prefix else ""
+
+        def schrijf_kop(aanhef: str) -> None:
+            regel = " ".join(x for x in (prefix, term, aanhef) if x)
+            self.u.blok(regel)
+            if anker:
+                self.u.eenheid(anker, "onderdeel", regel)
+
+        structureel = ("LIST", "DLIST", "TBL")
+        if definitie is None or not any(k.tag in structureel for k in definitie):
+            schrijf_kop(ws(self.inline(definitie)) if definitie is not None else "")
+            return
+
+        # Eén doorloop, zodat tekst ná een opsomming niet stil wegvalt: alles
+        # tot het eerste structurele kind hoort bij de kopregel, wat erna komt
+        # wordt een eigen alinea zonder eigen anker (zoals ALINEA het doet).
+        lopend, kop_geschreven = definitie.text or "", False
+        for kind in list(definitie) + [None]:
+            if kind is not None and kind.tag not in structureel:
+                lopend += self.inline_el(kind) + (kind.tail or "")
+                continue
+            tekst, lopend = ws(lopend), ""
+            if not kop_geschreven:
+                schrijf_kop(tekst)
+                kop_geschreven = True
+            elif tekst:
+                self.u.blok(tekst)
+            if kind is None:
+                break
+            if kind.tag == "TBL":
+                self.tabel(kind)
+            else:
+                self.lijst(kind, anker or basis, "")
+            lopend = kind.tail or ""
+
     def lijst(self, el, basis: str, extra: str) -> None:
         """Elk onderdeel is een eigen alinea: `a) tekst`, niet een Markdown-lijst."""
         if el.tag == "DLIST":
             for item in el.findall("DLIST.ITEM"):
-                term = ws(self.inline(item.find("TERM"))) if item.find("TERM") is not None else ""
-                prefix = ws(self.inline(item.find("PREFIX"))) if item.find("PREFIX") is not None else ""
-                definitie = ws(self.inline(item.find("DEFINITION"))) if item.find("DEFINITION") is not None else ""
-                regel = " ".join(x for x in (prefix, term, definitie) if x)
-                self.u.blok(regel)
-                if basis and prefix:
-                    self.u.eenheid(f"{basis}-{nummer_anker(prefix)}", "onderdeel", regel)
+                self.definitiepunt(item, basis)
             return
         genummerd = el.get("TYPE", "").upper() not in ONGENUMMERD
         for item in el.findall("ITEM"):

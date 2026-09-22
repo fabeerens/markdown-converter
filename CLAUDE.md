@@ -147,6 +147,15 @@ accountregistratie namens de gebruiker):
   geen `shown` (niet `false`: dat de wijziging is overschreven is voor Formex niet gemeten).
   `corrections` schrijft de omzetter niet; een `MOD.ACT` met een ander `TYPE` dan `MOD` komt met
   een waarschuwing niet in `amendments`.
+  Een **definitielijst** (`DLIST`) is genummerd: elk `DLIST.ITEM` wordt `16) “term” …` als
+  eigen alinea met een eigen structuureenheid (`art-4-16`). Draagt de `DEFINITION` zelf een
+  `LIST`, `DLIST` of `TBL`, dan blijft dat een opsomming: de kopregel loopt tot het eerste
+  structurele kind — de aanhef van AVG punt 22 (`… omdat:`) hoort dus nog op die regel — en de
+  onderdelen krijgen het punt als ankerouder (`art-4-16-a`). Een `LIST` binnen `QUOT.S` splitst
+  niet: die citeert een andere handeling. Tot 22 september 2026 ging `DEFINITION` altijd door
+  `inline()` en kreeg een `DLIST` nooit een basis mee, waardoor artikel 4 AVG en artikel 3 LED
+  één samengevoegde alinea per punt gaven, geen van de 26 definitiepunten een eenheid had, en
+  het bronbewijs van de kennisbank de regel niet terugvond.
   De portal-HTML (`/legal-content/…/HTML/`) blokkeert bots (HTTP 202, lege body;
   inmiddels een AWS WAF-JS-challenge, dus ook met retries permanent 202 — de portal is in de praktijk
   dood voor een simpele `requests`-scraper). Gebruik het **Cellar-archief** via content negotiation,

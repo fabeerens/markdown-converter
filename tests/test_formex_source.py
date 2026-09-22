@@ -549,3 +549,98 @@ def test_quotation_marks_and_emphasis_inside_a_table_cell_do_not_get_spaces():
     markdown = formex_xml.omzetten(formex_zip(act=act))[0]
     assert "een knop of een “smart home”-apparaat, **vet** en dan door." in markdown
     assert "“ smart" not in markdown
+
+
+# De vorm van artikel 4 AVG en artikel 3 LED: een definitielijst waarvan een
+# deel van de punten zelf een opsomming draagt. Tot 22 september 2026 ging
+# DEFINITION altijd door inline(), zodat `16) “term” a) … b) …` één alinea werd.
+# De definities krijgen een eigen artikel: een artikel met genummerde leden
+# *en* een definitielijst eronder zou twee keer `art-N-1` opleveren, en dat
+# weigert de structuurcontrole terecht.
+DEFINITIES = (
+    b'</ARTICLE><ARTICLE IDENTIFIER="2"><TI.ART>Artikel 2</TI.ART><STI.ART>Definities</STI.ART>'
+    b'<ALINEA><P>Voor de toepassing van deze verordening wordt verstaan onder:</P><DLIST>'
+    b'<DLIST.ITEM><PREFIX>1)</PREFIX>'
+    b'<TERM><QUOT.START CODE="201E" ID="Q1" REF.END="E1"/>persoonsgegevens'
+    b'<QUOT.END CODE="201D" ID="E1" REF.START="Q1"/></TERM>'
+    b'<DEFINITION>alle informatie over een natuurlijke persoon;</DEFINITION></DLIST.ITEM>'
+    b'<DLIST.ITEM><PREFIX>16)</PREFIX>'
+    b'<TERM><QUOT.START CODE="201E" ID="Q2" REF.END="E2"/>hoofdvestiging'
+    b'<QUOT.END CODE="201D" ID="E2" REF.START="Q2"/></TERM>'
+    b'<DEFINITION><LIST TYPE="alpha">'
+    b'<ITEM><NP><NO.P>a)</NO.P><TXT>de plaats van de centrale administratie;</TXT></NP></ITEM>'
+    b'<ITEM><NP><NO.P>b)</NO.P><TXT>de plaats van de voornaamste activiteiten;</TXT></NP></ITEM>'
+    b'</LIST></DEFINITION></DLIST.ITEM>'
+    b'<DLIST.ITEM><PREFIX>22)</PREFIX>'
+    b'<TERM><QUOT.START CODE="201E" ID="Q3" REF.END="E3"/>betrokken autoriteit'
+    b'<QUOT.END CODE="201D" ID="E3" REF.START="Q3"/></TERM>'
+    b'<DEFINITION><P>een autoriteit die betrokken is omdat:</P><LIST TYPE="alpha">'
+    b'<ITEM><NP><NO.P>a)</NO.P><TXT>de verwerker daar is gevestigd;</TXT></NP></ITEM>'
+    b'<ITEM><NP><NO.P>b)</NO.P><TXT>een klacht is ingediend;</TXT></NP></ITEM>'
+    b'</LIST></DEFINITION></DLIST.ITEM>'
+    b'<DLIST.ITEM><PREFIX>30)</PREFIX>'
+    b'<TERM><QUOT.START CODE="201E" ID="Q4" REF.END="E4"/>geciteerde term'
+    b'<QUOT.END CODE="201D" ID="E4" REF.START="Q4"/></TERM>'
+    b'<DEFINITION>wat in een andere handeling staat: <QUOT.S LEVEL="1">'
+    b'<LIST TYPE="alpha"><ITEM><NP><NO.P>a)</NO.P><TXT>geciteerd onderdeel;</TXT></NP></ITEM>'
+    b'</LIST></QUOT.S></DEFINITION></DLIST.ITEM>'
+    b'</DLIST></ALINEA></ARTICLE>'
+)
+
+
+def met_definities() -> bytes:
+    return formex_zip(act=ACT.replace(b"</ARTICLE>", DEFINITIES, 1))
+
+
+def test_a_definition_carrying_a_list_stays_a_list():
+    """Artikel 4 AVG punt 16: `DEFINITION > LIST` geeft een kopregel plus twee
+    onderdelen, met het punt als ankerouder — niet één samengevoegde alinea.
+
+    Zo stond het in de HTML-route-versie (`art-4-16`, `art-4-16-a`, `-b`), en
+    zo vindt het bronbewijs van de kennisbank de regel terug: `bind()` eist de
+    hele regel, niet een deelreeks."""
+    markdown, eenheden, onbekend, _ = formex_xml.omzetten(met_definities())
+    regels = [r for r in markdown.splitlines() if r.strip()]
+
+    assert "16) “hoofdvestiging”" in regels
+    assert "a) de plaats van de centrale administratie;" in regels
+    assert "b) de plaats van de voornaamste activiteiten;" in regels
+    ankers = [e.anker for e in eenheden if e.anker.startswith("art-2-")]
+    assert ankers == ["art-2-1", "art-2-16", "art-2-16-a", "art-2-16-b",
+                      "art-2-22", "art-2-22-a", "art-2-22-b", "art-2-30"]
+    assert not onbekend
+
+
+def test_a_definition_keeps_its_own_lead_in_on_the_heading_line():
+    """Artikel 4 AVG punt 22: `DEFINITION > [P, LIST]`. De `P` hoort bij de
+    kopregel; kwam ze als eigen alinea, dan bindt het bronbewijs niet, want
+    `nummering()` zet haar aan de kant van de kennisbank óók op die regel."""
+    regels = [r for r in formex_xml.omzetten(met_definities())[0].splitlines() if r.strip()]
+
+    # Als hele regel, niet als deelreeks: vóór de reparatie stonden de
+    # onderdelen a) en b) achter de dubbele punt op diezelfde regel, en dan
+    # slaagt een `in markdown` nog steeds.
+    assert "22) “betrokken autoriteit” een autoriteit die betrokken is omdat:" in regels
+    assert "a) de verwerker daar is gevestigd;" in regels
+
+
+def test_a_plain_definition_stays_one_paragraph():
+    """Zonder structureel kind verandert er niets: dat is wat de zes andere
+    Formex-bronnen byte-identiek houdt."""
+    regels = [r for r in formex_xml.omzetten(met_definities())[0].splitlines() if r.strip()]
+
+    assert "1) “persoonsgegevens” alle informatie over een natuurlijke persoon;" in regels
+
+
+def test_a_quoted_list_inside_a_definition_stays_inline():
+    """Een opsomming binnen `QUOT.S` citeert een andere handeling; daar mag de
+    planner geen onderdelen van maken. Alleen een LIST/DLIST/TBL die rechtstreeks
+    onder DEFINITION hangt, splitst."""
+    markdown, eenheden, _, _ = formex_xml.omzetten(met_definities())
+    ankers = [e.anker for e in eenheden]
+
+    assert "30) “geciteerde term” wat in een andere handeling staat: a) geciteerd onderdeel;" in markdown
+    # Het punt zelf is wél een eenheid — tot 22 september 2026 kreeg een DLIST
+    # nooit een basis mee, en had geen van de definitiepunten er een.
+    assert "art-2-30" in ankers
+    assert not [a for a in ankers if a.startswith("art-2-30-")]
