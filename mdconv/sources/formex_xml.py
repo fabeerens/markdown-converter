@@ -1,9 +1,10 @@
 """Formex 4 (Publicatieblad) -> de raw-vorm die md-clean-eurlex verwacht.
 
-De Cellar levert een zip met een `.doc.xml` (de inhoudsopgave van de
-manifestatie) en per onderdeel een XML: de handeling (`ACT`, of `CONS.ACT` bij
-een geconsolideerde tekst) en elke bijlage. De volgorde komt uit de `.doc.xml`,
-niet uit de bestandsnamen.
+De Cellar levert een zip met een documentmanifest (`.doc.xml` of
+`.doc.fmx.xml`) en per onderdeel een XML: de handeling (`ACT`, of `CONS.ACT`
+bij een geconsolideerde tekst) en elke bijlage. Nieuwe verpakkingen bevatten
+daarnaast de publicatie-inhoudsopgave waarnaar het manifest verwijst. De
+volgorde komt uit het documentmanifest, niet uit de bestandsnamen.
 
 **Deze omzetter schrijft niet de mooiste Markdown, maar de vorm die het profiel
 al aankan.** Gemeten op 20 september 2026: een vrijere vorm wordt door
@@ -47,7 +48,7 @@ METADATA = {"BIB.INSTANCE", "BIB.DOC", "BIB.DATA", "PUBLICATION.REF", "NO.DOC", 
             "PAGE.SEQ", "PAGE.TOTAL", "LG.DOC", "NO.SEQ", "VOLUME.REF"}
 INLINE_TEKST = {"DATE", "REF.DOC.OJ", "FT", "HT", "QUOT.S", "IE", "PERIOD", "REF.DOC", "ACRONYM",
                 "ADDR", "PL.DATE", "NO.CELEX", "UNIT", "EXPONENT", "INF", "SUP", "TERM", "DEFINITION"}
-INLINE_TRANSPARANT = {"TI", "STI", "NP", "NO.P", "TXT", "ITEM", "PREFIX"}
+INLINE_TRANSPARANT = {"TI", "STI", "NP", "NO.P", "NO.PARAG", "TXT", "ITEM", "PREFIX"}
 STRUCTUUR_ELEMENTEN = {
     "ACT", "CONS.ACT", "CONS.DOC", "ANNEX", "CONS.ANNEX", "TITLE", "PREAMBLE",
     "GR.VISA", "GR.CONSID", "CONSID", "ENACTING.TERMS", "FINAL", "DIVISION",
@@ -70,8 +71,13 @@ def _xml_fout(boodschap: str, exc: Exception | None = None) -> ConversionError:
     return fout
 
 
+def _is_documentmanifest(naam: str) -> bool:
+    klein = naam.lower()
+    return klein.endswith(".doc.xml") or klein.endswith(".doc.fmx.xml")
+
+
 def _onderdelen(data: bytes) -> tuple[ET.Element, list[tuple[str, ET.Element]]]:
-    """Lees één manifestatie, uitsluitend in de volgorde van de `.doc.xml`.
+    """Lees één manifestatie, uitsluitend in de volgorde van het documentmanifest.
 
     De omgekeerde controle is bewust: een extra XML-onderdeel dat niet in de
     inhoudsopgave staat mag niet stil buiten de omzetting blijven.
@@ -86,29 +92,48 @@ def _onderdelen(data: bytes) -> tuple[ET.Element, list[tuple[str, ET.Element]]]:
         if len(korte_namen) != len(set(korte_namen)):
             raise _xml_fout("de zip bevat XML-bestanden met dezelfde korte naam")
         per_naam = dict(zip(korte_namen, xml_infos))
-        doc_namen = [n for n in korte_namen if n.lower().endswith(".doc.xml")]
+        doc_namen = [n for n in korte_namen if _is_documentmanifest(n)]
         if len(doc_namen) != 1:
             raise _xml_fout(
-                f"de zip bevat {len(doc_namen)} inhoudsopgaven (.doc.xml); precies één is vereist"
+                f"de zip bevat {len(doc_namen)} documentmanifesten (.doc.xml of .doc.fmx.xml); "
+                "precies één is vereist"
             )
         try:
             doc = ET.fromstring(zf.read(per_naam[doc_namen[0]]))
         except (ET.ParseError, KeyError) as exc:
-            raise _xml_fout(f"de .doc.xml is niet leesbaar ({exc})", exc)
+            raise _xml_fout(f"het documentmanifest is niet leesbaar ({exc})", exc)
+        toc_verwijzingen = {
+            (r.get("FILE") or "").rsplit("/", 1)[-1]
+            for r in doc.iter("PUBLICATION.REF") if r.get("FILE")
+        }
+        aanwezige_tocs = toc_verwijzingen & set(korte_namen)
+        for toc_naam in aanwezige_tocs:
+            try:
+                toc = ET.fromstring(zf.read(per_naam[toc_naam]))
+            except (ET.ParseError, KeyError) as exc:
+                raise _xml_fout(f"de publicatie-inhoudsopgave {toc_naam} is niet leesbaar ({exc})", exc)
+            terug = {
+                (item.get("DOC.INSTANCE") or "").rsplit("/", 1)[-1]
+                for item in toc.iter("ITEM.PUB") if item.get("DOC.INSTANCE")
+            }
+            if doc_namen[0] not in terug:
+                raise _xml_fout(
+                    f"de publicatie-inhoudsopgave {toc_naam} verwijst niet terug naar {doc_namen[0]}"
+                )
         volgorde = [r.get("FILE") for r in doc.iter("REF.PHYS") if r.get("TYPE") == "DOC.XML"]
         if not volgorde or any(not n for n in volgorde):
-            raise _xml_fout("de .doc.xml noemt geen geldige onderdelen (REF.PHYS TYPE=DOC.XML)")
+            raise _xml_fout("het documentmanifest noemt geen geldige onderdelen (REF.PHYS TYPE=DOC.XML)")
         kort = [n.rsplit("/", 1)[-1] for n in volgorde]
         if len(kort) != len(set(kort)):
-            raise _xml_fout("de .doc.xml noemt hetzelfde onderdeel meer dan één keer")
-        werkelijk = set(korte_namen) - set(doc_namen)
+            raise _xml_fout("het documentmanifest noemt hetzelfde onderdeel meer dan één keer")
+        werkelijk = set(korte_namen) - set(doc_namen) - aanwezige_tocs
         genoemd = set(kort)
         ontbreekt = genoemd - werkelijk
         extra = werkelijk - genoemd
         if ontbreekt:
-            raise _xml_fout(f"de .doc.xml noemt ontbrekende onderdelen: {', '.join(sorted(ontbreekt))}")
+            raise _xml_fout(f"het documentmanifest noemt ontbrekende onderdelen: {', '.join(sorted(ontbreekt))}")
         if extra:
-            raise _xml_fout(f"de zip bevat onderdelen buiten de .doc.xml: {', '.join(sorted(extra))}")
+            raise _xml_fout(f"de zip bevat onderdelen buiten het documentmanifest: {', '.join(sorted(extra))}")
         uit = []
         for naam in kort:
             try:
@@ -148,7 +173,8 @@ def _wijzigingsmarkeringen(data: bytes) -> Counter:
         with zipfile.ZipFile(io.BytesIO(data)) as zf:
             for info in zf.infolist():
                 naam = info.filename.lower()
-                if info.is_dir() or not naam.endswith(".xml") or naam.endswith(".doc.xml"):
+                if (info.is_dir() or not naam.endswith(".xml") or _is_documentmanifest(naam)
+                        or naam.endswith(".toc.xml") or naam.endswith(".toc.fmx.xml")):
                     continue
                 bouwer = _PiVerzamelaar()
                 parser = ET.XMLParser(target=bouwer)
@@ -391,7 +417,10 @@ class FormexOmzetter:
             # Een NP binnen een geciteerde wijziging (QUOT.S) loopt hier inline
             # door; zonder scheiding stond `“67)Verordening` aaneen.
             return self.inline(el) + " "
-        if tag == "P":
+        if tag in ("P", "ALINEA", "PARAG"):
+            # De AI-verordening bevat vier ALINEA's en negen PARAG's binnen
+            # QUOT.S; daar zijn het inline bladregels, net als P in oudere
+            # handelingen. NO.PARAG blijft binnen dit citaat gewone tekst.
             return " " + self.inline(el) + " "
         if tag in ("LIST", "ITEM"):
             # Een opsomming binnen QUOT.S citeert de structuur van een andere
@@ -512,10 +541,16 @@ class FormexOmzetter:
 
         telling = Counter(e.soort for e in self.u.eenheden)
         artikelen = sum(1 for _, root in onderdelen for _ in root.iter("ARTICLE"))
-        leden = sum(
-            1 for _, root in onderdelen for el in root.iter("PARAG")
-            if el.find("NO.PARAG") is not None and ws(_plat_bron(el.find("NO.PARAG")))
-        )
+        def structurele_leden(el, in_citaat: bool = False) -> int:
+            """Tel alleen leden van de handeling, niet negen geciteerde uit 2024/1689."""
+            citaat = in_citaat or el.tag == "QUOT.S"
+            eigen = int(
+                el.tag == "PARAG" and not citaat and el.find("NO.PARAG") is not None
+                and bool(ws(_plat_bron(el.find("NO.PARAG"))))
+            )
+            return eigen + sum(structurele_leden(kind, citaat) for kind in el)
+
+        leden = sum(structurele_leden(root) for _, root in onderdelen)
         overwegingen = sum(1 for _, root in onderdelen for _ in root.iter("CONSID"))
         bijlagen = sum(
             1 for _, root in onderdelen for el in root.iter()
@@ -864,7 +899,15 @@ class FormexOmzetter:
                 continue
             if kind.tag == "PARAG":
                 nr = ws(self.inline(kind.find("NO.PARAG"))) if kind.find("NO.PARAG") is not None else ""
-                self.lid(kind, nr, f"{anker}-{nummer_anker(nr)}" if nr else anker)
+                ankernummer = nummer_anker(nr)
+                identificatie = (kind.get("IDENTIFIER") or "").rsplit(".", 1)[-1]
+                # In artikel 73 van 2024/1689 heet IDENTIFIER 073.010 in de
+                # bron zichtbaar "11."; het volgende lid heet eveneens 11.
+                # De machine-identiteit houdt beide bronpassages uniek zonder
+                # het gedrukte nummer of de tekst te veranderen.
+                if identificatie.isdigit() and nr.rstrip(".").isdigit():
+                    ankernummer = str(int(identificatie))
+                self.lid(kind, nr, f"{anker}-{ankernummer}" if nr else anker)
             else:
                 self.inhoud(kind, basis=anker, teller=teller)
 
@@ -1097,7 +1140,9 @@ class FormexOmzetter:
                     ti = f"{letter}{NBSP * 3}{rest}".strip()
                 else:
                     ti = ws(self.inline(titel)) if titel is not None else ""
-                m = re.match(r"([A-Z]|\d+)\.", ti)
+                # Bijlage VIII en XI van 2024/1689 schrijven `Afdeling A —`
+                # en `Afdeling 1` in plaats van de oudere kopvorm `A.`.
+                m = re.match(r"(?:Afdeling\s+)?([A-Z]|\d+)(?:\.|\b)", ti, re.I)
                 sub = f"{anker}-{nummer_anker(m.group(1))}" if m else anker
                 if ti:
                     self.u.blok(ti)

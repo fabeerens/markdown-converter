@@ -35,14 +35,84 @@ ACT = b"""<ACT>
 </ACT>"""
 
 
-def formex_zip(*, doc: bytes = DOC, act: bytes = ACT, extra: dict[str, bytes] | None = None) -> bytes:
+def formex_zip(*, doc: bytes = DOC, act: bytes = ACT, doc_naam: str = "L_test.doc.xml",
+               extra: dict[str, bytes] | None = None) -> bytes:
     stream = io.BytesIO()
     with zipfile.ZipFile(stream, "w") as archive:
-        archive.writestr("L_test.doc.xml", doc)
+        archive.writestr(doc_naam, doc)
         archive.writestr("handeling.xml", act)
         for naam, data in (extra or {}).items():
             archive.writestr(naam, data)
     return stream.getvalue()
+
+
+def test_modern_doc_fmx_manifest_and_its_publication_toc_are_supported():
+    doc = DOC.replace(b"<PUBLICATION.REF>", b'<PUBLICATION.REF FILE="L_test.toc.fmx.xml">')
+    toc = b'<PUBLICATION><OJ><VOLUME><ITEM.PUB DOC.INSTANCE="L_test.doc.fmx.xml"/></VOLUME></OJ></PUBLICATION>'
+    data = formex_zip(
+        doc=doc,
+        doc_naam="L_test.doc.fmx.xml",
+        extra={"L_test.toc.fmx.xml": toc},
+    )
+
+    markdown, eenheden, onbekend, _ = formex_xml.omzetten(data)
+
+    assert "### Artikel\u00a01" in markdown
+    ankers = [eenheid.anker for eenheid in eenheden]
+    assert "art-1" in ankers
+    assert "art-1-1" in ankers
+    assert onbekend == {}
+
+
+def test_modern_publication_toc_must_point_back_to_the_document_manifest():
+    doc = DOC.replace(b"<PUBLICATION.REF>", b'<PUBLICATION.REF FILE="L_test.toc.fmx.xml">')
+    toc = b'<PUBLICATION><OJ><VOLUME><ITEM.PUB DOC.INSTANCE="ander.doc.fmx.xml"/></VOLUME></OJ></PUBLICATION>'
+    data = formex_zip(
+        doc=doc,
+        doc_naam="L_test.doc.fmx.xml",
+        extra={"L_test.toc.fmx.xml": toc},
+    )
+
+    with pytest.raises(ConversionError, match="verwijst niet terug"):
+        formex_xml.omzetten(data)
+
+
+def test_quoted_alinea_is_preserved_as_an_inline_leaf():
+    act = ACT.replace(
+        b"Deze verordening stelt regels vast.",
+        b"Deze verordening wijzigt: <QUOT.S><ALINEA>geciteerde bladregel.</ALINEA></QUOT.S>",
+    )
+
+    markdown, _, onbekend, _ = formex_xml.omzetten(formex_zip(act=act))
+
+    assert "Deze verordening wijzigt: geciteerde bladregel." in markdown
+    assert onbekend == {}
+
+
+def test_quoted_paragraph_is_preserved_without_creating_its_own_unit():
+    act = ACT.replace(
+        b"Deze verordening stelt regels vast.",
+        b"Deze verordening wijzigt: <QUOT.S><PARAG><NO.PARAG>5.</NO.PARAG>"
+        b"<ALINEA>geciteerd lid.</ALINEA></PARAG></QUOT.S>",
+    )
+
+    markdown, eenheden, onbekend, _ = formex_xml.omzetten(formex_zip(act=act))
+
+    assert "Deze verordening wijzigt: 5. geciteerd lid." in markdown
+    assert [eenheid.anker for eenheid in eenheden].count("art-1-5") == 0
+    assert onbekend == {}
+
+
+def test_paragraph_identifier_disambiguates_a_duplicate_printed_number():
+    act = ACT.replace(
+        b'<PARAG><NO.PARAG>1.</NO.PARAG><ALINEA>',
+        b'<PARAG IDENTIFIER="001.010"><NO.PARAG>11.</NO.PARAG><ALINEA>',
+    )
+
+    _, eenheden, _, _ = formex_xml.omzetten(formex_zip(act=act))
+
+    assert any(eenheid.anker == "art-1-10" and eenheid.tekst.startswith("11.")
+               for eenheid in eenheden)
 
 
 def test_eurlex_uses_formex_before_html_and_preserves_the_source(monkeypatch):
@@ -407,7 +477,7 @@ def test_emphasis_inside_a_word_does_not_split_the_word():
 
 
 def test_manifest_and_zip_must_name_exactly_the_same_parts():
-    with pytest.raises(ConversionError, match="buiten de .doc.xml"):
+    with pytest.raises(ConversionError, match="buiten het documentmanifest"):
         formex_xml.omzetten(formex_zip(extra={"stil-vergeten.xml": b"<ANNEX/>"}))
 
 
