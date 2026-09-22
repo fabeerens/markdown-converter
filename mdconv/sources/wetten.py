@@ -249,6 +249,16 @@ def _fetch_bwb_xml(query: str) -> tuple[str, str, Herkomst]:
     markdown, eenheden, onbekend, extra = bwb_xml.omzetten(data)
     if onbekend:
         raise ConversionError(f"BWB-XML bevat elementen zonder behandeling: {onbekend}.")
+    koppen_bron = len([e for e in eenheden if e.soort in {
+        "boek", "deel", "titeldeel", "hoofdstuk", "afdeling", "paragraaf",
+        "subparagraaf", "sub-paragraaf", "artikel", "bijlage",
+    }])
+    if root.find(".//artikel") is not None and koppen_bron == 0:
+        raise ConversionError(
+            "De BWB-XML bevat <artikel>-elementen, maar de omzetting geeft geen "
+            "enkele artikel- of structuurkop; de omzetter weigert liever dan "
+            "onvolledige structuur door te laten."
+        )
     gemeten_sha512 = hashlib.sha512(data).hexdigest()
     manifest_sha512 = (versie.get("sha512") or "").strip().lower() or None
     wijkt_af = bool(manifest_sha512 and manifest_sha512 != gemeten_sha512)
@@ -281,10 +291,7 @@ def _fetch_bwb_xml(query: str) -> tuple[str, str, Herkomst]:
         source_url=f"https://wetten.overheid.nl/{bwb}/{versie['begin']}",
         requested_url=query,
         expired=extra["expired"],
-        koppen_bron=len([e for e in eenheden if e.soort in {
-            "boek", "deel", "titeldeel", "hoofdstuk", "afdeling", "paragraaf",
-            "subparagraaf", "sub-paragraaf", "artikel", "bijlage",
-        }]),
+        koppen_bron=koppen_bron,
         koppen_markdown=verify.tel_koppen_markdown(markdown),
         waarschuwingen=tuple(waarschuwingen),
         extra={

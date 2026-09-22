@@ -119,6 +119,79 @@ def test_identity_and_selected_start_date_are_hard_requirements(monkeypatch):
         from_link("BWBR0000001/2020-02-01")
 
 
+def regeling(*, bwb="BWBR0000001", begin="2020-01-01"):
+    """Een ministeriële regeling: <regeling> met <regeling-tekst>/<regeling-sluiting>
+    in plaats van de <wet-besluit>-vorm met <wettekst>/<wetsluiting>."""
+    return f"""<toestand bwb-id="{bwb}" inwerkingtreding="{begin}"><wetgeving>
+<citeertitel>Testregeling</citeertitel><regeling><aanhef><al>Gelet op artikel 1.</al></aanhef>
+<regeling-tekst><artikel status="goed" inwerking="{begin}"><kop><label>Artikel</label>
+<nr>1</nr><titel>Reikwijdte</titel></kop><lid><lidnr>1</lidnr>
+<al>Deze regeling geldt.</al></lid></artikel></regeling-tekst>
+<regeling-sluiting><al>Aldus vastgesteld.</al></regeling-sluiting>
+</regeling></wetgeving></toestand>""".encode()
+
+
+def test_regeling_route_is_converted_like_wet_besluit(monkeypatch):
+    xml = regeling()
+
+    def get(url, **kwargs):
+        return response(manifest(), url) if url.endswith("manifest.xml") else response(xml, url)
+
+    monkeypatch.setattr(wetten.net, "documents", lambda: SimpleNamespace(get=get))
+    document = from_link("BWBR0000001/2020-02-01")
+
+    assert "# Testregeling" in document.markdown
+    assert "Reikwijdte" in document.markdown
+    assert "Deze regeling geldt." in document.markdown
+    assert "Aldus vastgesteld." in document.markdown
+    assert document.provenance.koppen_bron == 1
+
+
+def test_unknown_top_level_element_under_wetgeving_is_refused_not_flattened():
+    """Vroeger viel <regeling> hier stil in plat(); nu geldt dat voor elk
+    onbekend hoofdelement direct onder <wetgeving>, niet alleen <regeling>."""
+    xml = toestand().replace(b"<wet-besluit>", b"<circulaire>").replace(b"</wet-besluit>", b"</circulaire>")
+
+    with pytest.raises(ConversionError, match="circulaire"):
+        wetten.bwb_xml.omzetten(xml)
+
+
+def test_zero_headings_with_source_articles_is_refused(monkeypatch):
+    """Goedkope grendel: als de XML <artikel>-elementen bevat maar de omzetting
+    nul structuurkoppen geeft, is dat een teken dat er ergens stil is platgeslagen."""
+    xml = toestand()
+    echte_omzetten = wetten.bwb_xml.omzetten
+
+    def lege_omzetting(data):
+        markdown, eenheden, onbekend, extra = echte_omzetten(data)
+        return markdown, [], onbekend, extra
+
+    monkeypatch.setattr(wetten.bwb_xml, "omzetten", lege_omzetting)
+
+    def get(url, **kwargs):
+        return response(manifest(), url) if url.endswith("manifest.xml") else response(xml, url)
+
+    monkeypatch.setattr(wetten.net, "documents", lambda: SimpleNamespace(get=get))
+    with pytest.raises(ConversionError, match="structuurkop"):
+        from_link("BWBR0000001/2020-02-01")
+
+
+def test_bijlage_divisie_preserves_its_title_table_and_footnote():
+    xml = b"""<toestand bwb-id="BWBR0000001" inwerkingtreding="2020-01-01"><wetgeving>
+<citeertitel>Testwet</citeertitel><bijlage><kop><label>Bijlage</label><nr>1</nr></kop>
+<divisie><kop><titel>Bijlage bij artikel 1</titel></kop>
+<table><tgroup cols="1"><colspec colname="c1"/><tbody><row><entry colname="c1">
+<al>Waarde<sup>1</sup></al></entry></row></tbody></tgroup></table>
+<al><sup>1</sup>De tabelnoot.</al></divisie></bijlage></wetgeving></toestand>"""
+
+    markdown, _, onbekend, _ = wetten.bwb_xml.omzetten(xml)
+
+    assert "Bijlage bij artikel 1" in markdown
+    assert "Waarde[^annex-1-1]" in markdown
+    assert "[^annex-1-1]: De tabelnoot." in markdown
+    assert onbekend == {}
+
+
 def test_unavailable_xml_falls_back_to_html_with_warning(monkeypatch):
     html = """<html><head><meta name="dcterms:title" content="Testwet"></head><body>
 <div id="regeling"><h1>Testwet</h1><div class="wetgeving"><p>""" + (

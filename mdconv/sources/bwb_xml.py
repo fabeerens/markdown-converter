@@ -83,9 +83,12 @@ class BwbOmzetter:
         for kind in wet:
             if kind.tag == "intitule":
                 self.u.blok(ws(self.inline(kind)))
-            elif kind.tag == "wet-besluit":
+            elif kind.tag in ("wet-besluit", "regeling"):
+                # Een wet/AMvB komt binnen als <wet-besluit> met <wettekst> en
+                # <wetsluiting>; een ministeriële regeling als <regeling> met
+                # <regeling-tekst> en <regeling-sluiting>. Zelfde vorm, andere naam.
                 for deel in kind:
-                    if deel.tag == "wettekst":
+                    if deel.tag in ("wettekst", "regeling-tekst"):
                         self.container_inhoud(deel, niveau=2, pad={})
                     elif deel.tag == "bijlage":
                         self.bijlage(deel, niveau=2)
@@ -94,7 +97,14 @@ class BwbOmzetter:
             elif kind.tag == "bijlage":
                 self.bijlage(kind, niveau=2)
             elif kind.tag not in OVERSLAAN:
-                self.plat(kind)
+                # Weiger liever dan een onbekend hoofdelement stil plat te slaan
+                # (zoals <regeling> dat vroeger deed): een stille terugval hier
+                # verliest kop, lid, lijst en tabel zonder enige melding.
+                raise ConversionError(
+                    f"<{kind.tag}> is een onbekend hoofdelement direct onder "
+                    "<wetgeving>; de omzetter kent alleen <intitule>, "
+                    "<wet-besluit>, <regeling> en <bijlage>."
+                )
         return self.u
 
     def plat(self, el) -> None:
@@ -238,6 +248,8 @@ class BwbOmzetter:
     def inhoud(self, el, basis: str, prefix_noot: str, teller: dict | None = None, diepte: int = 0) -> None:
         inspring = "  " * diepte
         if el.tag == "al":
+            if self.nootdefinitie(el, prefix_noot):
+                return
             tekst = ws(self.inline(el, prefix_noot))
             if tekst:
                 self.u.blok(f"{inspring}{tekst}")
@@ -251,6 +263,8 @@ class BwbOmzetter:
             self.u.blok(self.lijst(el, basis, extra, diepte, prefix_noot))
         elif el.tag == "table":
             self.tabel(el, prefix_noot)
+        elif el.tag == "divisie":
+            self.divisie(el, basis, prefix_noot, teller, diepte)
         elif el.tag in OVERSLAAN:
             return
         else:
@@ -258,6 +272,37 @@ class BwbOmzetter:
             tekst = ws(self.inline(el, prefix_noot))
             if tekst:
                 self.u.blok(tekst)
+
+    def nootdefinitie(self, el, prefix_noot: str) -> bool:
+        """Schrijf een bijlagenoot, ook wanneer die onder een divisie staat."""
+        if (not prefix_noot or el.tag != "al" or (el.text or "").strip()
+                or not len(el) or el[0].tag != "sup"):
+            return False
+        cijfer = ws("".join(el[0].itertext()))
+        if not cijfer.isdigit():
+            return False
+        rest = (el[0].tail or "") + "".join(
+            self.inline_el(kind, prefix_noot) + (kind.tail or "") for kind in list(el)[1:]
+        )
+        self.u.blok(f"[^{prefix_noot}{cijfer}]: {ws(rest)}")
+        return True
+
+    def divisie(self, el, basis: str, prefix_noot: str,
+                teller: dict | None, diepte: int) -> None:
+        """Een benoemd blok binnen een bijlage, gemeten in BWBR0034306.
+
+        De zeven divisies daar bevatten ieder een kop en een CALS-tabel; één
+        bevat daarnaast de definitie van een tabelnoot. De kop blijft een
+        gewone bronalinea, omdat een divisie geen citeeranker draagt.
+        """
+        label, nr, titel = self.kop(el)
+        regel = self.kopregel(label, nr, titel) if label or nr else titel
+        if regel:
+            self.u.blok(regel)
+        for kind in el:
+            if kind.tag == "kop" or kind.tag in OVERSLAAN:
+                continue
+            self.inhoud(kind, basis, prefix_noot, teller, diepte)
 
     def lijst(self, el, basis: str, extra: str, diepte: int, prefix_noot: str) -> str:
         regels = []
@@ -332,14 +377,6 @@ class BwbOmzetter:
         for kind in el:
             if kind.tag == "kop" or kind.tag in OVERSLAAN:
                 continue
-            # Een alinea die met een los noot-cijfer begint is een voetnootdefinitie.
-            if kind.tag == "al" and not (kind.text or "").strip() and len(kind) and kind[0].tag == "sup":
-                cijfer = ws("".join(kind[0].itertext()))
-                if cijfer.isdigit():
-                    rest = (kind[0].tail or "") + "".join(self.inline_el(c, prefix) + (c.tail or "") for c in list(kind)[1:])
-                    # Direct na de bijlage, zoals in de bron; niet achteraan het document.
-                    self.u.blok(f"[^{prefix}{cijfer}]: {ws(rest)}")
-                    continue
             if kind.tag in CONTAINERS or kind.tag == "artikel":
                 wrapper = ET.Element("x")
                 wrapper.append(kind)
