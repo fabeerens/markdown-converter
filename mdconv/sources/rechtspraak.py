@@ -16,10 +16,10 @@ zouden veranderen die `md-clean-jurisprudentie` vandaag al aankan:
 - **Kopniveaus.** `<title>` wordt een kop op de diepte die de bron toont, niet
   op een diepte die uit de inhoud is afgeleid.
 
-Wat deze route wél weigert in plaats van stil op te lossen: een uitspraak met
-een inhoudsafbeelding (de keten heeft daar geen route voor), een `orderedlist`
-(de nummering staat niet in de bron, en dan zou de renderer haar bepalen), een
-onbekend element met tekst, en elke tabel die niet rechthoekig te maken is.
+Inhoudsafbeeldingen worden niet in de Markdown opgenomen. De omzetting meldt
+aantal, afmetingen en bron-id als waarschuwing en legt dezelfde gegevens vast in
+het zijbestand. Een `orderedlist` met onbekende nummering, een onbekend element
+met tekst en elke tabel die niet rechthoekig te maken is, blijven weigeringen.
 """
 
 from __future__ import annotations
@@ -43,8 +43,8 @@ _MIN_USEFUL_LENGTH = 40
 # Een afbeelding van hooguit twee pixels hoog is een spacer of de scheidingslijn
 # uit het briefhoofd. Gemeten over 300 uitspraken: 66 van de 94 afbeeldingen
 # hebben depth 1 of 2, de overige 28 zijn 16 pixels of hoger en zijn foto's,
-# kaartjes en schema's. Die tweede groep is inhoud, en daar heeft de keten geen
-# route voor - dus een weigering en geen stil verlies.
+# kaartjes en schema's. Die tweede groep is inhoud. Op uitdrukkelijk verzoek van
+# de gebruiker wordt ze weggelaten, maar wel zichtbaar en machineleesbaar gemeld.
 _DECORATIE_MAX_DEPTH = 2
 
 # Containers zonder eigen betekenis in de uitvoer: de kinderen tellen.
@@ -205,6 +205,7 @@ class _Lezer:
         self.opmaak_weggelaten = 0
         self.regelvallen = 0
         self.lijstitems = 0
+        self.afbeeldingen_weggelaten: list[dict] = []
         self.gegenereerd: Counter = Counter()
         self.secties: list[dict] = []
         self.bladteksten: list[str] = []
@@ -277,10 +278,12 @@ class _Lezer:
         except ValueError:
             depth = 0
         if depth > _DECORATIE_MAX_DEPTH:
-            raise ConversionError(
-                f"De uitspraak bevat een afbeelding van {el.get('width')}x{depth} pixels "
-                f"({el.get('fileref')}). De kennisbank heeft daar geen route voor, en een "
-                "afbeelding stil weglaten zou inhoud verliezen; omzetting geweigerd.")
+            self.afbeeldingen_weggelaten.append({
+                "fileref": el.get("fileref"),
+                "width": el.get("width"),
+                "depth": depth,
+                "format": el.get("format"),
+            })
 
     # -- blokken --------------------------------------------------------
 
@@ -483,6 +486,17 @@ def omzetten(data: bytes, ecli: str) -> tuple[str, dict]:
     _zelfcontrole(lezer, markdown)
 
     waarschuwingen = []
+    if lezer.afbeeldingen_weggelaten:
+        details = ", ".join(
+            f"{beeld['width'] or '?'}x{beeld['depth']} pixels "
+            f"(bron-id {beeld['fileref'] or 'onbekend'})"
+            for beeld in lezer.afbeeldingen_weggelaten
+        )
+        aantal = len(lezer.afbeeldingen_weggelaten)
+        soort = "inhoudsafbeelding" if aantal == 1 else "inhoudsafbeeldingen"
+        waarschuwingen.append(
+            f"{aantal} {soort} niet overgenomen; de tekst is zonder beeld geconverteerd: "
+            f"{details}.")
     if lezer.opmaak_weggelaten:
         waarschuwingen.append(
             f"{lezer.opmaak_weggelaten} keer opmaak (<emphasis>) niet overgenomen; de tekst blijft.")
@@ -495,6 +509,7 @@ def omzetten(data: bytes, ecli: str) -> tuple[str, dict]:
         "koppen_bron": lezer.koppen,
         "koppen_markdown": sum(1 for r in markdown.splitlines() if r.startswith("#")),
         "waarschuwingen": waarschuwingen,
+        "afbeeldingen_weggelaten": lezer.afbeeldingen_weggelaten,
         "secties": lezer.secties,
         "noten": len(lezer.uit.noten),
         "lijstitems": lezer.lijstitems,

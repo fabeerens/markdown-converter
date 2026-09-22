@@ -78,7 +78,7 @@ function profileFor(doc) {
 
 function addDoc({
   title, filenameBase, source, kind, markdown, allowObsidian,
-  attachments_token, attachment_count, bundle_token,
+  attachments_token, attachment_count, bundle_token, warnings,
   batchIndex = 0, activate = true,
 }) {
   const doc = {
@@ -98,6 +98,9 @@ function addDoc({
     obsidian: false,
     model: $("#model").value || null,
     markdown,
+    // Bronwaarschuwingen blijven bij hun eigen documenttab horen. Zo blijft
+    // een weggelaten inhoudsafbeelding ook na wisselen van tab zichtbaar.
+    warnings: Array.isArray(warnings) ? warnings : [],
     cleaned: false,
     translated: false,
     lastUsage: null,
@@ -824,6 +827,11 @@ function renderEditor() {
   $("#md").value = doc.markdown;
   $("#src").textContent = doc.source;
   $("#src").title = doc.source;
+  const waarschuwing = $("#doc-warnings");
+  waarschuwing.hidden = doc.warnings.length === 0;
+  waarschuwing.textContent = doc.warnings.length
+    ? `Waarschuwing: ${doc.warnings.join(" · ")}`
+    : "";
   updateLineNumbers();
 
   $("#download").textContent = doc.bundleToken

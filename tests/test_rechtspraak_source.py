@@ -11,6 +11,7 @@ import hashlib
 
 import pytest
 
+from mdconv import sources
 from mdconv.errors import ConversionError
 from mdconv.source_structure import capture_source_documents
 from mdconv.sources import rechtspraak
@@ -136,15 +137,29 @@ def test_een_andere_ecli_in_de_bron_is_een_weigering(monkeypatch):
         rechtspraak.fetch("ECLI:NL:HR:2026:2")
 
 
-def test_een_inhoudsafbeelding_wordt_geweigerd(monkeypatch):
+def test_een_inhoudsafbeelding_wordt_weggelaten_met_waarschuwing(monkeypatch):
     body = UITSPRAAK.replace(
         "<para>Het verloop blijkt uit de stukken.",
         '<para><inlinemediaobject><imageobject><imagedata fileref="x" depth="240" '
         'width="500" format="image/png"/></imageobject></inlinemediaobject>'
         "Het verloop blijkt uit de stukken.")
     _fake(monkeypatch, body)
-    with pytest.raises(ConversionError, match="afbeelding van 500x240"):
-        rechtspraak.fetch("ECLI:NL:HR:2026:1")
+    document = sources.from_link("ECLI:NL:HR:2026:1")
+    markdown = document.markdown
+    herkomst = document.provenance
+
+    assert "Het verloop blijkt uit de stukken." in markdown
+    assert "![" not in markdown
+    assert any(
+        "1 inhoudsafbeelding niet overgenomen" in melding
+        and "500x240 pixels" in melding
+        and "bron-id x" in melding
+        for melding in herkomst.waarschuwingen
+    )
+    assert herkomst.extra["afbeeldingen_weggelaten"] == [{
+        "fileref": "x", "width": "500", "depth": 240, "format": "image/png",
+    }]
+    assert document.as_json()["warnings"] == list(herkomst.waarschuwingen)
 
 
 def test_een_spacer_van_twee_pixels_blijft_decoratie(monkeypatch):
@@ -154,8 +169,10 @@ def test_een_spacer_van_twee_pixels_blijft_decoratie(monkeypatch):
         'width="13" format="image/png"/></imageobject></inlinemediaobject>'
         "Het verloop blijkt uit de stukken.")
     _fake(monkeypatch, body)
-    markdown, _, _ = rechtspraak.fetch("ECLI:NL:HR:2026:1")
+    markdown, _, herkomst = rechtspraak.fetch("ECLI:NL:HR:2026:1")
     assert "Het verloop blijkt uit de stukken." in markdown
+    assert herkomst.extra["afbeeldingen_weggelaten"] == []
+    assert not any("afbeelding" in melding for melding in herkomst.waarschuwingen)
 
 
 def test_een_onbekend_element_met_tekst_wordt_geweigerd(monkeypatch):
