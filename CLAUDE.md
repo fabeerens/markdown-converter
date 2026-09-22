@@ -496,6 +496,22 @@ accountregistratie namens de gebruiker):
     schrijft dat voor het Hof voor); een ECLI wordt nooit uit een patroon opgebouwd. De
     bundel-extensie volgt het bronformaat: `fmx4.zip` voor `formex` en `formex-hvj`, `xml` voor
     `bwb-xml` en `rechtspraak-xml`, `docx` voor `hudoc-docx`.
+    **Élke gedeclareerde bron wordt gearchiveerd, niet alleen de hoofdbron.** Een
+    geconsolideerde handeling haalt haar considerans uit de basishandeling
+    (`role: "preamble"`), en een meerdelige handeling bestaat uit meerdere
+    `document-part`-onderdelen; tot 22 september 2026 koos `_bronnen()` er één en belandde
+    de rest nergens. Gemeten gevolg bij de AVG (`02016R0679-20160504`): het bronbewijs
+    noemde twee zips, het archief bevatte er één, de basiszip was daarna nergens meer op
+    de Mac te vinden — en zonder haar mist de herbouwde Markdown 408 regels considerans.
+    Elke bron staat nu onder haar eigen SHA-256; twee bronnen met dezelfde bytes delen één
+    bestand en houden allebei hun regel. `fetch.json` houdt zijn bovenste sleutels
+    (`resolved_url`, `sha256`, `source_format`, `media_type`) bij de hoofdbron — harde
+    regel 1 van de kennisbank verbiedt een schemabump, en `tools/xml_meting/ophalen.py`
+    leest `resolved_url` daar — en krijgt er één **optionele** sleutel bij: `sources`, met
+    per bron `role`, `file`, `sha256`, `resolved_url`, `source_format`, `media_type`,
+    `identifier` en `language`. Wie `sources` niet kent, ziet precies wat hij eerder zag.
+    Een gedeclareerde bron zonder bruikbare bytes weigert de hele download: een half
+    archief is erger dan geen download, en zo raakte het bewijs ongemerkt incompleet.
     Voorstellen, documenten en geplakte tekst houden de platte download. De tokens
     verlopen lui na twee uur, net als afbeeldingtokens.
 - **Tekst plakken** (`pasted_text.py`, endpoint `/api/convert/text`): de front-end stuurt
@@ -900,7 +916,7 @@ regel), inclusief de vloeiende tabbalk-indicator.
   weggeschreven bestand nooit als geldige staat gelezen kan worden.
 
 ## Tests
-`.venv/bin/python -m pytest tests/ -q` — 355 karakteriseringstests die het gedrag
+`.venv/bin/python -m pytest tests/ -q` — 376 karakteriseringstests die het gedrag
 vastleggen in plaats van het te beschrijven: `detect_source`-precedentie, ELI→CELEX,
 de CLG-markupnormalisatie (lidnummers, lettermarkers, voetnootankers), de
 voetnootdefinities die met de preambule meereizen, de notitievorm die een intakepoort

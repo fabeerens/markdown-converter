@@ -129,33 +129,61 @@ def _get(token: str) -> Bundel | None:
                   data.get("pad_id") or bestandsid(data["document_id"]), data["provenance"])
 
 
-def _bron(provenance: dict) -> tuple[bytes, str, dict]:
+# De extensie per bronformaat. `html` staat er niet in: die tak heeft geen
+# `source_format` in de herkomst en valt hieronder op "html" terug.
+_EXTENSIES = {"formex": "fmx4.zip", "formex-hvj": "fmx4.zip", "bwb-xml": "xml",
+              "rechtspraak-xml": "xml", "hudoc-docx": "docx", "docx": "docx",
+              "op-xml": "xml", "pdf": "pdf"}
+
+
+def _bytes_van(bron: dict) -> tuple[bytes, str]:
+    """De bewaarde bytes van één bron, met hun extensie; weiger bij twijfel."""
+    if not isinstance(bron, dict):
+        raise ValueError("Een gedeclareerde bron is geen JSON-object.")
+    formaat = bron.get("source_format") or "html"
+    if formaat == "html":
+        inhoud = bron.get("original_html")
+        if not isinstance(inhoud, str):
+            raise ValueError("De HTML-bron ontbreekt in de herkomst.")
+        data, extensie = inhoud.encode("utf-8"), "html"
+    else:
+        inhoud = bron.get("original_base64")
+        if not isinstance(inhoud, str):
+            raise ValueError("De binaire bron ontbreekt in de herkomst.")
+        data = base64.b64decode(inhoud, validate=True)
+        extensie = _EXTENSIES.get(formaat)
+        if extensie is None:
+            raise ValueError(f"Onbekend bronformaat voor kennisbankbundel: {formaat}.")
+    if bron.get("source_sha256") != hashlib.sha256(data).hexdigest():
+        raise ValueError("De bewaarde bronbytes wijken af van hun SHA-256.")
+    return data, extensie
+
+
+def _bronnen(provenance: dict) -> tuple[list[tuple[bytes, str, dict]], dict]:
+    """Alle gedeclareerde bronnen, en welke daarvan de hoofdbron is.
+
+    **Elke bron wordt uitgepakt, niet alleen de hoofdbron.** Tot 22 september 2026
+    koos deze functie er één en archiveerde `build()` alleen die; het bronbewijs
+    van een geconsolideerde handeling nóémde dan twee bronnen en bewaarde er één.
+    Gemeten geval: de AVG (`02016R0679-20160504`), waarvan de considerans uit de
+    basishandeling `32016R0679` komt (`role: "preamble"`). Die basiszip stond
+    nergens meer op de Mac, en zonder haar mist de herbouwde Markdown 408 regels
+    considerans — het document was offline niet meer te herbouwen. Dezelfde
+    leemte trof een meerdelige HTML-handeling, waarvan alleen het laatste
+    `document-part` overbleef.
+
+    De hoofdbron blijft wél apart benoemd: `fetch.json` houdt haar op de plek
+    waar de kennisbank haar al leest.
+    """
     extra = provenance.get("extra")
     bewijs = extra.get("source_structure") if isinstance(extra, dict) else None
     bronnen = bewijs.get("sources") if isinstance(bewijs, dict) else None
     if not isinstance(bronnen, list) or not bronnen:
         raise ValueError("De herkomst bevat geen bewaarde bronbytes.")
-    hoofdbron = next((b for b in reversed(bronnen) if b.get("role") != "preamble"), bronnen[0])
-    formaat = hoofdbron.get("source_format") or "html"
-    if formaat == "html":
-        inhoud = hoofdbron.get("original_html")
-        if not isinstance(inhoud, str):
-            raise ValueError("De HTML-bron ontbreekt in de herkomst.")
-        data, extensie = inhoud.encode("utf-8"), "html"
-    else:
-        inhoud = hoofdbron.get("original_base64")
-        if not isinstance(inhoud, str):
-            raise ValueError("De binaire bron ontbreekt in de herkomst.")
-        data = base64.b64decode(inhoud, validate=True)
-        extensie = {"formex": "fmx4.zip", "formex-hvj": "fmx4.zip", "bwb-xml": "xml",
-                    "rechtspraak-xml": "xml", "hudoc-docx": "docx", "docx": "docx",
-                    "op-xml": "xml", "pdf": "pdf"}.get(formaat)
-        if extensie is None:
-            raise ValueError(f"Onbekend bronformaat voor kennisbankbundel: {formaat}.")
-    digest = hashlib.sha256(data).hexdigest()
-    if hoofdbron.get("source_sha256") != digest:
-        raise ValueError("De bewaarde bronbytes wijken af van hun SHA-256.")
-    return data, extensie, hoofdbron
+    uitgepakt = [(*_bytes_van(bron), bron) for bron in bronnen]
+    hoofdbron = next((b for b in reversed(bronnen)
+                      if isinstance(b, dict) and b.get("role") != "preamble"), bronnen[0])
+    return uitgepakt, hoofdbron
 
 
 def build(token: str, markdown: str, *, bewerkt_met_ai: bool) -> tuple[io.BytesIO, str] | None:
@@ -163,19 +191,45 @@ def build(token: str, markdown: str, *, bewerkt_met_ai: bool) -> tuple[io.BytesI
     bundel = _get((token or "").strip())
     if bundel is None:
         return None
-    bron, extensie, bronmeta = _bron(bundel.provenance)
-    digest = hashlib.sha256(bron).hexdigest()
+    bronnen, hoofdbron = _bronnen(bundel.provenance)
     zij = als_zijbestand(
         bundel.provenance, bewerkt_met_ai=bewerkt_met_ai, markdown=markdown,
     )
+
+    # Twee bronnen met dezelfde bytes krijgen dezelfde naam en dus één bestand;
+    # ze houden allebei hun eigen regel in `sources`, want de rol verschilt wel.
+    bestanden: dict[str, bytes] = {}
+    verwijzingen: list[dict] = []
+    for data, extensie, meta in bronnen:
+        digest = hashlib.sha256(data).hexdigest()
+        naam = f"{digest}.{extensie}"
+        bestanden[naam] = data
+        verwijzingen.append({
+            "role": meta.get("role") or "document",
+            "file": naam,
+            "sha256": digest,
+            "resolved_url": meta.get("source_url"),
+            "source_format": meta.get("source_format") or "html",
+            "media_type": meta.get("media_type") or "text/html",
+            "identifier": meta.get("identifier"),
+            "language": meta.get("language"),
+        })
+    hoofd = next(v for v, (_, _, meta) in zip(verwijzingen, bronnen) if meta is hoofdbron)
+
+    # De bovenste sleutels blijven die van de hoofdbron. `sources` is een
+    # toevoeging, geen schemawijziging: harde regel 1 van de kennisbank verbiedt
+    # een bump, en `tools/xml_meting/ophalen.py` leest hier nog altijd
+    # `resolved_url` uit het object zelf. Wie `sources` niet kent, ziet precies
+    # wat hij vóór 22 september 2026 zag.
     fetch = {
         "requested_url": bundel.provenance.get("requested_url"),
-        "resolved_url": bronmeta.get("source_url") or bundel.provenance.get("source_url"),
-        "sha256": digest,
+        "resolved_url": hoofd["resolved_url"] or bundel.provenance.get("source_url"),
+        "sha256": hoofd["sha256"],
         "fetched_at": bundel.provenance.get("fetched_at"),
         "language": bundel.provenance.get("language"),
-        "source_format": bronmeta.get("source_format") or "html",
-        "media_type": bronmeta.get("media_type") or "text/html",
+        "source_format": hoofd["source_format"],
+        "media_type": hoofd["media_type"],
+        "sources": verwijzingen,
     }
     root = f"raw/source-evidence/{bundel.pad_id}"
     stream = io.BytesIO()
@@ -183,7 +237,8 @@ def build(token: str, markdown: str, *, bewerkt_met_ai: bool) -> tuple[io.BytesI
         archive.writestr(f"raw/{bundel.profiel}/{bundel.pad_id}.md", markdown)
         archive.writestr(f"raw/{bundel.profiel}/{bundel.pad_id}.source.json", zij)
         archive.writestr(f"{root}/fetch.json", json.dumps(fetch, ensure_ascii=False, indent=2) + "\n")
-        archive.writestr(f"{root}/{digest}.{extensie}", bron)
+        for naam, data in bestanden.items():
+            archive.writestr(f"{root}/{naam}", data)
     stream.seek(0)
     return stream, bundel.pad_id
 

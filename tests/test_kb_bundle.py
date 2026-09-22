@@ -219,3 +219,148 @@ def test_sidecar_keeps_the_source_hash_but_not_the_source_bytes():
     assert bronnen[0]["source_sha256"] == hashlib.sha256(bron).hexdigest()
     assert "original_base64" not in bronnen[0] and "original_html" not in bronnen[0]
     assert base64.b64encode(bron).decode() not in json.dumps(zij)
+
+
+def bewijs(bron: bytes, *, identifier: str, role: str = "document",
+           source_format: str = "formex", media_type: str = "application/zip;mtype=fmx4") -> dict:
+    """Eén vastgelegde binaire bron, in de vorm die `record_source` oplevert."""
+    return {
+        "schema_version": 1, "format": "binary-source", "source_format": source_format,
+        "media_type": media_type, "source_sha256": hashlib.sha256(bron).hexdigest(),
+        "original_base64": base64.b64encode(bron).decode("ascii"),
+        "source_url": f"https://example.test/{identifier}",
+        "identifier": identifier, "language": "nl", "role": role,
+    }
+
+
+def bewijs_html(html: str, *, identifier: str, role: str) -> dict:
+    """Eén vastgelegde HTML-bron, in de vorm die `record_html` oplevert.
+
+    Zonder `source_format` en `media_type`, precies zoals `source_structure()`
+    ze weglaat; de bundel valt daarop terug op `html` en `text/html`.
+    """
+    return {
+        "schema_version": 1, "format": "html-source-structure",
+        "source_sha256": hashlib.sha256(html.encode("utf-8")).hexdigest(),
+        "original_html": html, "selection": {"selector": "document", "anchor": None},
+        "tables": [], "source_url": f"https://example.test/{identifier}",
+        "identifier": identifier, "language": "nl", "role": role,
+    }
+
+
+def geconsolideerde_herkomst(bronnen: list[dict]) -> dict:
+    """De herkomst van een geconsolideerde handeling met haar basishandeling."""
+    return bind_structure(
+        Herkomst(format="formex", celex="02016R0679-20160504", base_celex="32016R0679",
+                 language="nl", requested_url="https://example.test/avg",
+                 source_url=bronnen[0]["source_url"]),
+        "# Oorspronkelijk", bronnen,
+    ).as_json()
+
+
+def test_bundle_archives_the_preamble_source_next_to_the_document():
+    """Elke gedeclareerde bron hoort in het archief, niet alleen de hoofdbron.
+
+    Gemeten geval van 22 september 2026: de AVG (`02016R0679-20160504`) haalt haar
+    considerans uit de basishandeling `32016R0679`. Het bronbewijs noemde beide
+    zips en het archief bevatte er één; de basiszip was daarna nergens meer terug
+    te vinden, en zonder haar mist de herbouwde Markdown 408 regels considerans.
+    """
+    document, basis = b"PK\x03\x04geconsolideerd", b"PK\x03\x04basishandeling"
+    token = kb_bundle.store(geconsolideerde_herkomst([
+        bewijs(document, identifier="02016R0679-20160504"),
+        bewijs(basis, identifier="32016R0679", role="preamble"),
+    ]))
+    stream, pad_id = kb_bundle.build(token, "# Bewerkt", bewerkt_met_ai=False)
+    assert pad_id == "32016R0679"
+    hoofd = hashlib.sha256(document).hexdigest()
+    preambule = hashlib.sha256(basis).hexdigest()
+
+    with zipfile.ZipFile(stream) as archive:
+        assert set(archive.namelist()) == {
+            "raw/eurlex/32016R0679.md",
+            "raw/eurlex/32016R0679.source.json",
+            "raw/source-evidence/32016R0679/fetch.json",
+            f"raw/source-evidence/32016R0679/{hoofd}.fmx4.zip",
+            f"raw/source-evidence/32016R0679/{preambule}.fmx4.zip",
+        }
+        assert archive.read(f"raw/source-evidence/32016R0679/{preambule}.fmx4.zip") == basis
+        fetch = json.loads(archive.read("raw/source-evidence/32016R0679/fetch.json"))
+
+    # De bovenste sleutels blijven die van de hoofdbron: `tools/xml_meting/ophalen.py`
+    # leest `resolved_url` daar, en harde regel 1 van de kennisbank verbiedt een bump.
+    assert fetch["sha256"] == hoofd
+    assert fetch["resolved_url"] == "https://example.test/02016R0679-20160504"
+    assert fetch["source_format"] == "formex"
+    # De rol staat per bron in de nieuwe, optionele sleutel.
+    assert [(b["role"], b["file"], b["identifier"]) for b in fetch["sources"]] == [
+        ("document", f"{hoofd}.fmx4.zip", "02016R0679-20160504"),
+        ("preamble", f"{preambule}.fmx4.zip", "32016R0679"),
+    ]
+    assert all(b["media_type"] == "application/zip;mtype=fmx4" for b in fetch["sources"])
+
+
+def test_bundle_archives_every_part_of_a_multipart_html_document():
+    """Een meerdelige handeling verloor alles behalve haar laatste onderdeel.
+
+    `_bronnen()` koos de láátste bron die geen preambule was; bij drie
+    `document-part`-onderdelen bleef daarmee alleen het derde over.
+    """
+    delen = ["<html>deel 1</html>", "<html>deel 2</html>", "<html>deel 3</html>"]
+    token = kb_bundle.store(geconsolideerde_herkomst(
+        [bewijs_html(deel, identifier="02016R0679-20160504", role="document-part")
+         for deel in delen]
+    ))
+    stream, _ = kb_bundle.build(token, "# Bewerkt", bewerkt_met_ai=False)
+    digests = [hashlib.sha256(deel.encode("utf-8")).hexdigest() for deel in delen]
+
+    with zipfile.ZipFile(stream) as archive:
+        for deel, digest in zip(delen, digests):
+            assert archive.read(f"raw/source-evidence/32016R0679/{digest}.html").decode() == deel
+        fetch = json.loads(archive.read("raw/source-evidence/32016R0679/fetch.json"))
+
+    assert [b["file"] for b in fetch["sources"]] == [f"{d}.html" for d in digests]
+    assert {b["role"] for b in fetch["sources"]} == {"document-part"}
+    assert {b["source_format"] for b in fetch["sources"]} == {"html"}
+    assert {b["media_type"] for b in fetch["sources"]} == {"text/html"}
+    # De hoofdbron blijft het laatste onderdeel, zoals vóór deze wijziging.
+    assert fetch["sha256"] == digests[-1]
+
+
+def test_bundle_refuses_when_a_declared_source_has_no_bytes():
+    """Fail-closed: een half archief is erger dan geen download.
+
+    Een bron die wel wordt gedeclareerd maar geen bytes draagt, werd eerder
+    stilzwijgend overgeslagen zodra ze niet de hoofdbron was. Dat is precies hoe
+    het bronbewijs onopgemerkt incompleet raakte.
+    """
+    zonder_bytes = bewijs(b"PK\x03\x04basishandeling", identifier="32016R0679", role="preamble")
+    del zonder_bytes["original_base64"]
+    token = kb_bundle.store(geconsolideerde_herkomst([
+        bewijs(b"PK\x03\x04geconsolideerd", identifier="02016R0679-20160504"),
+        zonder_bytes,
+    ]))
+    with pytest.raises(ValueError, match="De binaire bron ontbreekt"):
+        kb_bundle.build(token, "# Bewerkt", bewerkt_met_ai=False)
+
+
+def test_two_sources_with_identical_bytes_share_one_archived_file():
+    """Dezelfde bytes hebben dezelfde hash, dus één bestand — maar twee regels.
+
+    De rollen verschillen wel, en het bewijs moet blijven zeggen dat beide zijn
+    gedeclareerd; anders lijkt er één bron te ontbreken.
+    """
+    zelfde = b"PK\x03\x04een en dezelfde zip"
+    token = kb_bundle.store(geconsolideerde_herkomst([
+        bewijs(zelfde, identifier="02016R0679-20160504"),
+        bewijs(zelfde, identifier="32016R0679", role="preamble"),
+    ]))
+    stream, _ = kb_bundle.build(token, "# Bewerkt", bewerkt_met_ai=False)
+    digest = hashlib.sha256(zelfde).hexdigest()
+
+    with zipfile.ZipFile(stream) as archive:
+        namen = archive.namelist()
+        assert namen.count(f"raw/source-evidence/32016R0679/{digest}.fmx4.zip") == 1
+        fetch = json.loads(archive.read("raw/source-evidence/32016R0679/fetch.json"))
+    assert [b["role"] for b in fetch["sources"]] == ["document", "preamble"]
+    assert {b["file"] for b in fetch["sources"]} == {f"{digest}.fmx4.zip"}
