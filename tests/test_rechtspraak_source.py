@@ -131,6 +131,18 @@ def test_fetch_levert_de_rawvorm_die_het_profiel_kent(monkeypatch):
     assert bewijs["source_sha256"] == hashlib.sha256(UITSPRAAK.encode("utf-8")).hexdigest()
 
 
+def test_fetch_accepteert_percent_gecodeerde_ecli_link(monkeypatch):
+    calls = _fake(monkeypatch, UITSPRAAK)
+
+    _, bron, herkomst = rechtspraak.fetch(
+        "https://uitspraken.rechtspraak.nl/details?id=ECLI%3ANL%3AHR%3A2026%3A1"
+    )
+
+    assert calls == ["https://data.rechtspraak.nl/uitspraken/content?id=ECLI:NL:HR:2026:1"]
+    assert bron == "Rechtspraak.nl • ECLI:NL:HR:2026:1"
+    assert herkomst.ecli == "ECLI:NL:HR:2026:1"
+
+
 def test_een_andere_ecli_in_de_bron_is_een_weigering(monkeypatch):
     _fake(monkeypatch, UITSPRAAK)
     with pytest.raises(ConversionError, match="noemt zichzelf"):

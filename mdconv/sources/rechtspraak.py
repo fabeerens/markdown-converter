@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import re
 from collections import Counter
+from urllib.parse import unquote
 
 from lxml import etree
 
@@ -74,7 +75,10 @@ def matches(query: str) -> bool:
 
 def fetch(query: str) -> tuple[str, str, Herkomst]:
     """Haal een uitspraak op; geeft (markdown, bronvermelding, herkomst)."""
-    m = ECLI_RE.search(query)
+    # Rechtspraak.nl codeert de dubbele punten in de `id`-queryparameter als
+    # `%3A`. De vijf links uit de testronde van 21 september 2026 werden
+    # daardoor vóór de netwerkaanroep geweigerd, hoewel hun ECLI geldig was.
+    m = ECLI_RE.search(unquote(query))
     if not m:
         raise ConversionError("Geen geldig ECLI-nummer herkend (bv. ECLI:NL:HR:2012:BQ9251).")
     ecli = m.group(0).upper()
