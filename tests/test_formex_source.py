@@ -1340,6 +1340,17 @@ def test_letteronderdelen_na_een_letteropsomming_zijn_een_tweede_reeks():
     assert _ankers(data, "bijlagedeel") == ["annex-5-al2-a", "annex-5-al2-b"]
 
 
+def test_een_tweede_opsomming_onder_een_los_punt_is_de_tweede_reeks():
+    """Punt 4 van bijlage V bij 2012/27: twee opsommingen a) …, elk na een eigen inleidende P."""
+    lijst = lambda *items: b'<P><LIST TYPE="alpha">' + b"".join(
+        b"<ITEM><NP><NO.P>" + i + b")</NO.P><TXT>Onderdeel " + i + b".</TXT></NP></ITEM>" for i in items) + b"</LIST></P>"
+    punt = (b"<NP><NO.P>4.</NO.P><TXT>Kennisgeving betreffende de methode</TXT>"
+            b"<P>Uitgezonderd in geval van belastingen bevat de kennisgeving:</P>" + lijst(b"a", b"b")
+            + b"<P>In geval van belastingen bevat de kennisgeving:</P>" + lijst(b"a", b"b") + b"</NP>")
+    assert _ankers(_met_bijlagen(_bijlage(b"BIJLAGE V", punt)), "onderdeel")[-4:] == [
+        "annex-5-4-a", "annex-5-4-b", "annex-5-4-al2-a", "annex-5-4-al2-b"]
+
+
 def test_een_dubbel_onderdeelnummer_midden_in_een_reeks_blijft_een_weigering():
     """Alleen een reeks die opnieuw begint (1, a, i) is een tweede reeks; `2.` na `2.` is een bronfout."""
     inhoud = _kopdeel(b"1.", b"Een") + _kopdeel(b"2.", b"Twee") + _kopdeel(b"2.", b"Nog eens twee")

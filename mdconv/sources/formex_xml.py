@@ -1333,9 +1333,14 @@ class FormexOmzetter:
                 if teller.get("reeks", 1) > 1:
                     anker = f"{basis}-al{teller['reeks']}-{nummer_anker(nr)}"
                 self.u.eenheid(anker, "punt", f"{nr} {txt}")
+            # Eén teller voor het hele punt: punt 4 van bijlage V bij 2012/27 heeft
+            # twee opsommingen a) …, elk na een eigen inleidende P. Met een teller
+            # per kind begon de tweede niet als `al2` en weigerde de zelfcontrole op
+            # dubbele ankers (`annex-5-4-a` tot en met `-e`).
+            binnen = {"lijsten": 0}
             for kind in el:
                 if kind.tag not in ("NO.P", "TXT"):
-                    self.inhoud(kind, anker or basis, {"lijsten": 0})
+                    self.inhoud(kind, anker or basis, binnen)
         elif tag in ("LIST", "DLIST"):
             # Een DLIST draagt zijn nummer in de PREFIX (`16)`) en is dus altijd
             # genummerd. Tot 22 september 2026 stond hier `tag == "LIST" and ...`,
