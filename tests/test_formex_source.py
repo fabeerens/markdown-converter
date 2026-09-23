@@ -920,3 +920,46 @@ def test_an_annex_that_quotes_a_block_of_another_act_renders_it_without_units():
     assert "| “Stof | Grenswaarde” |" in markdown
     assert "1.   Geciteerd punt." in markdown
     assert [e.soort for e in eenheden if e.anker.startswith("annex")] == ["bijlage"]
+
+
+# ------------------------------------------------------------------ afbeeldingen (TIFF)
+
+def _met_afbeelding(act: bytes, *, bestand: bool = True, soort: bytes = b"TIFF") -> bytes:
+    act = act.replace(b"<PAGE.FIRST>1</PAGE.FIRST>", b'<PAGE.FIRST>1</PAGE.FIRST><INCLUSIONS>'
+                      b'<INCL.ELEMENT FILEREF="L_test.beeld.tif" TYPE="' + soort + b'"/></INCLUSIONS>', 1)
+    return formex_zip(act=act, extra={"L_test.beeld.tif": b"II*\x00"} if bestand else None)
+
+
+def test_an_image_used_as_a_list_marker_is_left_out_with_a_warning():
+    """e-evidence (2023/1543) zet 200 aankruisvakjes als TIFF in NO.P; dat weigerde het hele document."""
+    act = ACT.replace(b"<NO.P>b)</NO.P>", b'<NO.P><INCL.ELEMENT FILEREF="L_test.beeld.tif" TYPE="TIFF"/></NO.P>')
+    markdown, _, _, extra = formex_xml.omzetten(_met_afbeelding(act))
+    assert "\ntweede onderdeel.\n" in markdown
+    assert extra["metadata"]["afbeeldingen_weggelaten"] == [
+        {"fileref": "L_test.beeld.tif", "format": "TIFF", "tekst_overgenomen": False}]
+    assert any("1 afbeelding uit de Formex-bron niet overgenomen" in w
+               for w in extra["metadata"]["waarschuwingen"])
+
+
+def test_the_text_an_image_carries_is_written_as_paragraphs():
+    """Brussel I bis (1215/2012): de certificaten zijn TIFF's met hun tekst in IMG.CNT."""
+    bijlage = (b'<ANNEX><BIB.INSTANCE><INCLUSIONS><INCL.ELEMENT FILEREF="L_test.beeld.tif" TYPE="TIFF"/>'
+               b'</INCLUSIONS></BIB.INSTANCE><TITLE><TI><P>BIJLAGE I</P></TI></TITLE><CONTENTS>'
+               b'<INCL.ELEMENT CONTENT="FORM" FILEREF="L_test.beeld.tif" TYPE="TIFF"><IMG.CNT>'
+               b'<P>CERTIFICAAT BETREFFENDE EEN BESLISSING</P><P>1.1. Naam:</P></IMG.CNT></INCL.ELEMENT>'
+               b'</CONTENTS></ANNEX>')
+    doc = DOC.replace(b"</FMX>", b'<REF.PHYS TYPE="DOC.XML" FILE="bijlage.xml"/></FMX>')
+    data = formex_zip(doc=doc, extra={"bijlage.xml": bijlage, "L_test.beeld.tif": b"II*\x00"})
+    markdown, _, _, extra = formex_xml.omzetten(data)
+    assert "\nCERTIFICAAT BETREFFENDE EEN BESLISSING\n\n1.1. Naam:\n" in markdown
+    assert extra["metadata"]["afbeeldingen_weggelaten"][0]["tekst_overgenomen"] is True
+
+
+@pytest.mark.parametrize("bestand, soort, reden", [
+    (False, b"TIFF", "ontbrekende afbeeldingen"),
+    (True, b"EPS", "onbekende type 'EPS'"),
+])
+def test_a_missing_image_or_another_image_type_is_still_refused(bestand, soort, reden):
+    act = ACT.replace(b"<NO.P>b)</NO.P>", b'<NO.P><INCL.ELEMENT FILEREF="L_test.beeld.tif" TYPE="' + soort + b'"/></NO.P>')
+    with pytest.raises(ConversionError, match=reden):
+        formex_xml.omzetten(_met_afbeelding(act, bestand=bestand, soort=soort))

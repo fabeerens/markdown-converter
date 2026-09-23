@@ -1,5 +1,5 @@
 {
- "commit": "b34a850+wijzigingen",
+ "commit": "20d8184+wijzigingen",
  "documenten": {
   "02002L0058-20091219": {
    "melding": null,
@@ -28,8 +28,8 @@
    ]
   },
   "02012R1215-20150226": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: INCL.ELEMENT (7×); omzetting geweigerd.",
-   "oorzaak": "element INCL.ELEMENT",
+   "melding": "Formex-bron geweigerd: de tekst roept afbeelding L_2015054NL.01000303.tif aan, maar de handeling noemt haar niet",
+   "oorzaak": "de tekst roept afbeelding L_#NL.#.tif aan, maar de handeling noemt haar niet",
    "route": "wetgeving",
    "sectie": "geconsolideerd",
    "sha256": null,
@@ -444,8 +444,8 @@
    "waarschuwingen": []
   },
   "32005L0066": {
-   "melding": "Formex-bron geweigerd: een inclusie heeft het onbekende type 'TIFF'",
-   "oorzaak": "inclusie van type TIFF",
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: ANNOTATION (1×), FORMULA (1×), TOC (1×); omzetting geweigerd.",
+   "oorzaak": "element ANNOTATION, FORMULA, TOC",
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
    "sha256": null,
@@ -914,14 +914,16 @@
    "waarschuwingen": []
   },
   "32011L0099": {
-   "melding": "Formex-bron geweigerd: een inclusie heeft het onbekende type 'TIFF'",
-   "oorzaak": "inclusie van type TIFF",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
-   "waarschuwingen": []
+   "sha256": "28e5ccb2d3417514d284acf8d6069f83117711a90e85c849205134bde10b9077",
+   "status": "ok",
+   "tekens": 62035,
+   "waarschuwingen": [
+    "6 afbeeldingen uit de Formex-bron niet overgenomen (TIFF); de tekst die de bron bij 6 ervan meelevert (IMG.CNT) is wel overgenomen; de tekst eromheen staat er wel: L_2011338NL.01001302.tif, L_2011338NL.01001401.tif, L_2011338NL.01001501.tif, L_2011338NL.01001601.tif, L_2011338NL.01001702.tif en 1 meer."
+   ]
   },
   "32011R0704": {
    "melding": "XML-element zonder eigen behandeling (inline:GR.SEQ); omzetting geweigerd.",
@@ -1024,18 +1026,20 @@
    "waarschuwingen": []
   },
   "32012R1215": {
-   "melding": "Formex-bron geweigerd: een inclusie heeft het onbekende type 'TIFF'",
-   "oorzaak": "inclusie van type TIFF",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "belangrijk",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
-   "waarschuwingen": []
+   "sha256": "83523cf6e9d34be8166fe069231ed8131b038daff84604ab3c7220cc539eb0be",
+   "status": "ok",
+   "tekens": 108474,
+   "waarschuwingen": [
+    "7 afbeeldingen uit de Formex-bron niet overgenomen (TIFF); de tekst die de bron bij 7 ervan meelevert (IMG.CNT) is wel overgenomen; de tekst eromheen staat er wel: L_2012351NL.01002202.tif, L_2012351NL.01002301.tif, L_2012351NL.01002401.tif, L_2012351NL.01002501.tif, L_2012351NL.01002602.tif en 2 meer."
+   ]
   },
   "32013D0287": {
-   "melding": "Formex-bron geweigerd: inclusie(s) nergens in de tekst aangeroepen: L_2013162NL.01001302.xml",
-   "oorzaak": "inclusie nergens in de tekst aangeroepen",
+   "melding": "Formex-bron geweigerd: een inclusie (INCL.ELEMENT) als los blok is alleen voor een afbeelding gemeten",
+   "oorzaak": "een inclusie als los blok is alleen voor een afbeelding gemeten",
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
    "sha256": null,
@@ -1084,8 +1088,8 @@
    "waarschuwingen": []
   },
   "32013R0503": {
-   "melding": "Formex-bron geweigerd: een inclusie heeft het onbekende type 'TIFF'",
-   "oorzaak": "inclusie van type TIFF",
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: NO.GR.SEQ (5×); omzetting geweigerd.",
+   "oorzaak": "element NO.GR.SEQ",
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
    "sha256": null,
@@ -1436,8 +1440,8 @@
    "waarschuwingen": []
   },
   "32016R2390": {
-   "melding": "Formex-bron geweigerd: inclusie(s) nergens in de tekst aangeroepen: L_2016360NL.01001602.xml",
-   "oorzaak": "inclusie nergens in de tekst aangeroepen",
+   "melding": "Formex-bron geweigerd: een inclusie (INCL.ELEMENT) als los blok is alleen voor een afbeelding gemeten",
+   "oorzaak": "een inclusie als los blok is alleen voor een afbeelding gemeten",
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
    "sha256": null,
@@ -1496,8 +1500,8 @@
    "waarschuwingen": []
   },
   "32017R0745": {
-   "melding": "Formex-bron geweigerd: een inclusie heeft het onbekende type 'TIFF'",
-   "oorzaak": "inclusie van type TIFF",
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: NO.GR.SEQ (294×); omzetting geweigerd.",
+   "oorzaak": "element NO.GR.SEQ",
    "route": "wetgeving",
    "sectie": "belangrijk",
    "sha256": null,
@@ -1506,8 +1510,8 @@
    "waarschuwingen": []
   },
   "32017R0746": {
-   "melding": "Formex-bron geweigerd: een inclusie heeft het onbekende type 'TIFF'",
-   "oorzaak": "inclusie van type TIFF",
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: NO.GR.SEQ (201×); omzetting geweigerd.",
+   "oorzaak": "element NO.GR.SEQ",
    "route": "wetgeving",
    "sectie": "belangrijk",
    "sha256": null,
@@ -1806,8 +1810,8 @@
    "waarschuwingen": []
   },
   "32019R0627": {
-   "melding": "Formex-bron geweigerd: een inclusie heeft het onbekende type 'TIFF'",
-   "oorzaak": "inclusie van type TIFF",
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: FORMULA (1×), NO.GR.SEQ (12×); omzetting geweigerd.",
+   "oorzaak": "element FORMULA, NO.GR.SEQ",
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
    "sha256": null,
@@ -2006,24 +2010,28 @@
    "waarschuwingen": []
   },
   "32021R0784": {
-   "melding": "Formex-bron geweigerd: een inclusie heeft het onbekende type 'TIFF'",
-   "oorzaak": "inclusie van type TIFF",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "belangrijk",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
-   "waarschuwingen": []
+   "sha256": "10880f3b61752047ce7d11c46734fcb18a3bdc9a42dada6cf627b1a6c4e7339e",
+   "status": "ok",
+   "tekens": 111276,
+   "waarschuwingen": [
+    "17 afbeeldingen uit de Formex-bron niet overgenomen (TIFF); de tekst eromheen staat er wel: L_2021172NL.01010301.tif, L_2021172NL.01010302.tif, L_2021172NL.01010303.tif, L_2021172NL.01010304.tif, L_2021172NL.01010305.tif en 12 meer."
+   ]
   },
   "32021R0931": {
-   "melding": "Formex-bron geweigerd: een inclusie heeft het onbekende type 'TIFF'",
-   "oorzaak": "inclusie van type TIFF",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
-   "waarschuwingen": []
+   "sha256": "17c764eb6811ff359f0b7cc40de66d69692ce457dc54ac6036a98da446a5fdb6",
+   "status": "ok",
+   "tekens": 21363,
+   "waarschuwingen": [
+    "7 afbeeldingen uit de Formex-bron niet overgenomen (TIFF); de tekst eromheen staat er wel: L_2021204NL.01001001.tif, L_2021204NL.01001002.tif, L_2021204NL.01001101.tif, L_2021204NL.01001102.tif, L_2021204NL.01001103.tif."
+   ]
   },
   "32021R0953": {
    "melding": null,
@@ -2226,8 +2234,8 @@
    "waarschuwingen": []
   },
   "32023D1795": {
-   "melding": "Formex-bron geweigerd: een inclusie heeft het onbekende type 'TIFF'",
-   "oorzaak": "inclusie van type TIFF",
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: ADDR.S (6×), DIV.CONSID (8×); omzetting geweigerd.",
+   "oorzaak": "element ADDR.S, DIV.CONSID",
    "route": "wetgeving",
    "sectie": "testset",
    "sha256": null,
@@ -2276,8 +2284,8 @@
    "waarschuwingen": []
   },
   "32023L2225": {
-   "melding": "Formex-bron geweigerd: een inclusie heeft het onbekende type 'TIFF'",
-   "oorzaak": "inclusie van type TIFF",
+   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=niets, extra=['richtlijn', 'richtlijn', 'eu', 'eu', '2023', '2023', '2023', '2023', '2023', '2225', '2225', '2225']).",
+   "oorzaak": "woordcontrole: tekst dubbel",
    "route": "wetgeving",
    "sectie": "belangrijk",
    "sha256": null,
@@ -2346,8 +2354,8 @@
    "waarschuwingen": []
   },
   "32023R1542": {
-   "melding": "Formex-bron geweigerd: een inclusie heeft het onbekende type 'TIFF'",
-   "oorzaak": "inclusie van type TIFF",
+   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['en', 'en', 'en', 'de', 'de', 'de', 'eg', 'eg', 'eg', '1', '9', '6'], extra=niets).",
+   "oorzaak": "woordcontrole: tekst valt weg",
    "route": "wetgeving",
    "sectie": "belangrijk",
    "sha256": null,
@@ -2356,14 +2364,16 @@
    "waarschuwingen": []
   },
   "32023R1543": {
-   "melding": "Formex-bron geweigerd: een inclusie heeft het onbekende type 'TIFF'",
-   "oorzaak": "inclusie van type TIFF",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "testset",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
-   "waarschuwingen": []
+   "sha256": "55cf02629aaaf5f350780575a755c22add2ef416f1cb7c68f725f7aa08e39677",
+   "status": "ok",
+   "tekens": 230522,
+   "waarschuwingen": [
+    "200 afbeeldingen uit de Formex-bron niet overgenomen (TIFF); de tekst eromheen staat er wel: L_2023191NL.01015402.tif, L_2023191NL.01015403.tif, L_2023191NL.01015404.tif, L_2023191NL.01015501.tif, L_2023191NL.01015502.tif en 195 meer."
+   ]
   },
   "32023R1704": {
    "melding": null,
@@ -2646,8 +2656,8 @@
    "waarschuwingen": []
   },
   "32025L2205": {
-   "melding": "Formex-bron geweigerd: een inclusie heeft het onbekende type 'TIFF'",
-   "oorzaak": "inclusie van type TIFF",
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: NO.GR.SEQ (21×); omzetting geweigerd.",
+   "oorzaak": "element NO.GR.SEQ",
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
    "sha256": null,

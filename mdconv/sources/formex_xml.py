@@ -60,11 +60,18 @@ STRUCTUUR_ELEMENTEN = {
     "NOTE", "CONTENTS", "GR.SEQ", "TI", "STI", "TI.ART", "STI.ART", "PREFIX",
     "TERM", "DEFINITION", "PREAMBLE.INIT", "PREAMBLE.FINAL", "GR.CONSID.INIT",
     "VISA", "SIGNATORY", "SIGNATURE", "COM",
+    # Een afbeelding (TIFF-inclusie) kan haar tekst meedragen: het formulier van
+    # Brussel I bis staat als P's in IMG.CNT. Wat daarbinnen staat, moet zelf
+    # bekend zijn; een FORMULA blijft dus een weigering.
+    "INCL.ELEMENT", "IMG.CNT",
 }
 # De letter van een CELEX-nummer volgens het soort handeling (`LEG.VAL`). Wat hier
 # niet in staat, is niet af te leiden en moet dan uit `NO.CELEX` komen.
 CELEX_LETTER = {"REG": "R", "DIR": "L", "DEC": "D"}
 BEKENDE_TEKSTELEMENTEN = METADATA | INLINE_TEKST | INLINE_TRANSPARANT | STRUCTUUR_ELEMENTEN
+# Het enige afbeeldingstype dat in de meetlat voorkomt (257 inclusies in 14
+# documenten, 23 september 2026). Een ander type blijft een weigering.
+AFBEELDINGSTYPE = "TIFF"
 # De kop van een bijlageonderdeel met een nummer: `A.`, `1.`, of een woord met een
 # nummer erachter. Bijlage VIII en XI van 2024/1689 schrijven `Afdeling A —` en
 # `Afdeling 1`; MiCA (2023/1114) `Deel A:` tot en met `Deel I:`, de
@@ -91,7 +98,7 @@ def _is_documentmanifest(naam: str) -> bool:
     return klein.endswith(".doc.xml") or klein.endswith(".doc.fmx.xml")
 
 
-def _onderdelen(data: bytes) -> tuple[ET.Element, list[tuple[str, ET.Element]], dict[str, ET.Element]]:
+def _onderdelen(data: bytes) -> tuple[ET.Element, list[tuple[str, ET.Element]], dict[str, ET.Element], set[str]]:
     """Lees één manifestatie, uitsluitend in de volgorde van het documentmanifest.
 
     Geeft `(manifest, onderdelen, inclusies)`. De omgekeerde controle is bewust:
@@ -104,6 +111,10 @@ def _onderdelen(data: bytes) -> tuple[ET.Element, list[tuple[str, ET.Element]], 
     Digitale omnibus `32026R1744` voegt zo bijlage XIV aan de AI-verordening toe).
     Zij is geen documentonderdeel — haar plek is waar de tekst haar aanroept,
     binnen een `QUOT.S` — maar wel brontekst, en dus geen buitenstaander.
+
+    Een inclusie van het type `TIFF` is een **afbeelding** (een formulier, een
+    pictogram, een handtekening, een aankruisvakje als lijstteken). Die komt als
+    vierde terug: de namen, zodat de omzetter een aanroep kan controleren.
     """
     try:
         zf = zipfile.ZipFile(io.BytesIO(data))
@@ -161,14 +172,22 @@ def _onderdelen(data: bytes) -> tuple[ET.Element, list[tuple[str, ET.Element]], 
             except (ET.ParseError, KeyError) as exc:
                 raise _xml_fout(f"onderdeel {naam} is niet leesbaar ({exc})", exc)
         inclusie_namen: list[str] = []
+        afbeeldingen: set[str] = set()
         for _, root in uit:
             for incl in root.iterfind("BIB.INSTANCE/INCLUSIONS/INCL.ELEMENT"):
-                if (incl.get("TYPE") or "").upper() != "FORMEX.DOC":
+                soort = (incl.get("TYPE") or "").upper()
+                if soort not in ("FORMEX.DOC", AFBEELDINGSTYPE):
                     raise _xml_fout(f"een inclusie heeft het onbekende type {incl.get('TYPE')!r}")
                 naam = (incl.get("FILEREF") or "").rsplit("/", 1)[-1]
                 if not naam:
                     raise _xml_fout("een inclusie (INCL.ELEMENT) noemt geen bestand")
-                inclusie_namen.append(naam)
+                (afbeeldingen.add if soort == AFBEELDINGSTYPE else inclusie_namen.append)(naam)
+        alle_namen = {i.filename.rsplit("/", 1)[-1] for i in zf.infolist() if not i.is_dir()}
+        ontbrekende_afbeeldingen = afbeeldingen - alle_namen
+        if ontbrekende_afbeeldingen:
+            raise _xml_fout(
+                f"de handeling noemt ontbrekende afbeeldingen: {', '.join(sorted(ontbrekende_afbeeldingen))}"
+            )
         dubbel_genoemd = set(inclusie_namen) & genoemd
         if dubbel_genoemd:
             raise _xml_fout(
@@ -188,7 +207,7 @@ def _onderdelen(data: bytes) -> tuple[ET.Element, list[tuple[str, ET.Element]], 
                 inclusies[naam] = ET.fromstring(zf.read(per_naam[naam]))
             except (ET.ParseError, KeyError) as exc:
                 raise _xml_fout(f"inclusie {naam} is niet leesbaar ({exc})", exc)
-        return doc, uit, inclusies
+        return doc, uit, inclusies, afbeeldingen
 
 
 class _PiVerzamelaar(ET.TreeBuilder):
@@ -344,7 +363,7 @@ def basis_preambule(basis: bytes, base_celex: str | None) -> tuple[ET.Element | 
     handeling zelf (`BIB.INSTANCE/NO.DOC`, jaar en volgnummer), niet uit de URL
     waarmee ze is opgehaald.
     """
-    _, delen, _ = _onderdelen(basis)
+    _, delen, _, _ = _onderdelen(basis)
     handelingen = [root for _, root in delen if root.tag == "ACT"]
     if len(handelingen) != 1:
         raise _xml_fout(f"de basishandeling bevat {len(handelingen)} handelingen (ACT); precies één is vereist")
@@ -380,6 +399,8 @@ class FormexOmzetter:
         self.zonder: frozenset = frozenset()       # opmaaksoorten die nu niet geschreven worden
         self.inclusies: dict[str, ET.Element] = {}  # geciteerde bijlagen, op bestandsnaam
         self.gebruikte_inclusies: set[str] = set()
+        self.afbeeldingen: set[str] = set()         # gedeclareerde TIFF-inclusies
+        self.afbeeldingen_weggelaten: list[dict] = []
 
     def onbekend(self, context: str, el) -> None:
         """Weiger onbekende inhoud; een leeg technisch element mag verdwijnen."""
@@ -482,6 +503,8 @@ class FormexOmzetter:
             return " " + self.inline(el) + " "
         if tag in INLINE_TEKST or tag in INLINE_TRANSPARANT:
             return self.inline(el)
+        if tag == "INCL.ELEMENT" and self.afbeelding(el):
+            return ""
         if tag == "INCL.ELEMENT":
             # Leeg, dus `onbekend()` zou hem stil laten vallen — en daarmee een
             # hele bijlage. Alleen de kale vorm als eigen alinea is gemeten.
@@ -534,8 +557,9 @@ class FormexOmzetter:
     # ------------------------------------------------------------ documenten
 
     def omzetten(self, data: bytes, basis: bytes | None = None) -> Uitvoer:
-        doc, onderdelen, inclusies = _onderdelen(data)
+        doc, onderdelen, inclusies, afbeeldingen = _onderdelen(data)
         self.inclusies = inclusies
+        self.afbeeldingen = afbeeldingen
         inclusiedelen = [(f"inclusie:{naam}", root) for naam, root in inclusies.items()]
         self.controleer_elementen(onderdelen + inclusiedelen)
         self.markeringen = _wijzigingsmarkeringen(data)
@@ -556,6 +580,8 @@ class FormexOmzetter:
             # De woordcontrole zou dit ook vangen, maar dan als raadsel; hier
             # staat de reden: de tekst roept de inclusie nergens aan.
             raise _xml_fout(f"inclusie(s) nergens in de tekst aangeroepen: {', '.join(sorted(ongebruikt))}")
+        if self.afbeeldingen_weggelaten:
+            self.meld_afbeeldingen()
         if self.basis is not None:
             # De ingevoegde considerans is brontekst als elke andere: dezelfde
             # controles op verlies, verdubbeling en verweving gelden ook voor haar.
@@ -1100,6 +1126,10 @@ class FormexOmzetter:
             self.lijst(el, basis if genummerd else "", extra)
         elif tag == "TBL":
             self.tabel(el)
+        elif tag == "INCL.ELEMENT":
+            # Leeg, dus `onbekend()` zou hem stil laten vallen.
+            if not self.afbeelding(el, blok=True):
+                raise _xml_fout("een inclusie (INCL.ELEMENT) als los blok is alleen voor een afbeelding gemeten")
         elif tag in METADATA:
             return
         else:
@@ -1124,6 +1154,50 @@ class FormexOmzetter:
         if (incl.get("TYPE") or "").upper() != "FORMEX.DOC":
             return None
         return incl
+
+    def afbeelding(self, incl, blok: bool = False) -> bool:
+        """Een TIFF-inclusie: niet overnemen, wel vastleggen. False als het geen afbeelding is.
+
+        Een afbeelding heeft geen tekst, dus de woordcontrole ziet het verschil niet;
+        de melding in de herkomst en de lijst `afbeeldingen_weggelaten` zorgen dat het
+        nooit stil gebeurt. Dezelfde afspraak als bij de rechtspraakroute. Tot 23
+        september 2026 weigerde een TIFF-inclusie het hele document, en daarmee 14
+        van de 347 documenten in de meetlat: de verordening productaansprakelijkheid
+        voor medische hulpmiddelen (2017/745 en 746, de CE-markering), Brussel I bis
+        (formulieren), e-evidence (2023/1543, 200 aankruisvakjes als lijstteken), het
+        adequaatheidsbesluit voor de VS (2023/1795, handtekeningen), ...
+        """
+        if (incl.get("TYPE") or "").upper() != AFBEELDINGSTYPE:
+            return False
+        naam = (incl.get("FILEREF") or "").rsplit("/", 1)[-1]
+        if naam not in self.afbeeldingen:
+            raise _xml_fout(f"de tekst roept afbeelding {naam or '?'} aan, maar de handeling noemt haar niet")
+        inhoud = incl.find("IMG.CNT")
+        met_tekst = inhoud is not None and bool(ws(" ".join(inhoud.itertext())))
+        self.afbeeldingen_weggelaten.append({"fileref": naam, "format": AFBEELDINGSTYPE,
+                                             "tekst_overgenomen": met_tekst})
+        if met_tekst:
+            # IMG.CNT is de tekst van het beeld (een formulier van Brussel I bis,
+            # van de beschermingsbevelrichtlijn 2011/99). Die is brontekst en
+            # komt als alinea's mee, zonder eenheden: het is een formulier.
+            if not blok:
+                raise _xml_fout("een afbeelding met tekst (IMG.CNT) midden in een zin is niet gemeten")
+            for kind in inhoud:
+                self.inhoud(kind, basis="", teller={"lijsten": 0})
+        return True
+
+    def meld_afbeeldingen(self) -> None:
+        weg = self.afbeeldingen_weggelaten
+        bestanden = list(dict.fromkeys(b["fileref"] for b in weg))
+        voorbeeld = ", ".join(bestanden[:5]) + (f" en {len(bestanden) - 5} meer" if len(bestanden) > 5 else "")
+        soort = "afbeelding" if len(weg) == 1 else "afbeeldingen"
+        met_tekst = sum(1 for b in weg if b["tekst_overgenomen"])
+        tekst = (f"; de tekst die de bron bij {met_tekst} ervan meelevert (IMG.CNT) is wel overgenomen"
+                 if met_tekst else "")
+        self.metadata.setdefault("waarschuwingen", []).append(
+            f"{len(weg)} {soort} uit de Formex-bron niet overgenomen (TIFF){tekst}; de tekst "
+            f"eromheen staat er wel: {voorbeeld}.")
+        self.metadata["afbeeldingen_weggelaten"] = weg
 
     def geciteerde_inclusie(self, incl) -> None:
         """Een geciteerde bijlage, als blok op de plek waar de tekst haar aanroept.

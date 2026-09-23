@@ -201,6 +201,12 @@ accountregistratie namens de gebruiker):
   Een **geciteerd blok als kind van een bijlage** (`CONTENTS/QUOT.S` met een tabel, onderdelen of
   alinea's: een bijlage die een bijlage van een andere handeling vervangt) gaat door
   `bijlage_inhoud(…, geciteerd=True)`, net als een ingesloten bijlage: brontekst, geen eenheden.
+  Een **afbeelding** (inclusie van het type `TIFF`: een formulier, pictogram, handtekening of
+  aankruisvakje als lijstteken) wordt niet overgenomen maar wel vastgelegd, zoals bij de
+  rechtspraakroute: een waarschuwing en `Herkomst.extra["afbeeldingen_weggelaten"]`. Draagt ze
+  haar tekst mee (`IMG.CNT`, de certificaten van Brussel I bis), dan komt die tekst als alinea's
+  mee, zonder eenheden. Een ander afbeeldingstype, een afbeelding die niet in de zip zit, en een
+  `IMG.CNT` midden in een zin blijven een weigering; een `FORMULA` in `IMG.CNT` ook.
   De portal-HTML (`/legal-content/…/HTML/`) blokkeert bots (HTTP 202, lege body;
   inmiddels een AWS WAF-JS-challenge, dus ook met retries permanent 202 — de portal is in de praktijk
   dood voor een simpele `requests`-scraper). Gebruik het **Cellar-archief** via content negotiation,
@@ -970,7 +976,7 @@ regel), inclusief de vloeiende tabbalk-indicator.
   weggeschreven bestand nooit als geldige staat gelezen kan worden.
 
 ## Tests
-`.venv/bin/python -m pytest tests/ -q` — 409 karakteriseringstests die het gedrag
+`.venv/bin/python -m pytest tests/ -q` — 413 karakteriseringstests die het gedrag
 vastleggen in plaats van het te beschrijven: `detect_source`-precedentie, ELI→CELEX,
 de CLG-markupnormalisatie (lidnummers, lettermarkers, voetnootankers), de
 voetnootdefinities die met de preambule meereizen, de notitievorm die een intakepoort

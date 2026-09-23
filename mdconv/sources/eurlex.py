@@ -311,6 +311,8 @@ def _fetch_formex(celex: str, lang: str, *, requested_url: str):
         extra={
             "formex_eenheden": len(eenheden),
             "herhaalde_tabelcellen": extra["herhaalde_cellen"],
+            **({"afbeeldingen_weggelaten": metadata["afbeeldingen_weggelaten"]}
+               if metadata.get("afbeeldingen_weggelaten") else {}),
         },
     )
     return (
