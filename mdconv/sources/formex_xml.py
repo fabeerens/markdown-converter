@@ -67,7 +67,11 @@ STRUCTUUR_ELEMENTEN = {
     # Brussel I bis staat als P's in IMG.CNT. Wat daarbinnen staat, moet zelf
     # bekend zijn; een FORMULA blijft dus een weigering.
     "INCL.ELEMENT", "IMG.CNT",
+    # Een annotatie is een noot die geen voetnoot is: een NB, een opmerking,
+    # een technische noot (`annotatie()`).
+    "GR.ANNOTATION", "ANNOTATION",
 }
+ANNOTATIES = ("GR.ANNOTATION", "ANNOTATION")
 # De letter van een CELEX-nummer volgens het soort handeling (`LEG.VAL`). Wat hier
 # niet in staat, is niet af te leiden en moet dan uit `NO.CELEX` komen.
 CELEX_LETTER = {"REG": "R", "DIR": "L", "DEC": "D"}
@@ -945,6 +949,11 @@ class FormexOmzetter:
             elif tag in ("ANNEX", "CONS.ANNEX"):
                 self.u.blok("---")
                 self.bijlage(kind)
+            elif tag == "GR.ANNOTATION":
+                # `ONTWERP` boven de titel van een ontwerpaanbeveling die als
+                # tweede handeling bij een besluit hoort (32015D0926); de
+                # HTML-route zet het als gewone alinea vóór de titel.
+                self.annotatie(kind)
             elif tag in METADATA:
                 continue
             else:
@@ -1145,12 +1154,12 @@ class FormexOmzetter:
 
         tag = el.tag
         if tag == "ALINEA":
-            if not any(c.tag in ("LIST", "TBL", "P", "NP", "DLIST") for c in el):
+            if not any(c.tag in ("LIST", "TBL", "P", "NP", "DLIST") + ANNOTATIES for c in el):
                 schrijf(ws(self.inline(el)))
                 return
             tekst = el.text or ""
             for kind in el:
-                if kind.tag in ("LIST", "TBL", "P", "NP", "DLIST"):
+                if kind.tag in ("LIST", "TBL", "P", "NP", "DLIST") + ANNOTATIES:
                     schrijf(ws(tekst))
                     tekst = ""
                     self.inhoud(kind, basis, teller, prefix, lid_anker, geankerd)
@@ -1162,7 +1171,12 @@ class FormexOmzetter:
             inclusie = self._inclusie_in(el)
             if inclusie is not None:
                 self.geciteerde_inclusie(inclusie)
-            elif el.find("LIST") is not None or el.find("TBL") is not None or el.find("DLIST") is not None:
+            elif (el.find("LIST") is not None or el.find("TBL") is not None or el.find("DLIST") is not None
+                  or any(c.tag in ANNOTATIES for c in el)):
+                # Een P die een annotatie draagt, is in de bron een omhulsel: 57 van
+                # de 58 annotaties in een P zijn er het enige kind (de opmerkingen in
+                # de milieukeurcriteria 32005D0338 en in 32024D2627), de 58e staat
+                # naast een afbeelding (32005L0066).
                 kopie = ET.Element("ALINEA")
                 kopie.text = el.text
                 kopie.extend(list(el))
@@ -1214,6 +1228,12 @@ class FormexOmzetter:
             self.lijst(el, basis if genummerd else "", extra)
         elif tag == "TBL":
             self.tabel(el)
+        elif tag in ANNOTATIES:
+            if isinstance(prefix, list) and prefix[0]:
+                # Niet gemeten: in de meetlat staat geen annotatie in een lid. Het
+                # nummer eraan vastplakken zou de noot tot lidtekst maken.
+                raise _xml_fout("een annotatie aan het begin van een lid is niet gemeten")
+            self.annotatie(el)
         elif tag == "INCL.ELEMENT":
             # Leeg, dus `onbekend()` zou hem stil laten vallen.
             if not self.afbeelding(el, blok=True):
@@ -1286,6 +1306,30 @@ class FormexOmzetter:
             f"{len(weg)} {soort} uit de Formex-bron niet overgenomen (TIFF){tekst}; de tekst "
             f"eromheen staat er wel: {voorbeeld}.")
         self.metadata["afbeeldingen_weggelaten"] = weg
+
+    def annotatie(self, el) -> None:
+        """Een annotatie (`GR.ANNOTATION`/`ANNOTATION`): gewone alinea's, zonder eenheden.
+
+        Formex zet elke noot die geen voetnoot is in een `ANNOTATION`: een NB, een
+        opmerking, een technische noot, een legenda onder een tabel. De tekst staat
+        waar de bron hem zet, dus in documentvolgorde; de titel (`Noot 1`,
+        `Technische noot:`) is een eigen alinea, zoals de HTML-route hem als
+        `<p class="oj-ti-annotation">` levert, en geen `##`-kop. Een eenheid krijgt
+        de noot niet: haar `a)` of `NB:` is geen onderdeel van de handeling, en een
+        anker zou botsen met het onderdeel waar ze onder staat. Tot 23 september
+        2026 weigerde een annotatie het hele document; 20 van de 347 documenten in
+        de meetlat noemden haar in hun weigering, waaronder het Europees wetboek
+        voor elektronische communicatie (32018L1972, `Noot 1` en `Noot 2` onder
+        bijlage X).
+        """
+        for kind in el:
+            if kind.tag == "TITLE":
+                for deel in kind:
+                    self.u.blok(ws(self.inline(deel)))
+            elif kind.tag in METADATA:
+                continue
+            else:
+                self.inhoud(kind, basis="", teller={"lijsten": 0})
 
     def geciteerde_inclusie(self, incl) -> None:
         """Een geciteerde bijlage, als blok op de plek waar de tekst haar aanroept.
@@ -1484,12 +1528,14 @@ class FormexOmzetter:
                 nr = ws(self.inline(kind.find("NO.P"))) if kind.find("NO.P") is not None else ""
                 txt = ws(self.inline(kind.find("TXT"))) if kind.find("TXT") is not None else ""
                 delen.append(f"{nr} {txt}".strip())
-            elif kind.tag in ("P", "ALINEA", "GR.SEQ", "TITLE", "TI"):
+            elif kind.tag in ("P", "ALINEA", "GR.SEQ", "TITLE", "TI") + ANNOTATIES:
                 # Een cel met onderdelen: de lijst van goedgekeurde werkzame
                 # stoffen zet de specifieke bepalingen als `DEEL A` en `DEEL B`
                 # (GR.SEQ met TITLE/TI/P) in één cel (32011R0704, en geciteerd
                 # in 32008L0044 twaalf keer). Een cel kan geen structuur dragen;
-                # net als een lijst in een cel wordt het tekst, kop voorop.
+                # net als een lijst in een cel wordt het tekst, kop voorop. Een
+                # annotatie in een cel (`Noot:` in 32026L0706, negen in
+                # 32013L0052) is een blok in die cel, net als een alinea.
                 sluit()
                 delen.append(self.cel_tekst(kind))
             else:
@@ -1536,6 +1582,13 @@ class FormexOmzetter:
         md, herhaald = tabel_markdown(leeg + rijen, 1)
         self.herhaalde_cellen += herhaald
         self.u.blok(md)
+        # Een annotatie tussen de tabelnoten (`Aantekeningen bij de tabel:` in
+        # 32023L0544, `Bron: Eurostat.` in 32012L0027) is geen noot met een
+        # nummer maar tekst onder de tabel; de HTML-route zet haar als laatste
+        # tabelrij. Hier komt ze als alinea direct onder de tabel, en de noten
+        # gaan zoals altijd naar het notenblok.
+        for annotatie in (gr.findall("GR.ANNOTATION") if gr is not None else []):
+            self.annotatie(annotatie)
         for noot in definities:
             sleutel = noot.get("NOTE.ID")
             nummer = self.nootlabels.get(sleutel)

@@ -1142,3 +1142,79 @@ def test_a_repeated_article_number_is_still_refused():
     act = ACT.replace(b"</DIVISION></ENACTING.TERMS>", tweede, 1)
     with pytest.raises(ConversionError, match="dubbele structurele ankers: art-1"):
         formex_xml.omzetten(formex_zip(act=act))
+
+
+# ------------------------------------------------------------------ annotaties
+#
+# Een ANNOTATION is in Formex een noot die geen voetnoot is: een NB, een
+# opmerking, een technische noot. Tot 23 september 2026 weigerde elke annotatie
+# het hele document (20 van de 347 in de meetlat noemden haar in hun weigering,
+# waaronder het Europees wetboek voor elektronische communicatie). De tekst komt
+# nu als gewone alinea's op de plek waar de bron haar zet, zonder kop en zonder
+# eenheden.
+
+def test_an_annotation_in_an_annex_is_its_title_and_text_as_plain_paragraphs():
+    """32018L1972, bijlage X: `Noot 1` en `Noot 2` onder de tabellen, als GR.ANNOTATION met TITLE."""
+    noot = (b"<GR.ANNOTATION><TITLE><TI><P>Noot 1</P></TI></TITLE><ANNOTATION><P>De parameters maken "
+            b"een analyse mogelijk.</P></ANNOTATION></GR.ANNOTATION>")
+    markdown, eenheden, _, _ = formex_xml.omzetten(
+        _met_bijlagen(_bijlage(b"BIJLAGE X", _deel(b"A.", b"1.") + noot)))
+    assert "\n\n1.   Punt 1. van A..\n\nNoot 1\n\nDe parameters maken een analyse mogelijk.\n" in markdown
+    assert "# Noot" not in markdown
+    assert not any("noot" in e.anker for e in eenheden)
+
+
+def test_an_annotation_among_the_table_notes_comes_directly_under_the_table():
+    """32023L0544: `Aantekeningen bij de tabel:` staat in TBL/GR.NOTES vóór de genummerde tabelnoten.
+
+    Die noten gaan zoals altijd naar het notenblok achter de bijlage; de annotatie
+    is geen noot met een nummer maar tekst onder de tabel.
+    """
+    tabel = (b'<TBL COLS="2"><CORPUS><ROW TYPE="HEADER"><CELL COL="1" TYPE="HEADER">Toepassing</CELL>'
+             b'<CELL COL="2" TYPE="HEADER">Vrijstelling</CELL></ROW><ROW><CELL COL="1">Lood in aluminium'
+             b'<NOTE NOTE.REF="E0001" NUMBERING="ARAB" TYPE="TABLE"/></CELL><CELL COL="2">X</CELL></ROW>'
+             b'</CORPUS><GR.NOTES><GR.ANNOTATION><ANNOTATION><P>Aantekeningen bij de tabel:</P></ANNOTATION>'
+             b'</GR.ANNOTATION><NOTE NOTE.ID="E0001" NUMBERING="ARAB" TYPE="TABLE"><P>Wordt opnieuw bekeken '
+             b'in 2024.</P></NOTE></GR.NOTES></TBL>')
+    markdown = formex_xml.omzetten(_met_bijlagen(_bijlage(b"BIJLAGE II", tabel)))[0]
+    assert ("| Lood in aluminium (1) | X |\n\nAantekeningen bij de tabel:\n\n"
+            "(1)  Wordt opnieuw bekeken in 2024.\n") in markdown
+
+
+def test_an_annotation_wrapped_in_a_paragraph_is_written_where_it_stands_without_a_unit():
+    """32024D2627: `Opmerking:` als NP in P/GR.ANNOTATION/ANNOTATION onder een onderdeel van de bijlage.
+
+    Het `Opmerking:` in NO.P is geen markering van een onderdeel; een anker
+    `annex-1-a-opmerking` zou een structuur beweren die de bron niet heeft.
+    """
+    lijst = (b'<LIST TYPE="alpha"><ITEM><NP><NO.P>a)</NO.P><TXT>Monitoring:</TXT><P>Geen.</P>'
+             b'<P><GR.ANNOTATION><ANNOTATION><NP><NO.P><HT TYPE="ITALIC">Opmerking:</HT></NO.P>'
+             b'<TXT><HT TYPE="ITALIC">links kunnen wijzigen.</HT></TXT></NP></ANNOTATION></GR.ANNOTATION></P>'
+             b'</NP></ITEM></LIST>')
+    markdown, eenheden, _, _ = formex_xml.omzetten(_met_bijlagen(_bijlage(b"BIJLAGE", lijst)))
+    assert "\n\na) Monitoring:\n\nGeen.\n\n*Opmerking:* *links kunnen wijzigen.*\n" in markdown
+    assert [e.anker for e in eenheden if e.anker.startswith("annex")] == ["annex-o1", "annex-o1-a"]
+
+
+def test_an_annotation_in_a_table_cell_is_a_block_of_that_cell():
+    """32026L0706: `Noot:` en haar tekst als ANNOTATION in een CELL, na de eigen alinea van de cel."""
+    tabel = (b'<TBL COLS="2"><CORPUS><ROW><CELL COL="1">Aanwijzing</CELL><CELL COL="2"><P>De aanwijzing in '
+             b'massa.</P><ANNOTATION><P>Noot:</P><P>Herleiden mag.</P></ANNOTATION></CELL></ROW></CORPUS></TBL>')
+    markdown = formex_xml.omzetten(_met_bijlagen(_bijlage(b"BIJLAGE I", tabel)))[0]
+    assert "| Aanwijzing | De aanwijzing in massa. Noot: Herleiden mag. |" in markdown
+
+
+def test_an_annotation_above_the_title_of_an_act_is_a_paragraph_before_it():
+    """32015D0926: de tweede handeling in de zip is een ontwerpaanbeveling met `ONTWERP` boven haar titel."""
+    act = ACT.replace(b"<TITLE>", b"<GR.ANNOTATION><ANNOTATION><P>ONTWERP</P></ANNOTATION></GR.ANNOTATION><TITLE>", 1)
+    markdown = formex_xml.omzetten(formex_zip(act=act))[0]
+    assert "---\n\nONTWERP\n\nVERORDENING (EU) 2022/1925\n" in markdown
+
+
+def test_an_annotation_at_the_start_of_a_paragraph_of_an_article_is_still_refused():
+    """Niet gemeten: geen annotatie in de meetlat staat in een lid. Het lidnummer eraan vastplakken
+    zou de noot tot lidtekst maken, en het nummer los laten staan is een vorm die niemand heeft gezien."""
+    act = ACT.replace(b"<ALINEA><P>Deze verordening stelt regels vast.</P>",
+                      b"<ANNOTATION><P>Opmerking vooraf.</P></ANNOTATION><ALINEA><P>Deze verordening stelt regels vast.</P>")
+    with pytest.raises(ConversionError, match="annotatie aan het begin van een lid"):
+        formex_xml.omzetten(formex_zip(act=act))
