@@ -644,7 +644,11 @@ class FormexOmzetter:
         ankers = [e.anker for e in self.u.eenheden if e.anker]
         dubbel = sorted(a for a, aantal in Counter(ankers).items() if aantal > 1)
         if dubbel:
-            fouten.append(f"dubbele structurele ankers: {', '.join(dubbel[:8])}")
+            fouten.append(
+                f"dubbele structurele ankers: {', '.join(dubbel[:8])} (de Formex-bron "
+                "nummert op één niveau twee eenheden gelijk; alleen een herhaalde "
+                "markering binnen één opsomming wordt met een volgnummer onderscheiden)"
+            )
         if fouten:
             raise ConversionError("Formex-structuurcontrole faalt: " + "; ".join(fouten))
 
@@ -1182,6 +1186,7 @@ class FormexOmzetter:
                 self.definitiepunt(item, basis)
             return
         genummerd = el.get("TYPE", "").upper() not in ONGENUMMERD
+        gezien: Counter = Counter()
         for item in el.findall("ITEM"):
             np = item.find("NP")
             if np is not None:
@@ -1195,6 +1200,10 @@ class FormexOmzetter:
                 txt = ws(self.inline(eerste)) if eerste is not None and eerste.find("LIST") is None else ""
                 binnen = [c for c in item if c is not eerste or not txt]
             anker = f"{basis}-{extra}{nummer_anker(nr)}" if (basis and genummerd and nr) else ""
+            if anker:
+                gezien[anker] += 1
+                if gezien[anker] > 1:
+                    anker = self.dubbele_markering(anker, gezien[anker], nr, basis)
             regel = f"{nr} {txt}".strip() if genummerd or nr else f"— {txt}".strip()
             if regel:
                 self.u.blok(regel)
@@ -1205,6 +1214,29 @@ class FormexOmzetter:
                     self.lijst(sub, anker, "")
                 else:
                     self.inhoud(sub, anker or basis, {"lijsten": 0})
+
+    def dubbele_markering(self, anker: str, volgnummer: int, nr: str, basis: str) -> str:
+        """Een tweede onderdeel met dezelfde gedrukte markering binnen één opsomming.
+
+        De Nederlandse Formex van de AVG (32016R0679, `L_2016119NL.01000101.xml`)
+        nummert in artikel 13, lid 1 de onderdelen a), b), c), d), d), e) waar het
+        Publicatieblad a) t/m f) heeft; de Engelse manifestatie heeft wél (a)–(f).
+        Een `ITEM`/`NP` draagt geen IDENTIFIER (0 van 558 in die bron), dus de
+        machine-identiteit die artikel 73 van 2024/1689 uniek houdt bestaat hier
+        niet. Wat de bron wél geeft is de volgorde: het tweede d) is het tweede
+        d). Dat volgnummer wordt het onderscheid (`art-13-1-d-2`); de gedrukte
+        markering en de tekst blijven zoals ze zijn — de omzetter corrigeert de
+        bron niet tot e), want dat zou raden zijn. De melding gaat als
+        waarschuwing mee in de herkomst, zodat dit nooit stil gebeurt. Botst het
+        volgnummer alsnog met een genest punt (`d) … 2.`), dan vangt de
+        zelfcontrole dat als dubbel anker en weigert de omzetting."""
+        onderscheiden = f"{anker}-{volgnummer}"
+        self.metadata.setdefault("waarschuwingen", []).append(
+            f"De Formex-bron gebruikt in {_beschrijf_basis(basis)} de markering {nr} "
+            f"{volgnummer} keer; het {volgnummer}e onderdeel {nr} kreeg de structuureenheid "
+            f"{onderscheiden}. De gedrukte markering en de tekst zijn ongewijzigd overgenomen."
+        )
+        return onderscheiden
 
     # ------------------------------------------------------------ tabellen
 
@@ -1334,6 +1366,14 @@ class FormexOmzetter:
                 continue
             else:
                 self.inhoud(kind, basis=anker, teller=teller)
+
+
+def _beschrijf_basis(basis: str) -> str:
+    """`art-13-1` -> 'artikel 13, lid 1'; een andere vorm blijft het anker zelf."""
+    m = re.fullmatch(r"art-([a-z0-9]+)(?:-([a-z0-9]+))?", basis)
+    if not m:
+        return basis
+    return f"artikel {m.group(1)}" + (f", lid {m.group(2)}" if m.group(2) else "")
 
 
 def omzetten(data: bytes, basis: bytes | None = None) -> tuple[str, list, dict, dict]:
