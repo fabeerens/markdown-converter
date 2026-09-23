@@ -293,6 +293,31 @@ accountregistratie namens de gebruiker):
   ziet: transparant werd `Risk − weighted exposure amount` stil `Risk weighted exposure amount`.
   En de `OVER`-breuk van 2005/66 zegt niet waar de noemer eindigt. Zie `FORMULE_ELEMENTEN`; maak
   die elementen niet transparant.
+  De **nummers van bijlageonderdelen komen uit de bron**. Een onderdeel zonder kop draagt zijn
+  nummer in `GR.SEQ/NO.GR.SEQ`, met de tekst in de P erna (902 keer in 12 documenten van de
+  meetlat, 294 keer in de MDR, altijd in een bijlage). Het nummer komt vóór die tekst met drie
+  harde spaties, in de vorm van het nummer van een onderdeel met een kop: `10.` (kop) en `10.1.`
+  (NO.GR.SEQ) in bijlage I van de MDR lezen gelijk, en `2) …` wordt zo geen Markdown-lijst. Begint
+  het onderdeel meteen met een opsomming (punt 6.4. van 2008/1), dan staat het nummer op een eigen
+  regel, zoals bij een lid. Tot 23 september 2026 schreef die tak het nummer twee keer (`3. 3.`,
+  ook bij artikel 6, lid 3 van Rome II). Het nummer is ook het ankersegment. Alleen de gemeten
+  vormen gaan door: `1.`, `1.1.`, `1.1.1.`, `2)` en `d)` (`ONDERDEELNUMMER`), als eerste kind,
+  zonder kop ernaast en met een P of LIST erna. Een andere vorm (`(1)` leest in het profiel als
+  overweging), een tabel of inclusie als eerste inhoud, of een nummer zonder tekst blijft een
+  weigering. Het nummer van een onderdeelkop wordt uit de bron gelezen (`_plat_bron`), niet met
+  een tweede `inline()`: die schreef een noot in de kop dubbel (32013R0503, 32023L2225,
+  32018L0100). Begint binnen één blok een tweede reeks bij 1, a of i terwijl dat anker al is
+  uitgegeven, dan draagt die reeks `al<k>`, met dezelfde teller als losse punten. Voorbeelden:
+  twee inleidende punten 1. en 2. en dan de categorieën 1.–6. in bijlage I bij 2008/1; de
+  opsomming a), b) en dan `Titel A`, `Titel B` in 2025/2205. Een dubbel nummer midden in een reeks
+  blijft een weigering. Onder één los punt (NP) delen de opsommingen één teller (bijlage V, punt 4
+  van 2012/27). Een **inhoudsopgave** (`TOC`) wordt per `TOC.ITEM` één alinea `nummer tekst`,
+  zonder kop, eenheid of lijst, in bronvolgorde en zonder opmaak. Ze staat als kind van een
+  CONS.ANNEX `BIJLAGEN` in de geconsolideerde MDR, of in CONTENTS in 2005/66. De
+  Publicatiebladversie van de MDR, waar dezelfde opgave als NP staat, leest daardoor regel voor
+  regel gelijk. `ITEM.REF`, een TOC naast CONTENTS of iets anders in een TOC.ITEM blijft een
+  weigering. Gemeten gevolg: wetgeving 167 → 174 van 266, onder meer de MDR, de IVDR en de
+  machineverordening.
   De portal-HTML (`/legal-content/…/HTML/`) blokkeert bots (HTTP 202, lege body;
   inmiddels een AWS WAF-JS-challenge, dus ook met retries permanent 202 — de portal is in de praktijk
   dood voor een simpele `requests`-scraper). Gebruik het **Cellar-archief** via content negotiation,
@@ -1062,7 +1087,7 @@ regel), inclusief de vloeiende tabbalk-indicator.
   weggeschreven bestand nooit als geldige staat gelezen kan worden.
 
 ## Tests
-`.venv/bin/python -m pytest tests/ -q` — 456 karakteriseringstests die het gedrag
+`.venv/bin/python -m pytest tests/ -q` — 475 karakteriseringstests die het gedrag
 vastleggen in plaats van het te beschrijven: `detect_source`-precedentie, ELI→CELEX,
 de CLG-markupnormalisatie (lidnummers, lettermarkers, voetnootankers), de
 voetnootdefinities die met de preambule meereizen, de notitievorm die een intakepoort

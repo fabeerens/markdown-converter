@@ -1,5 +1,5 @@
 {
- "commit": "6a304d0",
+ "commit": "d9c52da",
  "documenten": {
   "02002L0058-20091219": {
    "melding": null,
@@ -141,8 +141,8 @@
    ]
   },
   "02017R0745-20260719": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: NO.GR.SEQ (294×), TOC (1×); omzetting geweigerd.",
-   "oorzaak": "element NO.GR.SEQ, TOC",
+   "melding": "Formex-bron geweigerd: de tekst roept afbeelding L_2017117NL.01011402.tif aan, maar de handeling noemt haar niet",
+   "oorzaak": "de tekst roept afbeelding L_#NL.#.tif aan, maar de handeling noemt haar niet",
    "route": "wetgeving",
    "sectie": "geconsolideerd",
    "sha256": null,
@@ -457,8 +457,8 @@
    "waarschuwingen": []
   },
   "32005L0066": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: FORMULA (1×), TOC (1×); omzetting geweigerd. Een formule wordt bewust niet omgezet: een index, breuk of operator heeft geen tekstvorm die leesbaar blijft en door de woordcontrole te bewijzen is.",
-   "oorzaak": "element FORMULA, TOC",
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: FORMULA (1×); omzetting geweigerd. Een formule wordt bewust niet omgezet: een index, breuk of operator heeft geen tekstvorm die leesbaar blijft en door de woordcontrole te bewijzen is.",
+   "oorzaak": "element FORMULA",
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
    "sha256": null,
@@ -677,13 +677,13 @@
    "waarschuwingen": []
   },
   "32008L0001": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: NO.GR.SEQ (35×); omzetting geweigerd.",
-   "oorzaak": "element NO.GR.SEQ",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "1c585b79cedb3b00948c7af6fdb0fd9a024736d36549527cb8d4dd6980b3e6ab",
+   "status": "ok",
+   "tekens": 67943,
    "waarschuwingen": []
   },
   "32008L0044": {
@@ -999,8 +999,8 @@
    "waarschuwingen": []
   },
   "32012L0027": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: FORMULA.S (1×), NO.GR.SEQ (2×); omzetting geweigerd. Een formule wordt bewust niet omgezet: een index, breuk of operator heeft geen tekstvorm die leesbaar blijft en door de woordcontrole te bewijzen is.",
-   "oorzaak": "element FORMULA.S, NO.GR.SEQ",
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: FORMULA.S (1×); omzetting geweigerd. Een formule wordt bewust niet omgezet: een index, breuk of operator heeft geen tekstvorm die leesbaar blijft en door de woordcontrole te bewijzen is.",
+   "oorzaak": "element FORMULA.S",
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
    "sha256": null,
@@ -1101,14 +1101,16 @@
    "waarschuwingen": []
   },
   "32013R0503": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: NO.GR.SEQ (5×); omzetting geweigerd.",
-   "oorzaak": "element NO.GR.SEQ",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
-   "waarschuwingen": []
+   "sha256": "fa04264d399ff9d5538e27d158dcfc2346b444e1cc92c42bebdbde221573fb14",
+   "status": "ok",
+   "tekens": 192596,
+   "waarschuwingen": [
+    "1 afbeelding uit de Formex-bron niet overgenomen (TIFF); de tekst die de bron bij 1 ervan meelevert (IMG.CNT) is wel overgenomen; de tekst eromheen staat er wel: L_2013157NL.01002801.tif."
+   ]
   },
   "32013R0575": {
    "melding": "Formex-element(en) met tekst zonder eigen behandeling: FORMULA (36×), FORMULA.S (72×); omzetting geweigerd. Een formule wordt bewust niet omgezet: een index, breuk of operator heeft geen tekstvorm die leesbaar blijft en door de woordcontrole te bewijzen is.",
@@ -1171,8 +1173,8 @@
    "waarschuwingen": []
   },
   "32014L0106": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: NO.GR.SEQ (10×); omzetting geweigerd.",
-   "oorzaak": "element NO.GR.SEQ",
+   "melding": "Formex-bron geweigerd: een inclusie (INCL.ELEMENT) als los blok is alleen voor een afbeelding gemeten",
+   "oorzaak": "een inclusie als los blok is alleen voor een afbeelding gemeten",
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
    "sha256": null,
@@ -1513,24 +1515,28 @@
    "waarschuwingen": []
   },
   "32017R0745": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: NO.GR.SEQ (294×); omzetting geweigerd.",
-   "oorzaak": "element NO.GR.SEQ",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "belangrijk",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
-   "waarschuwingen": []
+   "sha256": "af9c6130d0c2c2644f94581dd3d5983d99cc1d5645485e15a4765f9e2abff62b",
+   "status": "ok",
+   "tekens": 709207,
+   "waarschuwingen": [
+    "1 afbeelding uit de Formex-bron niet overgenomen (TIFF); de tekst eromheen staat er wel: L_2017117NL.01011402.tif."
+   ]
   },
   "32017R0746": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: NO.GR.SEQ (201×); omzetting geweigerd.",
-   "oorzaak": "element NO.GR.SEQ",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "belangrijk",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
-   "waarschuwingen": []
+   "sha256": "d92b6e0e54b660f51c7ad8e98a27857e07c0654fead7faeb1d4c585a035460a5",
+   "status": "ok",
+   "tekens": 616278,
+   "waarschuwingen": [
+    "1 afbeelding uit de Formex-bron niet overgenomen (TIFF); de tekst eromheen staat er wel: L_2017117NL.01027902.tif."
+   ]
   },
   "32017R0941": {
    "melding": null,
@@ -1763,8 +1769,8 @@
    "waarschuwingen": []
   },
   "32019L0782": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: NO.GR.SEQ (13×); omzetting geweigerd.",
-   "oorzaak": "element NO.GR.SEQ",
+   "melding": "Formex-bron geweigerd: een inclusie (INCL.ELEMENT) staat midden in een zin; alleen een inclusie als eigen alinea binnen QUOT.S is gemeten",
+   "oorzaak": "een inclusie staat midden in een zin",
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
    "sha256": null,
@@ -1823,8 +1829,8 @@
    "waarschuwingen": []
   },
   "32019R0627": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: FORMULA (1×), NO.GR.SEQ (12×); omzetting geweigerd. Een formule wordt bewust niet omgezet: een index, breuk of operator heeft geen tekstvorm die leesbaar blijft en door de woordcontrole te bewijzen is.",
-   "oorzaak": "element FORMULA, NO.GR.SEQ",
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: FORMULA (1×); omzetting geweigerd. Een formule wordt bewust niet omgezet: een index, breuk of operator heeft geen tekstvorm die leesbaar blijft en door de woordcontrole te bewijzen is.",
+   "oorzaak": "element FORMULA",
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
    "sha256": null,
@@ -2301,8 +2307,8 @@
    "waarschuwingen": []
   },
   "32023L2225": {
-   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=niets, extra=['richtlijn', 'richtlijn', 'eu', 'eu', '2023', '2023', '2023', '2023', '2023', '2225', '2225', '2225']).",
-   "oorzaak": "woordcontrole: tekst dubbel",
+   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: art-2-2-h-i, art-2-2-h-ii, art-2-2-h-iii (de Formex-bron nummert op één niveau twee eenheden gelijk; alleen een herhaalde markering binnen één opsomming wordt met een volgnummer onderscheiden)",
+   "oorzaak": "structuur: dubbele structurele ankers",
    "route": "wetgeving",
    "sectie": "belangrijk",
    "sha256": null,
@@ -2361,13 +2367,13 @@
    "waarschuwingen": []
   },
   "32023R1230": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: NO.GR.SEQ (14×); omzetting geweigerd.",
-   "oorzaak": "element NO.GR.SEQ",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "belangrijk",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "29337b6cd5fdc84aa7ac08d62cf1585f56fde35f925a5533669314d5b24e24a6",
+   "status": "ok",
+   "tekens": 369884,
    "waarschuwingen": []
   },
   "32023R1542": {
@@ -2603,13 +2609,13 @@
    "waarschuwingen": []
   },
   "32024R1781": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: NO.GR.SEQ (1×); omzetting geweigerd.",
-   "oorzaak": "element NO.GR.SEQ",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "belangrijk",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "90fafc562cf330f2c828cc8a6f360f24431bb1e696cd11210a86a7bb6a4b31ef",
+   "status": "ok",
+   "tekens": 373955,
    "waarschuwingen": []
   },
   "32024R2623": {
@@ -2673,14 +2679,16 @@
    "waarschuwingen": []
   },
   "32025L2205": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: NO.GR.SEQ (21×); omzetting geweigerd.",
-   "oorzaak": "element NO.GR.SEQ",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
-   "waarschuwingen": []
+   "sha256": "478c043ef2c0ad078eca7467ef7a23aa05a4b69c20700ed6ff59c16d46657685",
+   "status": "ok",
+   "tekens": 292899,
+   "waarschuwingen": [
+    "2 afbeeldingen uit de Formex-bron niet overgenomen (TIFF); de tekst eromheen staat er wel: L_202502205NL.003702.fmx.tif, L_202502205NL.003703.fmx.tif."
+   ]
   },
   "32025R0038": {
    "melding": null,
@@ -3634,6 +3642,6 @@
    ]
   }
  },
- "gemeten": "2026-09-23 16:04",
+ "gemeten": "2026-09-23 16:06",
  "taal": "NL"
 }
