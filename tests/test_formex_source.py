@@ -695,6 +695,21 @@ def test_een_lid_dat_met_een_geciteerde_tabel_begint_wordt_geweigerd():
         formex_xml.omzetten(formex_zip(act=act))
 
 
+def test_bijlageonderdelen_in_een_tabelcel_worden_tekst_van_die_cel():
+    """De lijst van goedgekeurde werkzame stoffen (32011R0704) zet `DEEL A` en `DEEL B` als GR.SEQ
+    in één cel; dat weigerde als `inline:GR.SEQ`. Een cel draagt geen structuur."""
+    cel = (b'<CELL COL="2"><GR.SEQ LEVEL="1"><TITLE><TI><P>DEEL A</P></TI></TITLE>'
+           b'<P>Alleen als herbicide.</P></GR.SEQ><GR.SEQ LEVEL="1"><TITLE><TI><P>DEEL B</P></TI></TITLE>'
+           b'<P>Let op:</P><LIST TYPE="ARAB"><ITEM><NP><NO.P>1.</NO.P><TXT>het grondwater.</TXT></NP></ITEM>'
+           b'</LIST></GR.SEQ></CELL>')
+    act = ACT.replace(b"</ARTICLE>", b'<ALINEA><TBL COLS="2"><CORPUS><ROW><CELL COL="1">Azimsulfuron</CELL>'
+                      + cel + b"</ROW></CORPUS></TBL></ALINEA></ARTICLE>", 1)
+
+    markdown = formex_xml.omzetten(formex_zip(act=act))[0]
+
+    assert "| Azimsulfuron | DEEL A Alleen als herbicide. DEEL B Let op: 1. het grondwater. |" in markdown
+
+
 def test_een_afdeling_inline_buiten_een_citaat_blijft_een_weigering():
     """Buiten een citaat is een DIVISION een eenheid van de handeling zelf; die mag niet stil
     in een alinea opgaan."""

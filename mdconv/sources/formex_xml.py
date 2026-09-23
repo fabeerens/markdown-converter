@@ -1481,7 +1481,12 @@ class FormexOmzetter:
                 nr = ws(self.inline(kind.find("NO.P"))) if kind.find("NO.P") is not None else ""
                 txt = ws(self.inline(kind.find("TXT"))) if kind.find("TXT") is not None else ""
                 delen.append(f"{nr} {txt}".strip())
-            elif kind.tag in ("P", "ALINEA"):
+            elif kind.tag in ("P", "ALINEA", "GR.SEQ", "TITLE", "TI"):
+                # Een cel met onderdelen: de lijst van goedgekeurde werkzame
+                # stoffen zet de specifieke bepalingen als `DEEL A` en `DEEL B`
+                # (GR.SEQ met TITLE/TI/P) in één cel (32011R0704, en geciteerd
+                # in 32008L0044 twaalf keer). Een cel kan geen structuur dragen;
+                # net als een lijst in een cel wordt het tekst, kop voorop.
                 sluit()
                 delen.append(self.cel_tekst(kind))
             else:
