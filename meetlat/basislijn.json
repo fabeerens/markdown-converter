@@ -1,5 +1,5 @@
 {
- "commit": "20d8184+wijzigingen",
+ "commit": "a0450f8+wijzigingen",
  "documenten": {
   "02002L0058-20091219": {
    "melding": null,
@@ -2214,14 +2214,16 @@
    "waarschuwingen": []
   },
   "32022R2554": {
-   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: hfd-3 (de Formex-bron nummert op één niveau twee eenheden gelijk; alleen een herhaalde markering binnen één opsomming wordt met een volgnummer onderscheiden)",
-   "oorzaak": "structuur: dubbele structurele ankers",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "belangrijk",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
-   "waarschuwingen": []
+   "sha256": "e7adc11605636ebd34b41c6ada6e57d498a3f0c9e569318f3e7d129e38ac1621",
+   "status": "ok",
+   "tekens": 335412,
+   "waarschuwingen": [
+    "De Formex-bron gebruikt de kop HOOFDSTUK III 2 keer; het 2e kreeg de structuureenheid hfd-3-2. De kop en de tekst zijn ongewijzigd overgenomen."
+   ]
   },
   "32023D1011": {
    "melding": null,
@@ -3617,6 +3619,6 @@
    ]
   }
  },
- "gemeten": "2026-09-23 14:52",
+ "gemeten": "2026-09-23 15:12",
  "taal": "NL"
 }

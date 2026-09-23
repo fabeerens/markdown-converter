@@ -963,3 +963,23 @@ def test_a_missing_image_or_another_image_type_is_still_refused(bestand, soort, 
     act = ACT.replace(b"<NO.P>b)</NO.P>", b'<NO.P><INCL.ELEMENT FILEREF="L_test.beeld.tif" TYPE="' + soort + b'"/></NO.P>')
     with pytest.raises(ConversionError, match=reden):
         formex_xml.omzetten(_met_afbeelding(act, bestand=bestand, soort=soort))
+
+
+def test_a_repeated_chapter_number_gets_a_sequence_number_and_a_warning():
+    """De Nederlandse DORA (32022R2554) noemt hoofdstuk VII `HOOFDSTUK III`: dezelfde regel als de dubbele d) in de AVG."""
+    tweede = (b'<DIVISION><TITLE><TI>HOOFDSTUK I</TI><STI>Bevoegde autoriteiten</STI></TITLE>'
+              b'<DIVISION><TITLE><TI>AFDELING 1</TI><STI>Toezicht</STI></TITLE>'
+              b'<ARTICLE IDENTIFIER="2"><TI.ART>Artikel 2</TI.ART><ALINEA><P>Tweede artikel.</P></ALINEA>'
+              b'</ARTICLE></DIVISION></DIVISION></ENACTING.TERMS>')
+    act = ACT.replace(b"</ENACTING.TERMS>", tweede, 1)
+    _, eenheden, _, extra = formex_xml.omzetten(formex_zip(act=act))
+    assert [e.anker for e in eenheden if e.soort == "divisie"] == ["hfd-1", "hfd-1-2", "afd-1-2-1"]
+    assert any("de kop HOOFDSTUK I 2 keer" in w for w in extra["metadata"]["waarschuwingen"])
+
+
+def test_a_repeated_article_number_is_still_refused():
+    tweede = (b'<ARTICLE IDENTIFIER="2"><TI.ART>Artikel 1</TI.ART><ALINEA><P>Nog een artikel 1.</P></ALINEA>'
+              b'</ARTICLE></DIVISION></ENACTING.TERMS>')
+    act = ACT.replace(b"</DIVISION></ENACTING.TERMS>", tweede, 1)
+    with pytest.raises(ConversionError, match="dubbele structurele ankers: art-1"):
+        formex_xml.omzetten(formex_zip(act=act))

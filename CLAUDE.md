@@ -195,9 +195,12 @@ accountregistratie namens de gebruiker):
   onderdeel naast andere onderdelen krijgt zijn plaats (`s2`); een ongenummerde bijlage is
   `annex-o<volgnummer>`, zodat ze niet botst met `BIJLAGE I` (SCC's). Een tweede reeks losse
   punten in één blok draagt `al<k>`, net als in het profiel, en een DLIST telt mee als tweede
-  opsomming in een lid. `HOOFDSTUK IX bis` is `hfd-9bis`. Wat blijft weigeren: een echt dubbel
-  hoofdstuk, zoals de twee keer `HOOFDSTUK III` in de Nederlandse DORA (32022R2554), waar
-  hoofdstuk VII bedoeld is.
+  opsomming in een lid. `HOOFDSTUK IX bis` is `hfd-9bis`. Een **herhaald hoofdstuknummer**
+  (twee keer `HOOFDSTUK III` in de Nederlandse DORA, 32022R2554, waar het Publicatieblad VII
+  heeft) krijgt dezelfde regel als de dubbele `d)` in de AVG: `dubbele_divisie()` geeft het
+  tweede zijn volgnummer (`hfd-3-2`, en dat loopt door in het ankerpad van zijn afdelingen),
+  kop en tekst blijven ongewijzigd, en de bronfout staat als waarschuwing in de herkomst.
+  Een dubbel artikelnummer blijft een weigering.
   Een **geciteerd blok als kind van een bijlage** (`CONTENTS/QUOT.S` met een tabel, onderdelen of
   alinea's: een bijlage die een bijlage van een andere handeling vervangt) gaat door
   `bijlage_inhoud(…, geciteerd=True)`, net als een ingesloten bijlage: brontekst, geen eenheden.
@@ -976,7 +979,7 @@ regel), inclusief de vloeiende tabbalk-indicator.
   weggeschreven bestand nooit als geldige staat gelezen kan worden.
 
 ## Tests
-`.venv/bin/python -m pytest tests/ -q` — 413 karakteriseringstests die het gedrag
+`.venv/bin/python -m pytest tests/ -q` — 415 karakteriseringstests die het gedrag
 vastleggen in plaats van het te beschrijven: `detect_source`-precedentie, ELI→CELEX,
 de CLG-markupnormalisatie (lidnummers, lettermarkers, voetnootankers), de
 voetnootdefinities die met de preambule meereizen, de notitievorm die een intakepoort

@@ -395,6 +395,7 @@ class FormexOmzetter:
         self.bijlagen = 0
         self.metadata: dict = {}
         self.markeringen: Counter = Counter()      # CELEX -> passages met een CLG.MDFO
+        self.divisies: Counter = Counter()         # anker -> keren dat een kop het draagt
         self.basis: ET.Element | None = None       # PREAMBLE van de basishandeling
         self.zonder: frozenset = frozenset()       # opmaaksoorten die nu niet geschreven worden
         self.inclusies: dict[str, ET.Element] = {}  # geciteerde bijlagen, op bestandsnaam
@@ -989,6 +990,9 @@ class FormexOmzetter:
                 anker, sleutel, nr = self.divisie_anker(ti, pad)
                 nieuw = dict(pad)
                 if anker:
+                    self.divisies[anker] += 1
+                    if self.divisies[anker] > 1:
+                        anker, nr = self.dubbele_divisie(anker, nr, self.divisies[anker], ti)
                     self.u.eenheid(anker, "divisie", f"{ti} {sti}".strip())
                     nieuw[sleutel] = nr
                 wrapper = ET.Element("x")
@@ -1000,6 +1004,24 @@ class FormexOmzetter:
                 continue
             else:
                 self.onbekend("bepalingen", kind)
+
+    def dubbele_divisie(self, anker: str, nr: str, volgnummer: int, kop: str) -> tuple[str, str]:
+        """Een tweede hoofdstuk, afdeling of titel met hetzelfde nummer op hetzelfde niveau.
+
+        De Nederlandse Formex van DORA (32022R2554) noemt hoofdstuk VII `HOOFDSTUK III`
+        (artikelen 46 tot en met 56); het Publicatieblad heeft daar VII. Het is dezelfde
+        soort bronfout als de dubbele `d)` in artikel 13 AVG, en krijgt dezelfde regel:
+        het volgnummer wordt het onderscheid (`hfd-3-2`), de kop en de tekst blijven zoals
+        de bron ze geeft, en de bronfout gaat als waarschuwing mee. Het volgnummer loopt
+        door in het ankerpad, zodat een afdeling onder het tweede hoofdstuk niet botst
+        met een afdeling onder het eerste. Een dubbel artikel blijft een weigering.
+        """
+        onderscheiden = f"{anker}-{volgnummer}"
+        self.metadata.setdefault("waarschuwingen", []).append(
+            f"De Formex-bron gebruikt de kop {kop} {volgnummer} keer; het {volgnummer}e kreeg "
+            f"de structuureenheid {onderscheiden}. De kop en de tekst zijn ongewijzigd overgenomen."
+        )
+        return onderscheiden, f"{nr}-{volgnummer}"
 
     def artikel(self, el) -> None:
         ti = self.kop_tekst(el.find("TI.ART")) if el.find("TI.ART") is not None else "Artikel"
