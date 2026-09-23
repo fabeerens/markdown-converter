@@ -1211,6 +1211,19 @@ def test_an_annotation_above_the_title_of_an_act_is_a_paragraph_before_it():
     assert "---\n\nONTWERP\n\nVERORDENING (EU) 2022/1925\n" in markdown
 
 
+def test_margin_text_stands_at_the_start_of_its_paragraph_and_heading():
+    """32017L0433: de categorie van de militaire lijst in de kantlijn (MARGIN), vóór een alinea en een begripskop.
+
+    MARGIN heeft geen staart, dus zonder scheiding plakte `ML1` aan het eerste woord.
+    """
+    inhoud = (b'<GR.SEQ><TITLE><TI><P>Lijst</P></TI></TITLE><P><MARGIN>ML1</MARGIN><HT TYPE="BOLD">Wapens met '
+              b'gladde loop:</HT></P></GR.SEQ><GR.SEQ><TITLE><TI><P><MARGIN>ML 7, 22.</MARGIN>"Biopolymeren"</P>'
+              b'</TI></TITLE><P>Biologische macromoleculen.</P></GR.SEQ>')
+    markdown = formex_xml.omzetten(_met_bijlagen(_bijlage(b"BIJLAGE", inhoud)))[0]
+    assert "\n\nML1 **Wapens met gladde loop:**\n\n" in markdown
+    assert '\n\nML 7, 22. "Biopolymeren"\n\nBiologische macromoleculen.\n' in markdown
+
+
 def test_an_annotation_at_the_start_of_a_paragraph_of_an_article_is_still_refused():
     """Niet gemeten: geen annotatie in de meetlat staat in een lid. Het lidnummer eraan vastplakken
     zou de noot tot lidtekst maken, en het nummer los laten staan is een vorm die niemand heeft gezien."""

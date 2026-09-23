@@ -53,7 +53,10 @@ INLINE_TEKST = {"DATE", "REF.DOC.OJ", "FT", "HT", "QUOT.S", "IE", "PERIOD", "REF
                 "ADDR", "PL.DATE", "NO.CELEX", "UNIT", "EXPONENT", "INF", "SUP", "TERM", "DEFINITION",
                 # De ELI-verwijzing die het Publicatieblad sinds 2026 achter elke
                 # REF.DOC.OJ in een noot zet; de zichtbare tekst is de URI zelf.
-                "LINK"}
+                "LINK",
+                # Kanttekst, het eerste kind van een alinea; `inline_el` zet er een
+                # spatie achter.
+                "MARGIN"}
 INLINE_TRANSPARANT = {"TI", "STI", "NP", "NO.P", "NO.PARAG", "TXT", "ITEM", "PREFIX"}
 STRUCTUUR_ELEMENTEN = {
     "ACT", "CONS.ACT", "CONS.DOC", "ANNEX", "CONS.ANNEX", "TITLE", "PREAMBLE",
@@ -497,6 +500,13 @@ class FormexOmzetter:
         if tag == "NO.P":
             # Een NP binnen een geciteerde wijziging (QUOT.S) loopt hier inline
             # door; zonder scheiding stond `“67)Verordening` aaneen.
+            return self.inline(el) + " "
+        if tag == "MARGIN":
+            # De gemeenschappelijke militaire lijst (32017L0433) zet de categorie
+            # in de kantlijn van 22 alinea's (`ML1`) en 38 begripskoppen (`ML 7,
+            # 22.`). De HTML-route schrijft haar vóór de alinea met een `<br/>`;
+            # hier staat ze vooraan op dezelfde regel. Zonder de spatie plakte ze
+            # aan het eerste woord (`ML1Wapens`), want MARGIN heeft geen staart.
             return self.inline(el) + " "
         if tag in ("P", "ALINEA", "PARAG", "ARTICLE", "TI.ART", "STI.ART"):
             # De AI-verordening bevat vier ALINEA's en negen PARAG's binnen
