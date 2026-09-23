@@ -1,5 +1,5 @@
 {
- "commit": "31180e6",
+ "commit": "c07d69e",
  "documenten": {
   "02002L0058-20091219": {
    "melding": null,
@@ -212,7 +212,7 @@
    ]
   },
   "02018R1862-20220801": {
-   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: hfd-9",
+   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: hfd-9 (de Formex-bron nummert op één niveau twee eenheden gelijk; alleen een herhaalde markering binnen één opsomming wordt met een volgnummer onderscheiden)",
    "oorzaak": "structuur: dubbele structurele ankers",
    "route": "wetgeving",
    "sectie": "geconsolideerd",
@@ -304,7 +304,7 @@
    ]
   },
   "02023R1114-20240109": {
-   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: annex-1-1, annex-1-10, annex-1-2, annex-1-3, annex-1-4, annex-1-5, annex-1-6, annex-1-7",
+   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: annex-1-1, annex-1-10, annex-1-2, annex-1-3, annex-1-4, annex-1-5, annex-1-6, annex-1-7 (de Formex-bron nummert op één niveau twee eenheden gelijk; alleen een herhaalde markering binnen één opsomming wordt met een volgnummer onderscheiden)",
    "oorzaak": "structuur: dubbele structurele ankers",
    "route": "wetgeving",
    "sectie": "geconsolideerd",
@@ -818,7 +818,7 @@
    "waarschuwingen": []
   },
   "32010L0040": {
-   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: annex-1-1, annex-1-1-1-1, annex-1-1-1-2, annex-1-2, annex-1-3, annex-1-4",
+   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: annex-1-1, annex-1-1-1-1, annex-1-1-1-2, annex-1-2, annex-1-3, annex-1-4 (de Formex-bron nummert op één niveau twee eenheden gelijk; alleen een herhaalde markering binnen één opsomming wordt met een volgnummer onderscheiden)",
    "oorzaak": "structuur: dubbele structurele ankers",
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
@@ -1378,14 +1378,16 @@
    "waarschuwingen": []
   },
   "32016R0679": {
-   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: art-13-1-d",
-   "oorzaak": "structuur: dubbele structurele ankers",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "belangrijk",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
-   "waarschuwingen": []
+   "sha256": "752b19f36d3124ba9ccd2bedc72ffc427a5314497cb35bc373e93b63cb990688",
+   "status": "ok",
+   "tekens": 395934,
+   "waarschuwingen": [
+    "De Formex-bron gebruikt in artikel 13, lid 1 de markering d) 2 keer; het 2e onderdeel d) kreeg de structuureenheid art-13-1-d-2. De gedrukte markering en de tekst zijn ongewijzigd overgenomen."
+   ]
   },
   "32016R0794": {
    "melding": null,
@@ -1768,7 +1770,7 @@
    "waarschuwingen": []
   },
   "32019L1937": {
-   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: annex-1-a, annex-1-a-1, annex-1-a-1-i, annex-1-a-1-ii, annex-1-a-1-iii, annex-1-a-1-iv, annex-1-a-2, annex-1-a-2-i",
+   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: annex-1-a, annex-1-a-1, annex-1-a-1-i, annex-1-a-1-ii, annex-1-a-1-iii, annex-1-a-1-iv, annex-1-a-2, annex-1-a-2-i (de Formex-bron nummert op één niveau twee eenheden gelijk; alleen een herhaalde markering binnen één opsomming wordt met een volgnummer onderscheiden)",
    "oorzaak": "structuur: dubbele structurele ankers",
    "route": "wetgeving",
    "sectie": "belangrijk",
@@ -1928,7 +1930,7 @@
    "waarschuwingen": []
   },
   "32021D0914": {
-   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: annex-1, annex-1-15, annex-1-15-a, annex-1-15-b, annex-1-15-c, annex-1-8, annex-1-8-a, annex-1-8-b",
+   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: annex-1, annex-1-15, annex-1-15-a, annex-1-15-b, annex-1-15-c, annex-1-8, annex-1-8-a, annex-1-8-b (de Formex-bron nummert op één niveau twee eenheden gelijk; alleen een herhaalde markering binnen één opsomming wordt met een volgnummer onderscheiden)",
    "oorzaak": "structuur: dubbele structurele ankers",
    "route": "wetgeving",
    "sectie": "testset",
@@ -1938,7 +1940,7 @@
    "waarschuwingen": []
   },
   "32021D0915": {
-   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: annex-1, annex-1-7, annex-1-7-a, annex-1-7-b, annex-1-7-c, annex-1-7-d, annex-1-7-e, annex-1-9",
+   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: annex-1, annex-1-7, annex-1-7-a, annex-1-7-b, annex-1-7-c, annex-1-7-d, annex-1-7-e, annex-1-9 (de Formex-bron nummert op één niveau twee eenheden gelijk; alleen een herhaalde markering binnen één opsomming wordt met een volgnummer onderscheiden)",
    "oorzaak": "structuur: dubbele structurele ankers",
    "route": "wetgeving",
    "sectie": "belangrijk",
@@ -2188,7 +2190,7 @@
    "waarschuwingen": []
   },
   "32022R2554": {
-   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: hfd-3",
+   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: hfd-3 (de Formex-bron nummert op één niveau twee eenheden gelijk; alleen een herhaalde markering binnen één opsomming wordt met een volgnummer onderscheiden)",
    "oorzaak": "structuur: dubbele structurele ankers",
    "route": "wetgeving",
    "sectie": "belangrijk",
@@ -2308,7 +2310,7 @@
    "waarschuwingen": []
   },
   "32023R1114": {
-   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: annex-1-1, annex-1-10, annex-1-2, annex-1-3, annex-1-4, annex-1-5, annex-1-6, annex-1-7",
+   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: annex-1-1, annex-1-10, annex-1-2, annex-1-3, annex-1-4, annex-1-5, annex-1-6, annex-1-7 (de Formex-bron nummert op één niveau twee eenheden gelijk; alleen een herhaalde markering binnen één opsomming wordt met een volgnummer onderscheiden)",
    "oorzaak": "structuur: dubbele structurele ankers",
    "route": "wetgeving",
    "sectie": "belangrijk",
@@ -2358,7 +2360,7 @@
    "waarschuwingen": []
   },
   "32023R1781": {
-   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: annex-1-a, annex-1-b",
+   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: annex-1-a, annex-1-b (de Formex-bron nummert op één niveau twee eenheden gelijk; alleen een herhaalde markering binnen één opsomming wordt met een volgnummer onderscheiden)",
    "oorzaak": "structuur: dubbele structurele ankers",
    "route": "wetgeving",
    "sectie": "belangrijk",
@@ -2428,7 +2430,7 @@
    "waarschuwingen": []
   },
   "32024L1760": {
-   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: annex-1-1, annex-1-2",
+   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: annex-1-1, annex-1-2 (de Formex-bron nummert op één niveau twee eenheden gelijk; alleen een herhaalde markering binnen één opsomming wordt met een volgnummer onderscheiden)",
    "oorzaak": "structuur: dubbele structurele ankers",
    "route": "wetgeving",
    "sectie": "belangrijk",
@@ -2568,7 +2570,7 @@
    "waarschuwingen": []
   },
   "32024R2623": {
-   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: annex-1-a, annex-1-b, annex-1-c, annex-1-d, annex-1-e, annex-1-f, annex-1-g, annex-1-h",
+   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: annex-1-a, annex-1-b, annex-1-c, annex-1-d, annex-1-e, annex-1-f, annex-1-g, annex-1-h (de Formex-bron nummert op één niveau twee eenheden gelijk; alleen een herhaalde markering binnen één opsomming wordt met een volgnummer onderscheiden)",
    "oorzaak": "structuur: dubbele structurele ankers",
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
@@ -2578,7 +2580,7 @@
    "waarschuwingen": []
   },
   "32024R2847": {
-   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: annex-1-1, annex-1-2, annex-3-1, annex-3-2, annex-3-3, annex-3-4, annex-8-1, annex-8-2",
+   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: annex-1-1, annex-1-2, annex-3-1, annex-3-2, annex-3-3, annex-3-4, annex-8-1, annex-8-2 (de Formex-bron nummert op één niveau twee eenheden gelijk; alleen een herhaalde markering binnen één opsomming wordt met een volgnummer onderscheiden)",
    "oorzaak": "structuur: dubbele structurele ankers",
    "route": "wetgeving",
    "sectie": "belangrijk",
@@ -3589,6 +3591,6 @@
    ]
   }
  },
- "gemeten": "2026-09-23 14:34",
+ "gemeten": "2026-09-23 14:40",
  "taal": "NL"
 }
