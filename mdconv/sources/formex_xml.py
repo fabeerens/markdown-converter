@@ -1203,7 +1203,7 @@ class FormexOmzetter:
             nr = ws(self.inline(el.find("NO.P"))) if el.find("NO.P") is not None else ""
             txt = ws(self.inline(el.find("TXT"))) if el.find("TXT") is not None else ""
             scheiding = NBSP * 3 if re.fullmatch(r"\d{1,3}\.", nr) else " "
-            schrijf(f"{nr}{scheiding}{txt}".strip() if nr else txt)
+            schrijf(_geen_opsomming(f"{nr}{scheiding}{txt}".strip()) if nr else txt)
             anker = f"{basis}-{nummer_anker(nr)}" if basis and nr else ""
             if anker:
                 # Een tweede reeks losse punten in hetzelfde blok draagt `al<k>`,
@@ -1418,7 +1418,7 @@ class FormexOmzetter:
         anker = f"{basis}-{extra}{nummer_anker(prefix)}" if basis and prefix else ""
 
         def schrijf_kop(aanhef: str) -> None:
-            regel = " ".join(x for x in (prefix, term, aanhef) if x)
+            regel = _geen_opsomming(" ".join(x for x in (prefix, term, aanhef) if x))
             self.u.blok(regel)
             if anker:
                 self.u.eenheid(anker, "onderdeel", regel)
@@ -1475,7 +1475,7 @@ class FormexOmzetter:
                 gezien[anker] += 1
                 if gezien[anker] > 1:
                     anker = self.dubbele_markering(anker, gezien[anker], nr, basis)
-            regel = f"{nr} {txt}".strip() if genummerd or nr else f"— {txt}".strip()
+            regel = _geen_opsomming(f"{nr} {txt}".strip()) if genummerd or nr else f"— {txt}".strip()
             if regel:
                 self.u.blok(regel)
             if anker:
@@ -1699,6 +1699,20 @@ class FormexOmzetter:
                 continue
             else:
                 self.inhoud(kind, basis=anker, teller=teller)
+
+
+def _geen_opsomming(regel: str) -> str:
+    """Een markering `*`, `+` of `-` vooraan de regel krijgt een harde spatie achter zich.
+
+    Met een gewone spatie is zo'n regel in Markdown een opsomming: het teken
+    verdwijnt als tekst en de regel wordt een lijst. De bron gebruikt het als
+    gedrukte markering: `*` als lijstteken (NO.P) in 32025D2554, en als term in
+    de legenda onder de PRODCOM-lijst (32010R0860, `* Rubriek die wijziging
+    bevat`). Het profiel doet voor zulke markeercellen uit de HTML-route
+    hetzelfde (patronen.md, paragraaf 6 en 8): harde spatie, "zodat Markdown er
+    geen lijst van maakt".
+    """
+    return re.sub(r"^([*+-]) ", r"\1" + NBSP, regel)
 
 
 def _beschrijf_basis(basis: str) -> str:

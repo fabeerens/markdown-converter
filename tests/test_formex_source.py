@@ -1224,6 +1224,23 @@ def test_margin_text_stands_at_the_start_of_its_paragraph_and_heading():
     assert '\n\nML 7, 22. "Biopolymeren"\n\nBiologische macromoleculen.\n' in markdown
 
 
+def test_an_asterisk_as_printed_marker_gets_a_hard_space_so_the_line_is_no_markdown_list():
+    """`* tekst` is in Markdown een opsomming en het sterretje verdwijnt.
+
+    32025D2554 gebruikt `*` als lijstteken (NO.P), de legenda onder de PRODCOM-lijst
+    (32010R0860) als term van een DLIST. Het profiel zet zulke markeercellen met een
+    harde spatie aan hun tekst, "zodat Markdown er geen lijst van maakt".
+    """
+    inhoud = (b'<LIST TYPE="OTHER"><ITEM><NP><NO.P>*</NO.P><TXT>[Link: plan bekendgemaakt]</TXT></NP></ITEM></LIST>'
+              b'<P><DLIST SEPARATOR="=" TYPE="TBL"><DLIST.ITEM><TERM>*</TERM><DEFINITION>Rubriek die wijziging '
+              b'bevat</DEFINITION></DLIST.ITEM><DLIST.ITEM><TERM>@</TERM><DEFINITION>Eenheid verschillend van de GN'
+              b'</DEFINITION></DLIST.ITEM></DLIST></P>')
+    markdown = formex_xml.omzetten(_met_bijlagen(_bijlage(b"BIJLAGE", inhoud)))[0]
+    assert "\n\n* [Link: plan bekendgemaakt]\n\n* Rubriek die wijziging bevat\n\n" in markdown
+    assert "\n\n@ Eenheid verschillend van de GN\n" in markdown
+    assert "\n* " not in markdown
+
+
 def test_an_annotation_at_the_start_of_a_paragraph_of_an_article_is_still_refused():
     """Niet gemeten: geen annotatie in de meetlat staat in een lid. Het lidnummer eraan vastplakken
     zou de noot tot lidtekst maken, en het nummer los laten staan is een vorm die niemand heeft gezien."""
