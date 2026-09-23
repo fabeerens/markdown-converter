@@ -1299,6 +1299,22 @@ def test_unnumbered_sibling_parts_get_their_position_and_decimal_numbers_stay_wh
         "annex-1-8", "annex-1-8-s1-8-1", "annex-1-8-s1-8-2", "annex-1-8-s2-8-1", "annex-1-8-s2-8-2"]
 
 
+def test_een_noot_in_de_kop_van_een_bijlagedeel_krijgt_maar_een_definitie():
+    """Bijlage II van de consumentenkredietrichtlijn (32023L2225) heeft noten in de koppen van
+    haar onderdelen. De kop werd twee keer door `inline()` gehaald (tekst en nummer), en de
+    definities (1) en (2) stonden daardoor elk twee keer in het notenblok van de bijlage."""
+    kop = (b'<GR.SEQ><TITLE><TI><P><HT TYPE="BOLD">EUROPESE INFORMATIE</HT><NOTE NOTE.ID="E0001">'
+           b'<P>Telkens als dit is vermeld.</P></NOTE></P></TI></TITLE>'
+           b'<GR.SEQ><TITLE><TI><NP><NO.P>A.</NO.P><TXT>Schuldherschikking<NOTE NOTE.ID="E0002">'
+           b'<P>Richtlijn (EU) 2023/2225.</P></NOTE></TXT></NP></TI></TITLE>'
+           b'<NP><NO.P>1.</NO.P><TXT>Eerste punt.</TXT></NP></GR.SEQ></GR.SEQ>')
+    markdown, eenheden, _, _ = formex_xml.omzetten(_met_bijlagen(_bijlage(b"BIJLAGE II", kop)))
+    assert markdown.count("Telkens als dit is vermeld.") == 1
+    assert markdown.count("Richtlijn (EU) 2023/2225.") == 1
+    assert "(1)  Telkens als dit is vermeld.\n\n(2)  Richtlijn (EU) 2023/2225." in markdown
+    assert "annex-2-a" in [e.anker for e in eenheden]
+
+
 def test_an_unnumbered_annex_does_not_take_the_anchor_of_annex_one():
     """De SCC's: `BIJLAGE` (de bepalingen), dan een aanhangsel met `BIJLAGE I`."""
     data = _met_bijlagen(_bijlage(b"BIJLAGE", _deel(b"A.", b"1.")), _bijlage(b"BIJLAGE I", _deel(b"A.", b"1.")))
