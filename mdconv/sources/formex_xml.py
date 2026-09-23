@@ -93,6 +93,22 @@ ANNOTATIES = ("GR.ANNOTATION", "ANNOTATION")
 # niet in staat, is niet af te leiden en moet dan uit `NO.CELEX` komen.
 CELEX_LETTER = {"REG": "R", "DIR": "L", "DEC": "D"}
 BEKENDE_TEKSTELEMENTEN = METADATA | INLINE_TEKST | INLINE_TRANSPARANT | STRUCTUUR_ELEMENTEN
+# Een formule staat bewust in geen van de verzamelingen hierboven, en haar
+# onderdelen (EXPR, IND, OP.MATH, OP.CMP, FRACTION, OVER, SUM, ROOT, ...) ook niet.
+# Gemeten op 23 september 2026: 372 formules in zes documenten van de meetlat (220
+# in de geconsolideerde CRR, 02013R0575-20270101), waarvan 307 met een index
+# (`PD<IND>pp</IND>`, `EL<IND>BE</IND>`). Een index heeft geen lineaire vorm die de
+# woordcontrole haalt en leesbaar blijft: `PD_pp` en `PDₚₚ` zijn één woord, een
+# hoofdletterindex bestaat in Unicode niet, `<sub>` voegt woorden toe en `PD~pp~`
+# is in GitHub-Markdown doorgehaalde tekst, in een wettekst het teken voor
+# geschrapt. Operatoren zijn lege elementen (`<OP.MATH TYPE="MINUS"/>`) en geen
+# woorden, dus of een minteken, breukstreep of haakje goed in de Markdown staat, ziet
+# de woordcontrole niet: liep een formule transparant door, dan werd `Risk −
+# weighted exposure amount` (artikel 153 CRR) `Risk weighted exposure amount`, en
+# de zelfcontrole slaagde. En de breuk in 32005L0066 (`1<OVER/><EXPR>t2 - t1
+# </EXPR> ∫ … adt`) zegt niet waar de noemer eindigt. Een half leesbare formule is
+# erger dan een weigering.
+FORMULE_ELEMENTEN = {"FORMULA", "FORMULA.S"}
 # Het enige afbeeldingstype dat in de meetlat voorkomt (257 inclusies in 14
 # documenten, 23 september 2026). Een ander type blijft een weigering.
 AFBEELDINGSTYPE = "TIFF"
@@ -458,9 +474,12 @@ class FormexOmzetter:
             loop(root)
         if onbekend:
             opsomming = ", ".join(f"{tag} ({aantal}×)" for tag, aantal in sorted(onbekend.items()))
+            uitleg = (" Een formule wordt bewust niet omgezet: een index, breuk of operator heeft "
+                      "geen tekstvorm die leesbaar blijft en door de woordcontrole te bewijzen is."
+                      if onbekend.keys() & FORMULE_ELEMENTEN else "")
             raise ConversionError(
                 f"Formex-element(en) met tekst zonder eigen behandeling: {opsomming}; "
-                "omzetting geweigerd."
+                "omzetting geweigerd." + uitleg
             )
 
     # ------------------------------------------------------------ inline

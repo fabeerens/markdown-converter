@@ -1515,3 +1515,17 @@ def test_a_group_of_tables_with_something_else_than_a_title_or_a_table_is_refuse
     groep = b"<GR.TBL>" + _tabel(b"", b"A", b"B") + b"<P>Een losse alinea in de groep.</P></GR.TBL>"
     with pytest.raises(ConversionError, match="tabelgroep:P"):
         formex_xml.omzetten(_met_bijlagen(_bijlage(b"BIJLAGE II", groep)))
+
+
+def test_a_formula_is_refused_on_purpose_and_the_refusal_says_why():
+    """372 formules in de meetlat, 307 met een index: `PD_pp` is één woord, en een weggevallen
+    minteken ziet de woordcontrole niet. De weigering blijft, met de reden erbij."""
+    formule = (b'<P>Het bedrag is <FORMULA TYPE="INLINE"><EXPR>RW</EXPR><OP.CMP TYPE="EQ"/>'
+               b'<EXPR>PD<IND LOC="SUB">pp</IND></EXPR></FORMULA>.</P>')
+    act = ACT.replace(b"<P>Deze verordening stelt regels vast.</P>", formule)
+    with pytest.raises(ConversionError, match=r"behandeling: FORMULA \(1×\); omzetting geweigerd\. "
+                                              r"Een formule wordt bewust niet omgezet"):
+        formex_xml.omzetten(formex_zip(act=act))
+    with pytest.raises(ConversionError) as zonder_formule:
+        formex_xml.omzetten(formex_zip(act=ACT.replace(b"</FINAL>", b"<MYSTERY>tekst</MYSTERY></FINAL>")))
+    assert "formule" not in str(zonder_formule.value)
