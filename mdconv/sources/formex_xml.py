@@ -525,6 +525,14 @@ class FormexOmzetter:
             # typografie (zie `kop_tekst`); in CRD VI (32024L1619) stond anders
             # `*AFDELING I* ***Algemene bepalingen***` midden in de alinea.
             return " " + self.kop_tekst(el) + " "
+        if self.citaatdiepte and tag == "NP":
+            # Een geciteerd bijlageonderdeel zet zijn punten als losse NP's
+            # zonder witruimte ertussen (`…voor cyberbeveiliging</TXT></NP><NP>
+            # <NO.P>3.2.</NO.P>`, 32025R0038); transparant liep dat aaneen tot
+            # `cyberbeveiliging3.2.`, en in 2018/1724 tot `lid 1.12. Verordening`.
+            # Binnen een ITEM gaf het ITEM de spatie al. Alleen ervóór: een
+            # spatie erna zette het leesteken achter het citaat los (`/oj).” ;`).
+            return " " + self.inline(el)
         if self.citaatdiepte and tag == "DLIST.ITEM":
             # PREFIX, TERM en DEFINITION staan in de bron zonder witruimte tegen
             # elkaar (`j)„levende verzwakte vaccins”vaccins die …`, 32012L0005);

@@ -619,6 +619,22 @@ def test_een_geciteerde_definitielijst_loopt_inline_met_nummer_term_en_definitie
     assert not [e for e in eenheden if e.soort == "onderdeel" and e.anker.endswith(("-12", "-13"))]
 
 
+def test_geciteerde_punten_zonder_witruimte_ertussen_blijven_gescheiden():
+    """32025R0038 citeert een bijlageonderdeel met losse NP's tegen elkaar aan; transparant gaf
+    dat `cyberbeveiliging3.2.` en weigerde de woordcontrole op woorden aan elkaar."""
+    citaat = (b'<P><QUOT.S LEVEL="1"><GR.SEQ LEVEL="1"><TITLE><TI><P>'
+              b'<QUOT.START CODE="201C" ID="Q1" REF.END="E1"/>Specifieke doelstelling 3</P></TI></TITLE>'
+              b'<NP><NO.P>3.1.</NO.P><TXT>Het aantal voorzieningen voor cyberbeveiliging</TXT></NP>'
+              b'<NP><NO.P>3.2.</NO.P><TXT>Het aantal gebruikers'
+              b'<QUOT.END CODE="201D" ID="E1" REF.START="Q1"/></TXT></NP></GR.SEQ></QUOT.S>;</P>')
+    data = formex_zip(act=_wijzigingshandeling(inclusies=b"", aanroep=citaat))
+
+    markdown = formex_xml.omzetten(data)[0]
+
+    assert ("\n“Specifieke doelstelling 3 3.1. Het aantal voorzieningen voor cyberbeveiliging "
+            "3.2. Het aantal gebruikers”") in markdown
+
+
 def test_een_afdeling_inline_buiten_een_citaat_blijft_een_weigering():
     """Buiten een citaat is een DIVISION een eenheid van de handeling zelf; die mag niet stil
     in een alinea opgaan."""
