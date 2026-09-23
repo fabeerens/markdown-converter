@@ -85,6 +85,8 @@ STRUCTUUR_ELEMENTEN = {
     "ADDR.S",
     # Een groep tabellen onder één titel; zie `tabelgroep()`.
     "GR.TBL",
+    # Een verklaring of samenvatting naast of in plaats van de handeling; zie `algemeen()`.
+    "GENERAL", "PROLOG",
 }
 ANNOTATIES = ("GR.ANNOTATION", "ANNOTATION")
 # De letter van een CELEX-nummer volgens het soort handeling (`LEG.VAL`). Wat hier
@@ -649,6 +651,12 @@ class FormexOmzetter:
                 self.handeling(root.find("CONS.DOC") if root.tag == "CONS.ACT" else root)
             elif root.tag in ("ANNEX", "CONS.ANNEX"):
                 self.bijlage(root)
+            elif root.tag == "GENERAL":
+                if not index:
+                    # Het hele document is een GENERAL (32006D0857): dan draagt
+                    # het de vindplaats, net als een handeling.
+                    self.kop_van_de_handeling(doc, root)
+                self.algemeen(root)
             else:
                 self.onbekend("document", root)
         ongebruikt = set(inclusies) - self.gebruikte_inclusies
@@ -1763,6 +1771,48 @@ class FormexOmzetter:
                 continue
             else:
                 self.onbekend("tabelgroep", kind)
+
+    # ------------------------------------------------------------ algemene documenten
+
+    def algemeen(self, root) -> None:
+        """Een algemeen document (`GENERAL`): titelregels, inleiding en inhoud, zonder eenheden.
+
+        Formex gebruikt `GENERAL` voor een publicatie die geen handeling en geen
+        bijlage is. Gemeten op 23 september 2026 in vier documenten van de meetlat,
+        in twee rollen. Meestal is het een verklaring die het manifest als
+        `DOC.SUB.PUB TYPE="ASSOCIATION"` achter de handeling zet: van de Commissie
+        bij Rome II (32007R0864) en bij de geoblockingverordening (32018R0302), en de
+        gezamenlijke verklaring over het Galileo-panel na de bijlage van 32008R0683.
+        Bij 32006D0857 (de samenvatting van de AstraZeneca-beschikking) is het het
+        hele document, met een `PROLOG` tussen titel en inhoud.
+
+        De titel krijgt de vorm van de titel van een handeling: elke `P` een eigen
+        regel, kapitalen waar de bron `HT TYPE="UC"` zet. De inhoud gaat door
+        `bijlage_inhoud()` zonder eenheden, zoals een geciteerd blok: een verklaring
+        is geen artikel of bijlage van de handeling, en het profiel kent er geen
+        anker voor. De noten tellen opnieuw vanaf (1) en staan achter het document,
+        zoals bij een bijlage. Een ander kind dan titel, inleiding of inhoud is niet
+        gemeten en wordt geweigerd.
+        """
+        self.nieuwe_nootreeks()
+        for kind in root:
+            if kind.tag == "TITLE":
+                for deel in kind:
+                    for p in (deel if deel.tag in ("TI", "STI") else [deel]):
+                        if p.tag == "P":
+                            self.u.blok(ws(self.inline(p)))
+                        else:
+                            self.onbekend("algemeen", p)
+            elif kind.tag == "PROLOG":
+                for sub in kind:
+                    self.inhoud(sub, basis="", teller={"lijsten": 0})
+            elif kind.tag == "CONTENTS":
+                self.bijlage_inhoud(kind, "", geciteerd=True)
+            elif kind.tag in METADATA:
+                continue
+            else:
+                self.onbekend("algemeen", kind)
+        self.notenblok()
 
     # ------------------------------------------------------------ bijlagen
 

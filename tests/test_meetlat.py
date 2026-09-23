@@ -66,7 +66,7 @@ def test_meten_is_offline_en_een_gemiste_cache_is_geen_schone_meting(meetlat, tm
     cache = tmp_path / "cache"
     cache.mkdir()
     (cache / "32022R1925.nld.zip").write_bytes(formex_zip())
-    onbekend = ACT.replace(b"<FINAL>", b"<GENERAL>Losse tekst.</GENERAL><FINAL>")
+    onbekend = ACT.replace(b"<FINAL>", b"<MYSTERY>Losse tekst.</MYSTERY><FINAL>")
     (cache / "32022R0002.nld.zip").write_bytes(formex_zip(act=onbekend))
     (cache / "32022R0003.nld.http404").write_bytes(b"")
     corpus = tmp_path / "corpus.txt"
@@ -82,7 +82,7 @@ def test_meten_is_offline_en_een_gemiste_cache_is_geen_schone_meting(meetlat, tm
         "32022R0003": "geen-formex",
         "32022R0004": "niet-in-cache",
     }
-    assert uitkomst["32022R0002"]["oorzaak"] == "element GENERAL"
+    assert uitkomst["32022R0002"]["oorzaak"] == "element MYSTERY"
     assert "### Artikel 1" in (tmp_path / "uitvoer" / "32022R1925.md").read_text(encoding="utf-8")
     assert net.documents is geen_netwerk  # de vervanging is na afloop teruggezet
 

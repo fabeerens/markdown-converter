@@ -880,6 +880,57 @@ def test_een_adresblok_midden_in_een_zin_of_met_losse_tekst_weigert(adres, conte
         formex_xml.omzetten(_met_bijlagen(_bijlage(b"BIJLAGE II", adres)))
 
 
+# ------------------------------------------------------------------ algemene documenten (GENERAL)
+
+VERKLARING = (
+    b'<GENERAL><BIB.INSTANCE><PAGE.FIRST>11</PAGE.FIRST></BIB.INSTANCE><TITLE><TI>'
+    b'<P><HT TYPE="UC">Gezamenlijke verklaring</HT></P><P>over het Galileo interinstitutioneel panel</P>'
+    b'</TI></TITLE><CONTENTS><NP><NO.P>1.</NO.P><TXT>Het panel volgt de volgende zaken:</TXT><P>'
+    b'<LIST TYPE="alpha"><ITEM><NP><NO.P>a)</NO.P><TXT>de aanbestedingen;</TXT></NP></ITEM></LIST></P></NP>'
+    b'<P>De Commissie houdt rekening met de standpunten.</P></CONTENTS></GENERAL>'
+)
+
+
+def test_a_declaration_after_the_act_is_written_after_it_without_units():
+    """Rome II (32007R0864), de geoblockingverordening (32018R0302) en 32008R0683 (Galileo) dragen
+    een verklaring als GENERAL achter de handeling; dat weigerde het hele document."""
+    markdown, eenheden, onbekend, extra = formex_xml.omzetten(_met_bijlagen(VERKLARING))
+    verklaring = markdown.split("\n---\n")[-1]
+    assert verklaring.startswith("\nGEZAMENLIJKE VERKLARING\n\nover het Galileo interinstitutioneel panel\n")
+    assert "\n1.\u00a0\u00a0\u00a0Het panel volgt de volgende zaken:\n\na) de aanbestedingen;\n" in verklaring
+    assert verklaring.rstrip().endswith("De Commissie houdt rekening met de standpunten.")
+    alleen_de_handeling = formex_xml.omzetten(formex_zip())[1]
+    assert [e.anker for e in eenheden] == [e.anker for e in alleen_de_handeling]
+    assert extra["metadata"]["oj_reference"] == "PB L 265 van 12.10.2022, blz. 1"
+    assert onbekend == {}
+
+
+def test_a_general_document_on_its_own_carries_the_citation_and_its_notes():
+    """32006D0857 (samenvatting van de AstraZeneca-beschikking) is als geheel een GENERAL, met een PROLOG."""
+    algemeen = (
+        '<GENERAL><BIB.INSTANCE><PAGE.FIRST>24</PAGE.FIRST></BIB.INSTANCE><TITLE><TI>'
+        '<P><HT TYPE="UC">Beschikking van de Commissie</HT></P><P>(Zaak COMP/A.37.507/F3 — AstraZeneca)'
+        '<NOTE NOTE.ID="E0001"><P>Advies van het Adviescomité.</P></NOTE></P></TI></TITLE>'
+        '<PROLOG><P>Op 15 juni 2005 heeft de Commissie een beschikking gegeven.</P></PROLOG>'
+        '<CONTENTS><GR.SEQ LEVEL="1"><TITLE><TI><NP><NO.P>1.</NO.P><TXT>GELDBOETEN</TXT></NP></TI></TITLE>'
+        '<P>De boete bedraagt 60 000 000 EUR.</P></GR.SEQ></CONTENTS></GENERAL>'
+    ).encode()
+    markdown, eenheden, onbekend, extra = formex_xml.omzetten(formex_zip(act=algemeen))
+    assert markdown == (
+        "---\n\nBESCHIKKING VAN DE COMMISSIE\n\n(Zaak COMP/A.37.507/F3 — AstraZeneca) (1)\n\n"
+        "Op 15 juni 2005 heeft de Commissie een beschikking gegeven.\n\n1.\u00a0\u00a0\u00a0GELDBOETEN\n\n"
+        "De boete bedraagt 60 000 000 EUR.\n\n(1)\u00a0\u00a0Advies van het Adviescomité.\n")
+    assert eenheden == []
+    assert extra["metadata"]["oj_reference"] == "PB L 265 van 12.10.2022, blz. 24"
+    assert onbekend == {}
+
+
+def test_a_general_document_with_an_unmeasured_part_is_refused():
+    onbekend_deel = VERKLARING.replace(b"</CONTENTS>", b"</CONTENTS><FINAL><P>Gedaan te Brussel.</P></FINAL>")
+    with pytest.raises(ConversionError, match="algemeen:FINAL"):
+        formex_xml.omzetten(_met_bijlagen(onbekend_deel))
+
+
 # De vorm van artikel 4 AVG en artikel 3 LED: een definitielijst waarvan een
 # deel van de punten zelf een opsomming draagt. Tot 22 september 2026 ging
 # DEFINITION altijd door inline(), zodat `16) “term” a) … b) …` één alinea werd.
