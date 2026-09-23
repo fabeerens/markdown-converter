@@ -253,6 +253,24 @@ accountregistratie namens de gebruiker):
   (`tit-2-1`, `hfd-2-1-3`), omdat het Europees wetboek voor elektronische communicatie
   (32018L1972) elk deel opnieuw bij TITEL I begint. Tot 23 september 2026 weigerde elk van deze
   gevallen het hele document; de wetgeving in de meetlat ging daardoor van 167/266 naar 176/266.
+  Een **groep overwegingen** (`DIV.CONSID`: adequaatheids-, staatssteun- en antidumpingbesluiten,
+  tot zes niveaus genest in 2021/1772) blijft overwegingen. Elke `CONSID` wordt `(n)` plus één
+  spatie met haar `rec-`-eenheid, in bronvolgorde en over de groepen heen doorgenummerd. De kop
+  van de groep wordt een gewone alinea: `NO.P` plus drie harde spaties plus de tekst zonder vet of
+  cursief (`1. INLEIDING`, `2.1 Toepassingsgebied`), de vorm van een bijlageonderdeelkop; een kop
+  zonder nummer (`Referentiestelsel`, 2017/2116) staat er kaal. Geen `##`, want in de considerans
+  plant het profiel alleen overwegingen (`plan_recitals`), en een andere kop zou daar een
+  kopniveau zonder anker zijn. Een **adresblok** (`ADDR.S`) wordt één alinea per P; in een
+  tabelcel is het een blok als een P, met de regels door een spatie gescheiden (dezelfde celtekst
+  die de kennisbank uit de bron herberekent). Een **slotformule in een bijlage** (`FINAL >
+  SIGNATURE > SIGNATORY`: de zes brieven in de bijlagen van het Data Privacy Framework, 2023/1795)
+  wordt één alinea per P; de handtekening is een TIFF en gaat de gewone afbeeldingsweg. Wat
+  daarbuiten valt, blijft een weigering: ander groeps- of kopinhoud (`overwegingen:P`,
+  `overwegingenkop:STI`), een adresblok midden in een zin of met losse tekst tussen zijn P's, en
+  `PL.DATE` of losse tekst in de slotformule van een bijlage. Tot 23 september 2026 weigerde
+  `DIV.CONSID` 9 en `ADDR.S` 2 van de 347 documenten in de meetlat. Nu komen er 8 door, waaronder
+  2023/1795 uit de eindtest; 2025/1330 weigert nog op `GR.ANNOTATION` en 2020/1675 op de
+  inclusie-aanroep `<P><INCL.ELEMENT/>.</P>`.
   De portal-HTML (`/legal-content/…/HTML/`) blokkeert bots (HTTP 202, lege body;
   inmiddels een AWS WAF-JS-challenge, dus ook met retries permanent 202 — de portal is in de praktijk
   dood voor een simpele `requests`-scraper). Gebruik het **Cellar-archief** via content negotiation,
@@ -1022,7 +1040,7 @@ regel), inclusief de vloeiende tabbalk-indicator.
   weggeschreven bestand nooit als geldige staat gelezen kan worden.
 
 ## Tests
-`.venv/bin/python -m pytest tests/ -q` — 437 karakteriseringstests die het gedrag
+`.venv/bin/python -m pytest tests/ -q` — 447 karakteriseringstests die het gedrag
 vastleggen in plaats van het te beschrijven: `detect_source`-precedentie, ELI→CELEX,
 de CLG-markupnormalisatie (lidnummers, lettermarkers, voetnootankers), de
 voetnootdefinities die met de preambule meereizen, de notitievorm die een intakepoort

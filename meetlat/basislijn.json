@@ -1,5 +1,5 @@
 {
- "commit": "c24df0c",
+ "commit": "c24e556",
  "documenten": {
   "02002L0058-20091219": {
    "melding": null,
@@ -637,13 +637,13 @@
    "waarschuwingen": []
   },
   "32007R1071": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: DIV.CONSID (7×); omzetting geweigerd.",
-   "oorzaak": "element DIV.CONSID",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "660a4a73f072c06c330ea0a471d69c9e42a4256753bfb87d6b6a39901bb63944",
+   "status": "ok",
+   "tekens": 68276,
    "waarschuwingen": []
   },
   "32007R1208": {
@@ -1331,23 +1331,23 @@
    "waarschuwingen": []
   },
   "32016D0649": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: DIV.CONSID (7×); omzetting geweigerd.",
-   "oorzaak": "element DIV.CONSID",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "04af476bfedb674415e209f3e5ced22824c40fd0424c14eefa0ada4c8678bb65",
+   "status": "ok",
+   "tekens": 55724,
    "waarschuwingen": []
   },
   "32016D2393": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: DIV.CONSID (9×); omzetting geweigerd.",
-   "oorzaak": "element DIV.CONSID",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "199e7253cdfb7bb03de00ea984294110b8efe474f52ef0754c091fafdc6c503c",
+   "status": "ok",
+   "tekens": 105721,
    "waarschuwingen": []
   },
   "32016L0011": {
@@ -1473,13 +1473,13 @@
    "waarschuwingen": []
   },
   "32017D2116": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: DIV.CONSID (8×); omzetting geweigerd.",
-   "oorzaak": "element DIV.CONSID",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "69717dabcca484c6628998c52f860a189a736c55a576937ba1f563cd1cf84576",
+   "status": "ok",
+   "tekens": 106524,
    "waarschuwingen": []
   },
   "32017L0433": {
@@ -1503,13 +1503,13 @@
    "waarschuwingen": []
   },
   "32017R0220": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: DIV.CONSID (5×); omzetting geweigerd.",
-   "oorzaak": "element DIV.CONSID",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "2d4ae409de852cc605406549daace2d4153a4fa1c875c6893f18de8f8ce92524",
+   "status": "ok",
+   "tekens": 34553,
    "waarschuwingen": []
   },
   "32017R0745": {
@@ -1533,13 +1533,13 @@
    "waarschuwingen": []
   },
   "32017R0941": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: DIV.CONSID (3×); omzetting geweigerd.",
-   "oorzaak": "element DIV.CONSID",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "49d70d2da979d9e5030c76c8e439078ab57945bbec62a899fe3422f7db0329be",
+   "status": "ok",
+   "tekens": 22502,
    "waarschuwingen": []
   },
   "32017R1782": {
@@ -1893,8 +1893,8 @@
    "waarschuwingen": []
   },
   "32020D1675": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: ADDR.S (44×); omzetting geweigerd.",
-   "oorzaak": "element ADDR.S",
+   "melding": "Formex-bron geweigerd: een inclusie (INCL.ELEMENT) staat midden in een zin; alleen een inclusie als eigen alinea binnen QUOT.S is gemeten",
+   "oorzaak": "een inclusie staat midden in een zin",
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
    "sha256": null,
@@ -1993,13 +1993,13 @@
    "waarschuwingen": []
   },
   "32021D1772": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: DIV.CONSID (8×); omzetting geweigerd.",
-   "oorzaak": "element DIV.CONSID",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "belangrijk",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "5a36b3832cec221c378b824b11eae82482f5f052a66f7b2846c96c8597bec4ee",
+   "status": "ok",
+   "tekens": 419961,
    "waarschuwingen": []
   },
   "32021L1159": {
@@ -2249,14 +2249,16 @@
    "waarschuwingen": []
   },
   "32023D1795": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: ADDR.S (6×), DIV.CONSID (8×); omzetting geweigerd.",
-   "oorzaak": "element ADDR.S, DIV.CONSID",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "testset",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
-   "waarschuwingen": []
+   "sha256": "1ccb9f211d92548098c5222bf2b1f3f7edf99eeba525f882c0ac46c76d32dc3f",
+   "status": "ok",
+   "tekens": 534898,
+   "waarschuwingen": [
+    "11 afbeeldingen uit de Formex-bron niet overgenomen (TIFF); de tekst eromheen staat er wel: L_2023231NL.01019602.tif, L_2023231NL.01019701.tif, L_2023231NL.01019802.tif, L_2023231NL.01020601.tif, L_2023231NL.01020702.tif en 6 meer."
+   ]
   },
   "32023D2692": {
    "melding": null,
@@ -2711,13 +2713,13 @@
    "waarschuwingen": []
   },
   "32025R1330": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: DIV.CONSID (9×); omzetting geweigerd.",
-   "oorzaak": "element DIV.CONSID",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "c5da52a07f29f8cf1010eb3aba344f5cdb4704ba194eeea9fd04068688b48ca4",
+   "status": "ok",
+   "tekens": 145146,
    "waarschuwingen": []
   },
   "32025R2339": {
@@ -3632,6 +3634,6 @@
    ]
   }
  },
- "gemeten": "2026-09-23 16:02",
+ "gemeten": "2026-09-23 16:03",
  "taal": "NL"
 }
