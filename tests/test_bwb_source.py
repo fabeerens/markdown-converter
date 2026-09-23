@@ -192,6 +192,50 @@ def test_bijlage_divisie_preserves_its_title_table_and_footnote():
     assert onbekend == {}
 
 
+def test_tussenkop_between_two_variants_of_an_article_stays_an_italic_paragraph():
+    """Artikel 8:36c Awb staat twee keer in de toestand (digitaal procederen en op papier);
+    een `<tussenkop kopopmaak="cur">` scheidt ze. Geen kop en geen eenheid: dat zou een
+    tweede `art-8-36c` geven."""
+    xml = b"""<toestand bwb-id="BWBR0000001" inwerkingtreding="2020-01-01"><wetgeving>
+<citeertitel>Testwet</citeertitel><wet-besluit><wettekst>
+<artikel><kop><label>Artikel</label><nr>8:36c</nr></kop>
+<lid><lidnr>1</lidnr><al>Digitale variant.</al></lid>
+<al><redactie type="extra">Voor overige gevallen luidt het artikel als volgt:</redactie></al>
+<tussenkop kopopmaak="cur">Artikel 8:36c.</tussenkop>
+<lid><lidnr>1</lidnr><al>Papieren variant.</al></lid>
+</artikel></wettekst></wet-besluit></wetgeving></toestand>"""
+
+    markdown, eenheden, onbekend, _ = wetten.bwb_xml.omzetten(xml)
+
+    assert onbekend == {}
+    assert "\n\n*Artikel 8:36c.*\n\n" in markdown
+    assert markdown.index("Digitale variant.") < markdown.index("*Artikel 8:36c.*") < markdown.index("Papieren variant.")
+    assert sum("Artikel 8:36c" in regel for regel in markdown.splitlines() if regel.startswith("#")) == 1
+    assert [e.anker for e in eenheden if e.soort == "artikel"] == ["art-8-36c"]
+
+
+def test_articles_inside_a_divisie_of_a_bijlage_get_headings_and_anchors():
+    """Bijlage 2 Awb (Bevoegdheidsregeling) deelt twaalf artikelen in vier divisies in;
+    de divisiekop blijft een alinea, het artikel krijgt kop en citeeranker."""
+    xml = b"""<toestand bwb-id="BWBR0000001" inwerkingtreding="2020-01-01"><wetgeving>
+<citeertitel>Testwet</citeertitel><bijlage><kop><label>Bijlage</label><nr>2</nr>
+<titel>Bevoegdheidsregeling</titel></kop>
+<divisie><kop><label>Hoofdstuk</label><nr>1</nr><titel>Van beroep uitgezonderde besluiten</titel></kop>
+<artikel><kop><label>Artikel</label><nr>1</nr><titel>Geen beroep</titel></kop>
+<al>Tegen een besluit kan geen beroep worden ingesteld.</al>
+<lijst><li><li.nr>a.</li.nr><al>artikel 38;</al></li></lijst></artikel></divisie>
+</bijlage></wetgeving></toestand>"""
+
+    markdown, eenheden, onbekend, _ = wetten.bwb_xml.omzetten(xml)
+
+    assert onbekend == {}
+    assert "\n\nHoofdstuk 1. Van beroep uitgezonderde besluiten\n\n" in markdown
+    assert "### Artikel 1. Geen beroep" in markdown
+    ankers = [e.anker for e in eenheden]
+    assert "annex-2-art-1" in ankers
+    assert "annex-2-art-1-a" in ankers
+
+
 def test_unavailable_xml_falls_back_to_html_with_warning(monkeypatch):
     html = """<html><head><meta name="dcterms:title" content="Testwet"></head><body>
 <div id="regeling"><h1>Testwet</h1><div class="wetgeving"><p>""" + (

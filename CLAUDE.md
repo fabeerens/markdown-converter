@@ -355,10 +355,19 @@ accountregistratie namens de gebruiker):
   de tekens die `numeration` noemt; die gegenereerde markers worden apart geteld, zodat de
   woordcontrole ze niet voor brontekst aanziet — net als de kopieën van een overspannen
   tabelcel.
-- **wetten.overheid.nl**: geen bruikbare XML-export gevonden; de **portal-HTML** is server-rendered
-  en bevat de volledige tekst in `#regeling` (h1 titel, h3 hoofdstuk, h4 artikel). `wetten.py` pakt
-  die container, strip't werkbalk-ruis (`[class*=action--]`, `.visually-hidden`) en markdownify't.
-  URL wordt herbouwd uit BWB-id + optionele versiedatum (`/{jjjj-mm-dd}`).
+- **wetten.overheid.nl**: eerst de officiële **BWB-XML** van KOOP (`repository.officiele-
+  overheidspublicaties.nl/bwb/{BWB}/manifest.xml` → de toestand op de peildatum, `bwb_xml.py`);
+  alleen als die route er niet is (`_BwbXmlNietBeschikbaar`) de **portal-HTML**, server-rendered met
+  de volledige tekst in `#regeling` (h1 titel, h3 hoofdstuk, h4 artikel): `wetten.py` pakt die
+  container, strip't werkbalk-ruis (`[class*=action--]`, `.visually-hidden`) en markdownify't.
+  Een weigering van de XML-omzetter valt bewust **niet** terug op de HTML: met een BWB-identiteit
+  is de weigering het antwoord. URL wordt herbouwd uit BWB-id + optionele versiedatum
+  (`/{jjjj-mm-dd}`). Gemeten op de Awb (`BWBR0005537`): een `<tussenkop kopopmaak="cur">` scheidt
+  de digitale en de papieren variant van artikel 8:36c en wordt een cursieve alinea, geen kop en
+  geen eenheid (als kop gaf het een tweede `art-8-36c`); Bijlage 2 deelt haar artikelen in
+  `divisie`s in, en `divisie()` krijgt daarvoor van `bijlage()` het kopniveau en het ankerpad mee
+  (`annex-2-art-7`). De leden van de tweede variant van 8:36c dragen dezelfde ankers als de eerste:
+  dat zegt de bron, en de BWB-route controleert ankers niet op dubbelen.
 - **Duitse rechtspraak** — twee lagen, met een gedeelde parser:
   - **Primair: OpenLegalData** (`de_openlegaldata.py`, `de.openlegaldata.io`) — een gratis,
     **sleutelloze** JSON-API, rechtstreeks doorzoekbaar op ECLI (`?ecli=<ECLI>`, dan een
@@ -913,7 +922,7 @@ regel), inclusief de vloeiende tabbalk-indicator.
   weggeschreven bestand nooit als geldige staat gelezen kan worden.
 
 ## Tests
-`.venv/bin/python -m pytest tests/ -q` — 355 karakteriseringstests die het gedrag
+`.venv/bin/python -m pytest tests/ -q` — 381 karakteriseringstests die het gedrag
 vastleggen in plaats van het te beschrijven: `detect_source`-precedentie, ELI→CELEX,
 de CLG-markupnormalisatie (lidnummers, lettermarkers, voetnootankers), de
 voetnootdefinities die met de preambule meereizen, de notitievorm die een intakepoort

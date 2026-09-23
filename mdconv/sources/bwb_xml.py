@@ -265,6 +265,16 @@ class BwbOmzetter:
             self.tabel(el, prefix_noot)
         elif el.tag == "divisie":
             self.divisie(el, basis, prefix_noot, teller, diepte)
+        elif el.tag == "tussenkop":
+            # Artikel 8:36c Awb staat er twee keer (digitaal en op papier); de
+            # `tussenkop` scheidt beide varianten. Geen kop en geen eenheid: als
+            # `######`-kop werd het een tweede `art-8-36c`, en een kale regel
+            # "Artikel 8:36c." kan door kopherkenning gepromoveerd worden. De bron
+            # zegt zelf cursief (`kopopmaak="cur"`), zoals `nadruk type="cur"`.
+            tekst = ws(self.inline(el, prefix_noot))
+            if tekst:
+                cursief = el.get("kopopmaak") == "cur"
+                self.u.blok(f"{inspring}*{tekst}*" if cursief else f"{inspring}{tekst}")
         elif el.tag in OVERSLAAN:
             return
         else:
@@ -288,12 +298,18 @@ class BwbOmzetter:
         return True
 
     def divisie(self, el, basis: str, prefix_noot: str,
-                teller: dict | None, diepte: int) -> None:
+                teller: dict | None, diepte: int,
+                niveau: int | None = None, pad: dict | None = None) -> None:
         """Een benoemd blok binnen een bijlage, gemeten in BWBR0034306.
 
         De zeven divisies daar bevatten ieder een kop en een CALS-tabel; één
         bevat daarnaast de definitie van een tabelnoot. De kop blijft een
         gewone bronalinea, omdat een divisie geen citeeranker draagt.
+
+        Bijlage 2 Awb (Bevoegdheidsregeling) deelt haar twaalf artikelen in vier
+        divisies "Hoofdstuk 1–4" in. Een artikel daarin is een gewoon artikel met
+        een citeeranker (`annex-2-art-7`); daarvoor moet `bijlage()` het kopniveau
+        en het ankerpad meegeven. Zonder die twee blijft een artikel onbekend.
         """
         label, nr, titel = self.kop(el)
         regel = self.kopregel(label, nr, titel) if label or nr else titel
@@ -302,7 +318,10 @@ class BwbOmzetter:
         for kind in el:
             if kind.tag == "kop" or kind.tag in OVERSLAAN:
                 continue
-            self.inhoud(kind, basis, prefix_noot, teller, diepte)
+            if kind.tag == "artikel" and niveau is not None:
+                self.artikel(kind, niveau, pad or {})
+            else:
+                self.inhoud(kind, basis, prefix_noot, teller, diepte)
 
     def lijst(self, el, basis: str, extra: str, diepte: int, prefix_noot: str) -> str:
         regels = []
@@ -381,6 +400,9 @@ class BwbOmzetter:
                 wrapper = ET.Element("x")
                 wrapper.append(kind)
                 self.container_inhoud(wrapper, niveau + 1, {"annex": anker})
+            elif kind.tag == "divisie":
+                self.divisie(kind, anker, prefix, None, 0,
+                             niveau=niveau + 1, pad={"annex": anker})
             else:
                 self.inhoud(kind, basis=anker, prefix_noot=prefix)
 
