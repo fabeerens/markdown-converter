@@ -1347,6 +1347,56 @@ def test_een_dubbel_onderdeelnummer_midden_in_een_reeks_blijft_een_weigering():
         formex_xml.omzetten(_met_bijlagen(_bijlage(b"BIJLAGE I", inhoud)))
 
 
+# ------------------------------------------------------------------ inhoudsopgave (TOC) in een bijlage
+
+def _toc_item(nr: bytes, tekst: bytes) -> bytes:
+    return b"<TOC.ITEM><NO.ITEM>" + nr + b"</NO.ITEM><ITEM.CONT>" + tekst + b"</ITEM.CONT></TOC.ITEM>"
+
+
+def test_een_inhoudsopgave_in_een_bijlage_wordt_tekst_zonder_structuur():
+    """De geconsolideerde MDR (02017R0745-20260719) opent haar bijlagen met een CONS.ANNEX
+    `BIJLAGEN` die alleen een TOC draagt; de Publicatiebladversie heeft daar losse punten (NP)
+    met dezelfde tekst, en die regels moeten gelijk lezen."""
+    opgave = (b"<CONS.ANNEX><TITLE><TI><P>BIJLAGEN</P></TI></TITLE><TOC><TOC.BLK>"
+              + _toc_item(b"I", b"Algemene veiligheids- en prestatie-eisen")
+              + _toc_item(b"II", b"Technische documentatie") + b"</TOC.BLK></TOC></CONS.ANNEX>")
+    punten = (b"<ANNEX><TITLE><TI><P>BIJLAGEN</P></TI></TITLE><CONTENTS>"
+              b"<NP><NO.P>I</NO.P><TXT>Algemene veiligheids- en prestatie-eisen</TXT></NP>"
+              b"<NP><NO.P>II</NO.P><TXT>Technische documentatie</TXT></NP></CONTENTS></ANNEX>")
+    markdown, eenheden, _, _ = formex_xml.omzetten(_met_bijlagen(opgave))
+
+    assert "\n\n## BIJLAGEN\n\nI Algemene veiligheids- en prestatie-eisen\n\nII Technische documentatie\n" in markdown
+    assert markdown.split("## BIJLAGEN")[1] == formex_xml.omzetten(_met_bijlagen(punten))[0].split("## BIJLAGEN")[1]
+    assert [e.soort for e in eenheden if e.anker.startswith("annex")] == ["bijlage"]
+
+
+def test_een_geneste_inhoudsopgave_houdt_haar_volgorde_zonder_opmaak():
+    """`LIJST VAN BIJLAGEN` in 2005/66: TOC in CONTENTS, cursieve nummers, en de aanhangsels van
+    bijlage II in een geneste TOC.BLK."""
+    toc = (b"<TOC><TOC.BLK>" + _toc_item(b'<HT TYPE="ITALIC">BIJLAGE I</HT>', b"Technische voorschriften")
+           + b"</TOC.BLK><TOC.BLK>" + _toc_item(b'<HT TYPE="ITALIC">BIJLAGE II</HT>', b"Bestuursrecht")
+           + b"<TOC.BLK>" + _toc_item(b'<HT TYPE="ITALIC">Aanhangsel 1:</HT>', b"Inlichtingenformulier")
+           + b"</TOC.BLK></TOC.BLK></TOC>")
+    markdown = formex_xml.omzetten(_met_bijlagen(_bijlage(b"LIJST VAN BIJLAGEN", toc)))[0]
+    assert ("\n\nBIJLAGE I Technische voorschriften\n\nBIJLAGE II Bestuursrecht\n\n"
+            "Aanhangsel 1: Inlichtingenformulier\n") in markdown
+    assert "*BIJLAGE" not in markdown
+
+
+@pytest.mark.parametrize("bijlage, reden", [
+    # Een paginaverwijzing kent de omzetter niet eens als element.
+    (_bijlage(b"BIJLAGEN", b"<TOC><TOC.BLK><TOC.ITEM><NO.ITEM>I</NO.ITEM><ITEM.CONT>Eisen</ITEM.CONT>"
+              b"<ITEM.REF>12</ITEM.REF></TOC.ITEM></TOC.BLK></TOC>"), "ITEM.REF"),
+    (_bijlage(b"BIJLAGEN", b"<TOC><TOC.BLK><TOC.ITEM><NO.ITEM>I</NO.ITEM><ITEM.CONT>Eisen</ITEM.CONT>"
+              b"<P>Toelichting.</P></TOC.ITEM></TOC.BLK></TOC>"), "meer dan NO.ITEM en ITEM.CONT"),
+    (b"<ANNEX><TITLE><TI><P>BIJLAGEN</P></TI></TITLE><TOC><TOC.BLK>" + _toc_item(b"I", b"Eisen")
+     + b"</TOC.BLK></TOC><CONTENTS><P>Tekst.</P></CONTENTS></ANNEX>", "naast CONTENTS"),
+])
+def test_een_niet_gemeten_inhoudsopgave_wordt_geweigerd(bijlage, reden):
+    with pytest.raises(ConversionError, match=reden):
+        formex_xml.omzetten(_met_bijlagen(bijlage))
+
+
 # ------------------------------------------------------------------ afbeeldingen (TIFF)
 
 def _met_afbeelding(act: bytes, *, bestand: bool = True, soort: bytes = b"TIFF") -> bytes:

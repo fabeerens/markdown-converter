@@ -69,6 +69,8 @@ STRUCTUUR_ELEMENTEN = {
     # Het nummer van een bijlageonderdeel zonder kop; alleen `bijlage_inhoud`
     # schrijft het, overal elders blijft het een weigering.
     "NO.GR.SEQ",
+    # Een inhoudsopgave in een bijlage; alleen `inhoudsopgave()` schrijft haar.
+    "TOC", "TOC.BLK", "TOC.ITEM", "NO.ITEM", "ITEM.CONT",
     # Een afbeelding (TIFF-inclusie) kan haar tekst meedragen: het formulier van
     # Brussel I bis staat als P's in IMG.CNT. Wat daarbinnen staat, moet zelf
     # bekend zijn; een FORMULA blijft dus een weigering.
@@ -1874,9 +1876,45 @@ class FormexOmzetter:
             self.u.blok(sti)
         self.u.eenheid(anker, "bijlage", f"{ti} {sti}".strip())
         inhoud = root.find("CONTENTS")
+        # De geconsolideerde MDR (02017R0745-20260719) opent haar bijlagen met een
+        # CONS.ANNEX `BIJLAGEN` die alleen een TOC draagt, zonder CONTENTS. Hier
+        # las de omzetter alleen CONTENTS, en viel zo'n inhoudsopgave weg.
+        opgaven = root.findall("TOC")
+        if len(opgaven) > 1 or (opgaven and inhoud is not None):
+            raise _xml_fout("een bijlage met meer dan een inhoudsopgave (TOC), of met een TOC naast "
+                            "CONTENTS, is niet gemeten")
+        for toc in opgaven:
+            self.inhoudsopgave(toc)
         if inhoud is not None:
             self.bijlage_inhoud(inhoud, anker)
         self.notenblok()
+
+    def inhoudsopgave(self, toc) -> None:
+        """Een inhoudsopgave (TOC) in een bijlage: tekst, geen structuur.
+
+        Elk `TOC.ITEM` wordt één alinea `nummer tekst`, zonder kop, eenheid of
+        Markdown-lijst: de koppen en ankers horen bij de bijlagen zelf, en een
+        tweede `BIJLAGE I` hier zou ermee botsen. Dat is de regel die de
+        Publicatiebladversie van de MDR (32017R0745) al krijgt, waar dezelfde
+        opgave als losse punten (NP) staat: `I Algemene veiligheids- en
+        prestatie-eisen`. Geneste blokken (`TOC.BLK`, de aanhangsels van bijlage
+        II in 2005/66) volgen in bronvolgorde. Opmaak valt weg, zoals in een kop.
+        Een paginaverwijzing (`ITEM.REF`) of een titel in de TOC is niet gemeten
+        en blijft een weigering.
+        """
+        for kind in toc:
+            if kind.tag == "TOC.BLK":
+                self.inhoudsopgave(kind)
+            elif kind.tag == "TOC.ITEM":
+                delen = [d for d in kind if d.tag in ("NO.ITEM", "ITEM.CONT")]
+                if len(delen) != len(kind) or ws(kind.text or "") or any(ws(d.tail or "") for d in delen):
+                    raise _xml_fout("een regel van een inhoudsopgave (TOC.ITEM) bevat meer dan "
+                                    "NO.ITEM en ITEM.CONT; dat is niet gemeten")
+                self.u.blok(" ".join(t for t in (self.kop_tekst(d) for d in delen) if t))
+            elif kind.tag in METADATA:
+                continue
+            else:
+                self.onbekend("inhoudsopgave", kind)
 
     def bijlage_inhoud(self, el, anker: str, geciteerd: bool = False, nummer: str = "") -> None:
         """`geciteerd`: een ingesloten bijlage van een andere handeling — geen eenheden.
@@ -2005,6 +2043,9 @@ class FormexOmzetter:
                 # `annex-<n>-art-<k>` (patronen.md §6); de kop is die van een
                 # artikel, en de structuurcontrole telt ze als artikelen mee.
                 self.artikel(kind, ouder=anker)
+            elif kind.tag == "TOC":
+                # `LIJST VAN BIJLAGEN` in 2005/66: de inhoudsopgave staat in CONTENTS.
+                self.inhoudsopgave(kind)
             elif kind.tag in METADATA:
                 continue
             elif voorvoegsel[0]:
