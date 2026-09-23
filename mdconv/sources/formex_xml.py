@@ -1925,7 +1925,12 @@ class FormexOmzetter:
                     letter = ws(self.inline(np.find("NO.P")))
                     rest = ws(self.inline(np.find("TXT"))) if np.find("TXT") is not None else ""
                     ti = f"{letter}{NBSP * 3}{rest}".strip()
-                    kop = self.kop_tekst(np)
+                    # De kop dient hier alleen om het nummer te lezen, dus uit de
+                    # bron en niet met een tweede `inline()`: die schreef de noot in
+                    # een kop een tweede keer (`14.1. … Richtlijn 90/220/EEG (3)` in
+                    # bijlage I bij 32013R0503). Over 2159 onderdeelkoppen in de
+                    # meetlat geeft dat hetzelfde nummer als `kop_tekst`.
+                    kop = ws(_plat_bron(np))
                     # Een NP-kop kan na TXT nog een P dragen, een aanwijzing onder de
                     # kop: `B. Modelformulier voor herroeping` met `(dit formulier
                     # alleen invullen …)` in bijlage I van 32011L0083, en `2. MASSA'S
@@ -1938,9 +1943,11 @@ class FormexOmzetter:
                     # `VERBODSBEPALINGEN` zijn aparte P's, en aan elkaar
                     # (`Deel IIVERBODSBEPALINGEN`) is het nummer niet meer te lezen.
                     # Zonder opmaak: `*Bepaling 8*` (cursief in de SCC's) leest anders
-                    # niet als nummer.
+                    # niet als nummer. Uit de bron, net als hierboven: `ti` heeft de
+                    # noten van de kop al geschreven (drie koppen met een noot in
+                    # 32023L2225, vier in 32018L0100); 1348 koppen, hetzelfde nummer.
                     eerste = titel.find(".//P") if titel is not None else None
-                    kop = self.kop_tekst(eerste) if eerste is not None else ti
+                    kop = ws(_plat_bron(eerste)) if eerste is not None else ti
                 m = ONDERDEELKOP.match(kop)
                 if geciteerd:
                     sub = anker

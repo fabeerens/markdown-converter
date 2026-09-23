@@ -1223,6 +1223,21 @@ def test_an_annex_that_quotes_a_block_of_another_act_renders_it_without_units():
     assert [e.soort for e in eenheden if e.anker.startswith("annex")] == ["bijlage"]
 
 
+@pytest.mark.parametrize("kop", [
+    # Bijlage I bij 32013R0503: `14.1.` als NP, met een noot in de TXT.
+    b'<TI><NP><NO.P>14.1.</NO.P><TXT>Eerdere introducties uit hoofde van Richtlijn 90/220/EEG'
+    b'<NOTE NOTE.ID="E0003"><P>PB L 117 van 8.5.1990, blz. 15.</P></NOTE></TXT></NP></TI>',
+    # 32023L2225: de kop als P, met een noot erin.
+    b'<TI><P>FORMULIER<NOTE NOTE.ID="E0003"><P>PB L 117 van 8.5.1990, blz. 15.</P></NOTE></P></TI>',
+])
+def test_een_noot_in_de_kop_van_een_bijlageonderdeel_komt_er_een_keer(kop):
+    """Het nummer van een onderdeelkop werd gelezen met een tweede `inline()`, en die
+    schreef de noot van de kop nog een keer: de woordcontrole weigerde op `tekst dubbel`."""
+    deel = b"<GR.SEQ><TITLE>" + kop + b"</TITLE><NP><NO.P>a)</NO.P><TXT>Punt.</TXT></NP></GR.SEQ>"
+    markdown = formex_xml.omzetten(_met_bijlagen(_bijlage(b"BIJLAGE I", deel)))[0]
+    assert markdown.count("PB L 117 van 8.5.1990, blz. 15.") == 1
+
+
 # ------------------------------------------------------------------ nummer van een bijlageonderdeel
 # Een onderdeel zonder kop draagt zijn nummer in `GR.SEQ/NO.GR.SEQ`, met de tekst in
 # de P erna. Tot 23 september 2026 weigerde dat element 10 van de 347 documenten in
