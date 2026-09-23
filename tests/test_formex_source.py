@@ -1406,3 +1406,47 @@ def test_a_title_that_restarts_in_every_part_carries_its_part():
     act = ACT.replace(b"</ENACTING.TERMS>", deel(b"I", b"2") + deel(b"II", b"3") + b"</ENACTING.TERMS>", 1)
     assert _ankers(formex_zip(act=act), "divisie") == [
         "hfd-1", "deel-1", "tit-1-1", "hfd-1-1-1", "deel-2", "tit-2-1", "hfd-2-1-1"]
+
+
+def _tabel(titel: bytes, *cellen: bytes) -> bytes:
+    rij = b"".join(b'<CELL COL="%d">' % i + c + b"</CELL>" for i, c in enumerate(cellen, 1))
+    kop = b"<TITLE><TI><P>" + titel + b"</P></TI></TITLE>" if titel else b""
+    return b'<TBL COLS="%d">' % len(cellen) + kop + b"<CORPUS><ROW>" + rij + b"</ROW></CORPUS></TBL>"
+
+
+def test_a_group_of_tables_in_a_paragraph_gets_its_title_and_every_table_in_order():
+    """Artikel 224 CRR (32013R0575): `VOLATILITEITSAANPASSINGEN` boven `Tabel 1` tot en met `Tabel 4`
+    in één GR.TBL, midden in lid 1. Dat weigerde als onbekend element; de lidtekst erna moet blijven."""
+    groep = (b'<GR.TBL><TITLE><TI><P><HT TYPE="BOLD">VOLATILITEITSAANPASSINGEN</HT></P></TI></TITLE>'
+             + _tabel(b"Tabel 1", b"Categorie", b"0,707") + _tabel(b"Tabel 2", b"Goud", b"21,213")
+             + b"</GR.TBL>")
+    act = ACT.replace(b"<P>Deze verordening stelt regels vast.</P>",
+                      b"<P>Deze verordening stelt regels vast:</P>" + groep + b"<P>Daarna gaat het lid door.</P>")
+    markdown, eenheden, onbekend, _ = formex_xml.omzetten(formex_zip(act=act))
+    volgorde = ["1.\u00a0\u00a0\u00a0Deze verordening stelt regels vast:", "\n\nVOLATILITEITSAANPASSINGEN\n\n",
+                "\n\nTabel 1\n\n", "| Categorie | 0,707 |", "\n\nTabel 2\n\n", "| Goud | 21,213 |",
+                "\n\nDaarna gaat het lid door.\n\n"]
+    posities = [markdown.index(stuk) for stuk in volgorde]
+    assert posities == sorted(posities)
+    assert "**VOLATILITEITSAANPASSINGEN**" not in markdown
+    assert [e.anker for e in eenheden if e.soort == "lid"] == ["art-1-1"]
+    assert onbekend == {}
+
+
+def test_a_group_of_tables_in_an_annex_keeps_the_notes_of_its_tables():
+    """Bijlage II van de consumentenrichtlijn (32011L0083): twee tabellen in één GR.TBL, de tweede met een noot."""
+    noot = b'<GR.NOTES><NOTE NOTE.ID="E0001"><P>PB L 364 van 9.12.2004, blz. 1.</P></NOTE></GR.NOTES>'
+    tweede = _tabel(b"", b'Verordening (EG) nr. 2006/2004<NOTE NOTE.REF="E0001"/>', b"Deze richtlijn")
+    tweede = tweede.replace(b"<CORPUS>", noot + b"<CORPUS>")
+    groep = b"<GR.TBL>" + _tabel(b"Concordantietabel", b"Artikel 1", b"Artikel 3") + tweede + b"</GR.TBL>"
+    markdown, _, _, _ = formex_xml.omzetten(_met_bijlagen(_bijlage(b"BIJLAGE II", groep)))
+    assert "\n\nConcordantietabel\n\n" in markdown
+    assert "| Artikel 1 | Artikel 3 |" in markdown
+    assert "| Verordening (EG) nr. 2006/2004 (1) | Deze richtlijn |" in markdown
+    assert markdown.rstrip().endswith("(1)\u00a0\u00a0PB L 364 van 9.12.2004, blz. 1.")
+
+
+def test_a_group_of_tables_with_something_else_than_a_title_or_a_table_is_refused():
+    groep = b"<GR.TBL>" + _tabel(b"", b"A", b"B") + b"<P>Een losse alinea in de groep.</P></GR.TBL>"
+    with pytest.raises(ConversionError, match="tabelgroep:P"):
+        formex_xml.omzetten(_met_bijlagen(_bijlage(b"BIJLAGE II", groep)))

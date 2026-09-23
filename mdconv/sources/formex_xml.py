@@ -83,6 +83,8 @@ STRUCTUUR_ELEMENTEN = {
     # bijlagen van 2023/1795) en in een tabelcel (de scheepsrecyclinginrichtingen
     # van 2020/1675); midden in een zin blijft het een weigering.
     "ADDR.S",
+    # Een groep tabellen onder één titel; zie `tabelgroep()`.
+    "GR.TBL",
 }
 ANNOTATIES = ("GR.ANNOTATION", "ANNOTATION")
 # De letter van een CELEX-nummer volgens het soort handeling (`LEG.VAL`). Wat hier
@@ -1241,12 +1243,12 @@ class FormexOmzetter:
 
         tag = el.tag
         if tag == "ALINEA":
-            if not any(c.tag in ("LIST", "TBL", "P", "NP", "DLIST") + ANNOTATIES for c in el):
+            if not any(c.tag in ("LIST", "TBL", "GR.TBL", "P", "NP", "DLIST") + ANNOTATIES for c in el):
                 schrijf(ws(self.inline(el)))
                 return
             tekst = el.text or ""
             for kind in el:
-                if kind.tag in ("LIST", "TBL", "P", "NP", "DLIST") + ANNOTATIES:
+                if kind.tag in ("LIST", "TBL", "GR.TBL", "P", "NP", "DLIST") + ANNOTATIES:
                     schrijf(ws(tekst))
                     tekst = ""
                     self.inhoud(kind, basis, teller, prefix, lid_anker, geankerd)
@@ -1342,6 +1344,8 @@ class FormexOmzetter:
                 self.u.markeer_onbekend(f"inhoud:{tag}")
             for kind in el:
                 self.inhoud(kind, basis, teller)
+        elif tag == "GR.TBL":
+            self.tabelgroep(el)
         elif tag == "INCL.ELEMENT":
             # Leeg, dus `onbekend()` zou hem stil laten vallen.
             if not self.afbeelding(el, blok=True):
@@ -1731,6 +1735,34 @@ class FormexOmzetter:
             raise _xml_fout("de titel van een groep tabelrijen (TI.BLK) noemt geen geldige kolommen")
         return {"tekst": self.cel_tekst(ti), "kol": int(start) - 1,
                 "colspan": int(eind) - int(start) + 1, "rowspan": 1}
+
+    def tabelgroep(self, el) -> None:
+        """Een groep tabellen (`GR.TBL`): de gezamenlijke titel als alinea, dan elke tabel.
+
+        Formex bundelt tabellen die één geheel vormen onder één `GR.TBL`, met een
+        eigen `TITLE` en per tabel ook weer een titel. Gemeten op 23 september 2026
+        in vier documenten van de meetlat: artikel 224 van de CRR (32013R0575 en
+        02013R0575-20270101: `VOLATILITEITSAANPASSINGEN` boven `Tabel 1` tot en met
+        `Tabel 4`), de correlatietabel van bijlage XV van de energie-
+        efficiëntierichtlijn (32012L0027) en de concordantietabel van bijlage II van
+        de consumentenrichtlijn (32011L0083, twee tabellen, de tweede met een
+        tabelnoot). De titel krijgt de vorm van een tabeltitel (`TBL/TITLE`): een
+        losse alinea zonder opmaak. Elke tabel gaat door `tabel()`, dus een
+        geneste tabel blijft een weigering; iets anders dan een titel of een tabel
+        is niet gemeten en wordt geweigerd.
+        """
+        for kind in el:
+            if kind.tag == "TITLE":
+                for deel in kind:
+                    tekst = self.kop_tekst(deel)
+                    if tekst:
+                        self.u.blok(tekst)
+            elif kind.tag == "TBL":
+                self.tabel(kind)
+            elif kind.tag in METADATA:
+                continue
+            else:
+                self.onbekend("tabelgroep", kind)
 
     # ------------------------------------------------------------ bijlagen
 
