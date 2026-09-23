@@ -1880,11 +1880,18 @@ class FormexOmzetter:
                 # in NO.P, de tekst in TXT. Zonder de scheiding ertussen leest
                 # `A.“Algemeen”` niet als onderdeel (RE_ANNEX_PART in het profiel).
                 np = titel.find(".//NP") if titel is not None else None
+                onder_de_kop = []
                 if np is not None and np.find("NO.P") is not None:
                     letter = ws(self.inline(np.find("NO.P")))
                     rest = ws(self.inline(np.find("TXT"))) if np.find("TXT") is not None else ""
                     ti = f"{letter}{NBSP * 3}{rest}".strip()
                     kop = self.kop_tekst(np)
+                    # Een NP-kop kan na TXT nog een P dragen, een aanwijzing onder de
+                    # kop: `B. Modelformulier voor herroeping` met `(dit formulier
+                    # alleen invullen …)` in bijlage I van 32011L0083, en `2. MASSA'S
+                    # EN AFMETINGEN` met `(eventueel naar tekeningen verwijzen)` in
+                    # 32005L0066. Die P viel weg; ze komt als alinea onder de kopregel.
+                    onder_de_kop = [k for k in np if k.tag not in ("NO.P", "TXT")]
                 else:
                     ti = ws(self.inline(titel)) if titel is not None else ""
                     # Het nummer staat in de eerste P: `Deel II` en het opschrift
@@ -1910,6 +1917,8 @@ class FormexOmzetter:
                     self.u.blok(ti)
                     if m and not geciteerd:
                         self.u.eenheid(sub, "bijlagedeel", ti)
+                for aanwijzing in onder_de_kop:
+                    self.inhoud(aanwijzing, basis="", teller={"lijsten": 0})
                 wrapper = ET.Element("x")
                 wrapper.extend([c for c in kind if c.tag != "TITLE"])
                 self.bijlage_inhoud(wrapper, sub, geciteerd)

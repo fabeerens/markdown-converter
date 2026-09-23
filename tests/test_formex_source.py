@@ -1529,3 +1529,15 @@ def test_a_formula_is_refused_on_purpose_and_the_refusal_says_why():
     with pytest.raises(ConversionError) as zonder_formule:
         formex_xml.omzetten(formex_zip(act=ACT.replace(b"</FINAL>", b"<MYSTERY>tekst</MYSTERY></FINAL>")))
     assert "formule" not in str(zonder_formule.value)
+
+
+def test_a_note_under_a_numbered_annex_heading_is_written_below_it():
+    """Bijlage I, deel B van de consumentenrichtlijn (32011L0083): de NP-kop `B. Modelformulier voor
+    herroeping` draagt na TXT een P `(dit formulier alleen invullen …)`, en die viel weg."""
+    deel = (b"<GR.SEQ><TITLE><TI><NP><NO.P>B.</NO.P><TXT>Modelformulier voor herroeping</TXT>"
+            b"<P>(dit formulier alleen invullen als u wilt herroepen)</P></NP></TI></TITLE>"
+            b"<NP><NO.P>1.</NO.P><TXT>Aan de handelaar.</TXT></NP></GR.SEQ>")
+    markdown, eenheden, _, _ = formex_xml.omzetten(_met_bijlagen(_bijlage(b"BIJLAGE I", deel)))
+    assert ("\nB.\u00a0\u00a0\u00a0Modelformulier voor herroeping\n\n(dit formulier alleen invullen als u wilt "
+            "herroepen)\n\n1.\u00a0\u00a0\u00a0Aan de handelaar.\n") in markdown
+    assert [e.anker for e in eenheden if e.anker.startswith("annex")] == ["annex-1", "annex-1-b", "annex-1-b-1"]
