@@ -1422,6 +1422,13 @@ class FormexOmzetter:
                 wrapper = ET.Element("x")
                 wrapper.extend([c for c in kind if c.tag != "TITLE"])
                 self.bijlage_inhoud(wrapper, sub, geciteerd)
+            elif kind.tag == "QUOT.S":
+                # Een bijlage die (een deel van) een bijlage van een andere
+                # handeling vervangt, citeert die als blok: een tabel, een
+                # onderdeel of alinea's binnen QUOT.S (16 van de 347 documenten
+                # in de meetlat, meest wijzigingsrichtlijnen). Zoals bij een
+                # ingesloten bijlage: wel brontekst, geen eenheden.
+                self.bijlage_inhoud(kind, "", geciteerd=True)
             elif kind.tag in METADATA:
                 continue
             else:

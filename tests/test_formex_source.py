@@ -907,3 +907,16 @@ def test_a_chapter_bis_is_another_chapter_than_the_one_before_it():
               b'</ARTICLE></DIVISION></ENACTING.TERMS>')
     act = ACT.replace(b"</ENACTING.TERMS>", tweede, 1)
     assert _ankers(formex_zip(act=act), "divisie") == ["hfd-1", "hfd-1bis"]
+
+
+def test_an_annex_that_quotes_a_block_of_another_act_renders_it_without_units():
+    """16 wijzigingshandelingen in de meetlat vervangen een bijlage elders door een geciteerd blok
+    (QUOT.S met een tabel of onderdelen als kind van CONTENTS); dat weigerde als onbekende inhoud."""
+    citaat = (b'<P>Bijlage II bij Richtlijn 2006/1/EG wordt vervangen door:</P><QUOT.S LEVEL="1">'
+              b'<TBL COLS="2"><CORPUS><ROW><CELL COL="1"><QUOT.START CODE="201C" ID="Q1" REF.END="E1"/>Stof</CELL>'
+              b'<CELL COL="2">Grenswaarde<QUOT.END CODE="201D" ID="E1" REF.START="Q1"/></CELL></ROW></CORPUS></TBL>'
+              b'<NP><NO.P>1.</NO.P><TXT>Geciteerd punt.</TXT></NP></QUOT.S>')
+    markdown, eenheden, _, _ = formex_xml.omzetten(_met_bijlagen(_bijlage(b"BIJLAGE", citaat)))
+    assert "| “Stof | Grenswaarde” |" in markdown
+    assert "1.   Geciteerd punt." in markdown
+    assert [e.soort for e in eenheden if e.anker.startswith("annex")] == ["bijlage"]

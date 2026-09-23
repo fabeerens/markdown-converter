@@ -1,5 +1,5 @@
 {
- "commit": "02e1b39+wijzigingen",
+ "commit": "b34a850+wijzigingen",
  "documenten": {
   "02002L0058-20091219": {
    "melding": null,
@@ -524,8 +524,8 @@
    "waarschuwingen": []
   },
   "32006L0136": {
-   "melding": "XML-element zonder eigen behandeling (inhoud:QUOT.S); omzetting geweigerd.",
-   "oorzaak": "element inhoud:QUOT.S",
+   "melding": "XML-element zonder eigen behandeling (inline:GR.SEQ); omzetting geweigerd.",
+   "oorzaak": "element inline:GR.SEQ",
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
    "sha256": null,
@@ -584,18 +584,18 @@
    "waarschuwingen": []
   },
   "32007L0008": {
-   "melding": "XML-element zonder eigen behandeling (inhoud:QUOT.S); omzetting geweigerd.",
-   "oorzaak": "element inhoud:QUOT.S",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "d85ea31e3920ea0413e98756a71620952d2620d1cd4390f075f4cdff68e520b0",
+   "status": "ok",
+   "tekens": 12688,
    "waarschuwingen": []
   },
   "32007L0011": {
-   "melding": "XML-element zonder eigen behandeling (inhoud:QUOT.S); omzetting geweigerd.",
-   "oorzaak": "element inhoud:QUOT.S",
+   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['9', '9', 'z', 'z'], extra=['9z', '9z']).",
+   "oorzaak": "woordcontrole: woorden aan elkaar",
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
    "sha256": null,
@@ -674,8 +674,8 @@
    "waarschuwingen": []
   },
   "32008L0044": {
-   "melding": "XML-element zonder eigen behandeling (inhoud:QUOT.S); omzetting geweigerd.",
-   "oorzaak": "element inhoud:QUOT.S",
+   "melding": "XML-element zonder eigen behandeling (inline:GR.SEQ); omzetting geweigerd.",
+   "oorzaak": "element inline:GR.SEQ",
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
    "sha256": null,
@@ -744,13 +744,13 @@
    "waarschuwingen": []
   },
   "32009L0086": {
-   "melding": "XML-element zonder eigen behandeling (inhoud:QUOT.S); omzetting geweigerd.",
-   "oorzaak": "element inhoud:QUOT.S",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "b31037face38daaaa2af6c3beb14ebd1c3b807f03f51c3c9c3d210478723b816",
+   "status": "ok",
+   "tekens": 9347,
    "waarschuwingen": []
   },
   "32009L0135": {
@@ -824,8 +824,8 @@
    "waarschuwingen": []
   },
   "32010L0015": {
-   "melding": "XML-element zonder eigen behandeling (inhoud:QUOT.S); omzetting geweigerd.",
-   "oorzaak": "element inhoud:QUOT.S",
+   "melding": "XML-element zonder eigen behandeling (inline:GR.SEQ); omzetting geweigerd.",
+   "oorzaak": "element inline:GR.SEQ",
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
    "sha256": null,
@@ -894,8 +894,8 @@
    "waarschuwingen": []
   },
   "32011L0019": {
-   "melding": "XML-element zonder eigen behandeling (inhoud:QUOT.S); omzetting geweigerd.",
-   "oorzaak": "element inhoud:QUOT.S",
+   "melding": "XML-element zonder eigen behandeling (inline:GR.SEQ); omzetting geweigerd.",
+   "oorzaak": "element inline:GR.SEQ",
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
    "sha256": null,
@@ -1014,13 +1014,13 @@
    "waarschuwingen": []
   },
   "32012R1050": {
-   "melding": "XML-element zonder eigen behandeling (inhoud:QUOT.S); omzetting geweigerd.",
-   "oorzaak": "element inhoud:QUOT.S",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "351f1be9e9fa5092f6cdb81c4de3a7520a25168bf1cb61efd6ab8b76b025967c",
+   "status": "ok",
+   "tekens": 5531,
    "waarschuwingen": []
   },
   "32012R1215": {
@@ -1144,13 +1144,13 @@
    "waarschuwingen": []
   },
   "32014L0071": {
-   "melding": "XML-element zonder eigen behandeling (inhoud:QUOT.S); omzetting geweigerd.",
-   "oorzaak": "element inhoud:QUOT.S",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "fafaf5d8f255b0474c041a719f66447be9789e7d9dea679d2932ce35acce44a9",
+   "status": "ok",
+   "tekens": 3815,
    "waarschuwingen": []
   },
   "32014L0106": {
@@ -1556,8 +1556,8 @@
    "waarschuwingen": []
   },
   "32018D0187": {
-   "melding": "Formex-bron geweigerd: inclusie(s) nergens in de tekst aangeroepen: L_2018034NL.01003802.xml",
-   "oorzaak": "inclusie nergens in de tekst aangeroepen",
+   "melding": "Formex-bron geweigerd: een inclusie (INCL.ELEMENT) staat midden in een zin; alleen een inclusie als eigen alinea binnen QUOT.S is gemeten",
+   "oorzaak": "een inclusie staat midden in een zin",
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
    "sha256": null,
@@ -1576,8 +1576,8 @@
    "waarschuwingen": []
   },
   "32018L0100": {
-   "melding": "Formex-bron geweigerd: inclusie(s) nergens in de tekst aangeroepen: L_2018017NL.01003602.xml, L_2018017NL.01003701.xml, L_2018017NL.01003801.xml, L_2018017NL.01003901.xml",
-   "oorzaak": "inclusie nergens in de tekst aangeroepen",
+   "melding": "Formex-bron geweigerd: een inclusie (INCL.ELEMENT) staat midden in een zin; alleen een inclusie als eigen alinea binnen QUOT.S is gemeten",
+   "oorzaak": "een inclusie staat midden in een zin",
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
    "sha256": null,
@@ -1736,8 +1736,8 @@
    "waarschuwingen": []
   },
   "32019L0114": {
-   "melding": "XML-element zonder eigen behandeling (inhoud:QUOT.S); omzetting geweigerd.",
-   "oorzaak": "element inhoud:QUOT.S",
+   "melding": "Formex-bron geweigerd: een inclusie (INCL.ELEMENT) staat midden in een zin; alleen een inclusie als eigen alinea binnen QUOT.S is gemeten",
+   "oorzaak": "een inclusie staat midden in een zin",
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
    "sha256": null,
@@ -1816,13 +1816,13 @@
    "waarschuwingen": []
   },
   "32019R0649": {
-   "melding": "XML-element zonder eigen behandeling (inhoud:QUOT.S); omzetting geweigerd.",
-   "oorzaak": "element inhoud:QUOT.S",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "8e244a57db19df1a8bce256459a172774ed0d06c823172237175b8559bfb24de",
+   "status": "ok",
+   "tekens": 9158,
    "waarschuwingen": []
   },
   "32019R0817": {
@@ -1866,8 +1866,8 @@
    "waarschuwingen": []
   },
   "32020D1402": {
-   "melding": "XML-element zonder eigen behandeling (inhoud:QUOT.S); omzetting geweigerd.",
-   "oorzaak": "element inhoud:QUOT.S",
+   "melding": "Formex-bron geweigerd: een inclusie (INCL.ELEMENT) staat midden in een zin; alleen een inclusie als eigen alinea binnen QUOT.S is gemeten",
+   "oorzaak": "een inclusie staat midden in een zin",
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
    "sha256": null,
@@ -1916,13 +1916,13 @@
    "waarschuwingen": []
   },
   "32020R0606": {
-   "melding": "XML-element zonder eigen behandeling (inhoud:QUOT.S); omzetting geweigerd.",
-   "oorzaak": "element inhoud:QUOT.S",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "5c4f0826881d8f496a3d74209a5a02bd3576936568fabad751bb8ca313c96ed9",
+   "status": "ok",
+   "tekens": 6399,
    "waarschuwingen": []
   },
   "32020R2156": {
@@ -2086,18 +2086,18 @@
    "waarschuwingen": []
   },
   "32022L0281": {
-   "melding": "XML-element zonder eigen behandeling (inhoud:QUOT.S); omzetting geweigerd.",
-   "oorzaak": "element inhoud:QUOT.S",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "288fdf39bb3e0116e7899f2277ca67ca2f9e068f3f72c12d27597d49b74d6a79",
+   "status": "ok",
+   "tekens": 7645,
    "waarschuwingen": []
   },
   "32022L1648": {
-   "melding": "Formex-bron geweigerd: inclusie(s) nergens in de tekst aangeroepen: L_2022248NL.01005502.xml",
-   "oorzaak": "inclusie nergens in de tekst aangeroepen",
+   "melding": "Formex-bron geweigerd: een inclusie (INCL.ELEMENT) staat midden in een zin; alleen een inclusie als eigen alinea binnen QUOT.S is gemeten",
+   "oorzaak": "een inclusie staat midden in een zin",
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
    "sha256": null,
@@ -2186,13 +2186,13 @@
    "waarschuwingen": []
   },
   "32022R1985": {
-   "melding": "XML-element zonder eigen behandeling (inhoud:QUOT.S); omzetting geweigerd.",
-   "oorzaak": "element inhoud:QUOT.S",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "9edbdf40b89093917cfca20ee64bfb849898048cbd0ea463ed5f6d46ded3493b",
+   "status": "ok",
+   "tekens": 6637,
    "waarschuwingen": []
   },
   "32022R2065": {
@@ -2296,13 +2296,13 @@
    "waarschuwingen": []
   },
   "32023R0152": {
-   "melding": "XML-element zonder eigen behandeling (inhoud:QUOT.S); omzetting geweigerd.",
-   "oorzaak": "element inhoud:QUOT.S",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "72bfe9234b66216dc7d1206da2e601fc93e64fd15e9c5df5fbda7a0fe093a2fe",
+   "status": "ok",
+   "tekens": 47815,
    "waarschuwingen": []
   },
   "32023R0173": {
@@ -2706,8 +2706,8 @@
    "waarschuwingen": []
   },
   "32026D0816": {
-   "melding": "Formex-bron geweigerd: inclusie(s) nergens in de tekst aangeroepen: L_202600816NL.000302.fmx.xml",
-   "oorzaak": "inclusie nergens in de tekst aangeroepen",
+   "melding": "Formex-bron geweigerd: een inclusie (INCL.ELEMENT) staat midden in een zin; alleen een inclusie als eigen alinea binnen QUOT.S is gemeten",
+   "oorzaak": "een inclusie staat midden in een zin",
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
    "sha256": null,
@@ -3607,6 +3607,6 @@
    ]
   }
  },
- "gemeten": "2026-09-23 14:47",
+ "gemeten": "2026-09-23 14:52",
  "taal": "NL"
 }

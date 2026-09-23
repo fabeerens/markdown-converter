@@ -198,6 +198,9 @@ accountregistratie namens de gebruiker):
   opsomming in een lid. `HOOFDSTUK IX bis` is `hfd-9bis`. Wat blijft weigeren: een echt dubbel
   hoofdstuk, zoals de twee keer `HOOFDSTUK III` in de Nederlandse DORA (32022R2554), waar
   hoofdstuk VII bedoeld is.
+  Een **geciteerd blok als kind van een bijlage** (`CONTENTS/QUOT.S` met een tabel, onderdelen of
+  alinea's: een bijlage die een bijlage van een andere handeling vervangt) gaat door
+  `bijlage_inhoud(…, geciteerd=True)`, net als een ingesloten bijlage: brontekst, geen eenheden.
   De portal-HTML (`/legal-content/…/HTML/`) blokkeert bots (HTTP 202, lege body;
   inmiddels een AWS WAF-JS-challenge, dus ook met retries permanent 202 — de portal is in de praktijk
   dood voor een simpele `requests`-scraper). Gebruik het **Cellar-archief** via content negotiation,
@@ -967,7 +970,7 @@ regel), inclusief de vloeiende tabbalk-indicator.
   weggeschreven bestand nooit als geldige staat gelezen kan worden.
 
 ## Tests
-`.venv/bin/python -m pytest tests/ -q` — 408 karakteriseringstests die het gedrag
+`.venv/bin/python -m pytest tests/ -q` — 409 karakteriseringstests die het gedrag
 vastleggen in plaats van het te beschrijven: `detect_source`-precedentie, ELI→CELEX,
 de CLG-markupnormalisatie (lidnummers, lettermarkers, voetnootankers), de
 voetnootdefinities die met de preambule meereizen, de notitievorm die een intakepoort
