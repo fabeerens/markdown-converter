@@ -1,5 +1,5 @@
 {
- "commit": "984e003",
+ "commit": "7776ece",
  "documenten": {
   "02002L0058-20091219": {
    "melding": null,
@@ -52,7 +52,7 @@
    "waarschuwingen": []
   },
   "02014L0065-20260606": {
-   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: annex-2-i-2-, annex-2-ii-ii, art-25-4-a-i, art-25-4-a-ii, art-25-4-a-iii, art-25-4-a-iv, art-4-1-1-a, art-4-1-1-b (de Formex-bron nummert op één niveau twee eenheden gelijk; alleen een herhaalde markering binnen één opsomming wordt met een volgnummer onderscheiden)",
+   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: annex-2-i-2-, annex-2-ii-ii, art-4-1-1-a, art-4-1-1-b (de Formex-bron nummert op één niveau twee eenheden gelijk; alleen een herhaalde markering binnen één opsomming wordt met een volgnummer onderscheiden)",
    "oorzaak": "structuur: dubbele structurele ankers",
    "route": "wetgeving",
    "sectie": "geconsolideerd",
@@ -967,13 +967,13 @@
    "waarschuwingen": []
   },
   "32011R1042": {
-   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=niets, extra=['uitvoeringsverordening', 'eu', 'nr', '2011', 'van', 'van', 'van', 'de', 'de', 'de', 'de', 'de']).",
-   "oorzaak": "woordcontrole: tekst dubbel",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "3fb68ea29287bfbbab00d7a8457edeaefe628ee1b2edeedac8fe1a93efdc0949",
+   "status": "ok",
+   "tekens": 3153,
    "waarschuwingen": []
   },
   "32012D0519": {
@@ -1089,13 +1089,13 @@
    "waarschuwingen": []
   },
   "32013L0052": {
-   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['van', 'en', 'en', 'en', 'en', 'en', 'en', 'en', 'en', 'en', 'en', 'en'], extra=niets).",
-   "oorzaak": "woordcontrole: tekst valt weg",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "e66d096bcf8e2af2039f07b90b4a1310043d95bc301e810f50a80fd5089046cf",
+   "status": "ok",
+   "tekens": 131254,
    "waarschuwingen": []
   },
   "32013R0390": {
@@ -1997,13 +1997,13 @@
    "waarschuwingen": []
   },
   "32021D1402": {
-   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['2021', '2021', '2014', 'en', 'en', 'en', 'en', 'en', 'en', 'en', 'en', 'en'], extra=niets).",
-   "oorzaak": "woordcontrole: tekst valt weg",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "1b8b1687e0dfa143dbe3963694dfaf1096a6c26265a787af89f2d0ab3c8bf091",
+   "status": "ok",
+   "tekens": 12732,
    "waarschuwingen": []
   },
   "32021D1772": {
@@ -2315,14 +2315,16 @@
    "waarschuwingen": []
   },
   "32023L2225": {
-   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: art-2-2-h-i, art-2-2-h-ii, art-2-2-h-iii (de Formex-bron nummert op één niveau twee eenheden gelijk; alleen een herhaalde markering binnen één opsomming wordt met een volgnummer onderscheiden)",
-   "oorzaak": "structuur: dubbele structurele ankers",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "belangrijk",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
-   "waarschuwingen": []
+   "sha256": "e494fa513146da9f9394ff43d1df31a2ca5456ae21db1138fac81bc10310f1a3",
+   "status": "ok",
+   "tekens": 246018,
+   "waarschuwingen": [
+    "2 afbeeldingen uit de Formex-bron niet overgenomen (TIFF); de tekst eromheen staat er wel: L_202302225NL.006202.fmx.tif, L_202302225NL.006301.fmx.tif."
+   ]
   },
   "32023L2673": {
    "melding": null,
@@ -2385,14 +2387,16 @@
    "waarschuwingen": []
   },
   "32023R1542": {
-   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['en', 'en', 'en', 'de', 'de', 'de', 'eg', 'eg', 'eg', '1', '9', '6'], extra=niets).",
-   "oorzaak": "woordcontrole: tekst valt weg",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "belangrijk",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
-   "waarschuwingen": []
+   "sha256": "6c306ea934ea54390679a82ff0ba43908c026e480fa38ac7ded5b7074d9e6ad5",
+   "status": "ok",
+   "tekens": 476882,
+   "waarschuwingen": [
+    "1 afbeelding uit de Formex-bron niet overgenomen (TIFF); de tekst eromheen staat er wel: L_2023191NL.01009302.tif."
+   ]
   },
   "32023R1543": {
    "melding": null,
@@ -2749,13 +2753,13 @@
    "waarschuwingen": []
   },
   "32026D0816": {
-   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['c', 'c', 'c', 'c', 'c', 'c', 'c', 'c', 'c', 'c', 'c', 'c'], extra=niets).",
-   "oorzaak": "woordcontrole: tekst valt weg",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "49759f34ce9d82a500de7a6e6446756c0a1de2527c3c51129ef9fe6bf7bca8c9",
+   "status": "ok",
+   "tekens": 37656,
    "waarschuwingen": []
   },
   "32026D1552": {
@@ -3653,6 +3657,6 @@
    ]
   }
  },
- "gemeten": "2026-09-23 16:07",
+ "gemeten": "2026-09-23 16:08",
  "taal": "NL"
 }

@@ -338,6 +338,24 @@ accountregistratie namens de gebruiker):
   (62012TJ0235, Żubrówka); die worden weggelaten met een waarschuwing en
   `afbeeldingen_weggelaten`, net als bij wetgeving. Een bestand dat niet wordt aangeroepen, een
   aanroep zonder bestand, een afbeelding midden in een zin of met IMG.CNT blijft een weigering.
+  De **woordcontrole** weigerde op 23 september 2026 negen documenten. Vier daarvan waren echte
+  fouten van de omzetter. Een NP in een tabelcel droeg na zijn TXT nog P's of een geneste lijst,
+  en die tekst viel stil weg (`CAS-nr.` onder `1. Kwik` in de batterijverordening 32023R1542, een
+  normenlijst i)–xxviii) in 32021D1402). `cel_tekst()` schrijft die rest nu in bronvolgorde in
+  dezelfde cel. Een enkele ongenummerde overweging (`<CONSID><P>` zonder NP, 32011R1042) stond er
+  twee keer in. Ze komt nu één keer en telt als overweging zonder anker, want het profiel herkent
+  een overweging aan haar nummer. De kop van een bijlagedeel ging twee keer door `inline()`, voor
+  de tekst en voor het nummer, waardoor een noot in die kop twee definities kreeg (bijlage II van
+  32023L2225); het nummer komt nu uit `_plat_bron` (zie hierboven). Twee reeksen i)–iii) onder
+  hetzelfde onderdeel (artikel 2, lid 2, onder h) van 32023L2225) delen één teller, zodat de
+  tweede `al2` krijgt. De andere vijf zijn géén fout van de omzetter: hun Markdown is gelijk aan
+  de authentieke PDF. Het gaat om `19 augustus 2015inzake` (32021L2167), `27 april
+  2016betreffende` (de noten van 2024/1183, en daarmee de geconsolideerde eIDAS), `8,9Z-MA4`
+  (32007L0011), en MiFIR artikel 53, waar een `NOTE.REF` de tekst van een eerdere noot herhaalt
+  terwijl de druk die noot één keer afdrukt, met twee `(*)`. Hier wijkt de brontelling
+  `_plat_bron` af: ze zet om elk element behalve `HT` een woordgrens en telt de herhaalde
+  nootinhoud mee. Deze vijf blijven geweigerd tot besloten is of de brontelling mag meebewegen. De
+  omzetter corrigeert de bron niet.
   De portal-HTML (`/legal-content/…/HTML/`) blokkeert bots (HTTP 202, lege body;
   inmiddels een AWS WAF-JS-challenge, dus ook met retries permanent 202 — de portal is in de praktijk
   dood voor een simpele `requests`-scraper). Gebruik het **Cellar-archief** via content negotiation,
@@ -1108,7 +1126,7 @@ regel), inclusief de vloeiende tabbalk-indicator.
   weggeschreven bestand nooit als geldige staat gelezen kan worden.
 
 ## Tests
-`.venv/bin/python -m pytest tests/ -q` — 492 karakteriseringstests die het gedrag
+`.venv/bin/python -m pytest tests/ -q` — 496 karakteriseringstests die het gedrag
 vastleggen in plaats van het te beschrijven: `detect_source`-precedentie, ELI→CELEX,
 de CLG-markupnormalisatie (lidnummers, lettermarkers, voetnootankers), de
 voetnootdefinities die met de preambule meereizen, de notitievorm die een intakepoort
