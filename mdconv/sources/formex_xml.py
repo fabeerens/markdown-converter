@@ -42,6 +42,9 @@ from ..errors import ConversionError
 from .xml_gedeeld import LATIJN, Uitvoer, nummer_anker, tabel_markdown, ws
 
 NBSP = " "
+# Markeert in inline tekst de plek van een geciteerde tabel (zie `geciteerde_tabel`).
+# U+0000 kan in XML niet voorkomen, dus nooit in brontekst.
+TABELMARKER = "\x00"
 ONGENUMMERD = {"DASH", "NDASH", "BULLET", "NONE", "DISC"}
 METADATA = {"BIB.INSTANCE", "BIB.DOC", "BIB.DATA", "PUBLICATION.REF", "NO.DOC", "INFO.CONSLEG",
             "INFO.PROD", "FAM.COMP", "GR.MOD.ACT", "DOCUMENT.REF", "PAGE.FIRST", "PAGE.LAST",
@@ -403,6 +406,7 @@ class FormexOmzetter:
         self.afbeeldingen: set[str] = set()         # gedeclareerde TIFF-inclusies
         self.afbeeldingen_weggelaten: list[dict] = []
         self.citaatdiepte = 0                       # >0 binnen een QUOT.S die inline loopt
+        self.citaattabellen: list[list[str] | None] = []  # blokken per TABELMARKER, None = geschreven
 
     def onbekend(self, context: str, el) -> None:
         """Weiger onbekende inhoud; een leeg technisch element mag verdwijnen."""
@@ -525,6 +529,8 @@ class FormexOmzetter:
             # typografie (zie `kop_tekst`); in CRD VI (32024L1619) stond anders
             # `*AFDELING I* ***Algemene bepalingen***` midden in de alinea.
             return " " + self.kop_tekst(el) + " "
+        if self.citaatdiepte and tag == "TBL":
+            return self.geciteerde_tabel(el)
         if self.citaatdiepte and tag == "NP":
             # Een geciteerd bijlageonderdeel zet zijn punten als losse NP's
             # zonder witruimte ertussen (`…voor cyberbeveiliging</TXT></NP><NP>
@@ -618,6 +624,11 @@ class FormexOmzetter:
             # De woordcontrole zou dit ook vangen, maar dan als raadsel; hier
             # staat de reden: de tekst roept de inclusie nergens aan.
             raise _xml_fout(f"inclusie(s) nergens in de tekst aangeroepen: {', '.join(sorted(ongebruikt))}")
+        if any(blokken is not None for blokken in self.citaattabellen):
+            # De marker kwam in tekst terecht die niet door `schrijf()` in
+            # `inhoud()` gaat (een cel, een definitie, een overweging): daar kan
+            # geen tabel staan, en de tabel zelf is dan nergens geschreven.
+            raise _xml_fout("een geciteerde tabel staat op een plek waar alleen tekst kan staan")
         if self.afbeeldingen_weggelaten:
             self.meld_afbeeldingen()
         if self.basis is not None:
@@ -1104,6 +1115,21 @@ class FormexOmzetter:
 
     def inhoud(self, el, basis: str, teller: dict, prefix=None, lid_anker=None, geankerd=None) -> None:
         def schrijf(tekst: str) -> None:
+            if TABELMARKER in tekst:
+                # Een geciteerde tabel (zie `geciteerde_tabel`): de tekst ervóór,
+                # de tabel als blok op haar plek, en de tekst erna als alinea.
+                for index, deel in enumerate(tekst.split(TABELMARKER)):
+                    if index % 2 == 0:
+                        schrijf(ws(deel))
+                        continue
+                    if isinstance(prefix, list) and prefix[0]:
+                        # Het lidnummer hoort op de eerste regel tekst; een lid
+                        # dat met een geciteerde tabel begint, is niet gemeten.
+                        raise _xml_fout("een lid dat met een geciteerde tabel begint, is niet gemeten")
+                    for blok in self.citaattabellen[int(deel)]:
+                        self.u.blok(blok)
+                    self.citaattabellen[int(deel)] = None
+                return
             if not tekst:
                 return
             if isinstance(prefix, list) and prefix[0]:
@@ -1289,6 +1315,30 @@ class FormexOmzetter:
         inhoud = root.find("CONTENTS")
         if inhoud is not None:
             self.bijlage_inhoud(inhoud, "", geciteerd=True)
+
+    def geciteerde_tabel(self, el) -> str:
+        """Een tabel binnen een citaat dat inline loopt: een marker op haar plek in de tekst.
+
+        Een wijzigingshandeling voegt een rij toe aan een tabel van een andere
+        handeling (`<P><QUOT.S><TBL>`, 28 keer in 12 documenten van de meetlat,
+        de PIC-verordening 32014R0167 zes keer) of zet een alinea met een tabel
+        erin. Inline kan een tabel niet, en een tabel blijft een tabel (patronen.md
+        §7: de ingevoegde tekst krijgt geen eigen ankers). Daarom breekt de
+        alinea daar: `schrijf()` in `inhoud()` schrijft de tekst ervóór, dan deze
+        blokken, dan de tekst erna. Een marker die niet door `schrijf()` gaat,
+        blijft in `citaattabellen` staan, en dan weigert `omzetten()`.
+
+        De tabel wordt hier al opgebouwd, niet pas bij het schrijven: zo krijgen
+        haar noten hun nummer in documentvolgorde, vóór een noot in de tekst erna.
+        """
+        eerder, self.u.blokken = self.u.blokken, []
+        try:
+            self.tabel(el)
+            blokken = self.u.blokken
+        finally:
+            self.u.blokken = eerder
+        self.citaattabellen.append(blokken)
+        return f" {TABELMARKER}{len(self.citaattabellen) - 1}{TABELMARKER} "
 
     def definitiepunt(self, item, basis: str, extra: str = "") -> None:
         """Eén `DLIST.ITEM`: `16) “hoofdvestiging” …` als eigen alinea.

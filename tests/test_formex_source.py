@@ -635,6 +635,66 @@ def test_geciteerde_punten_zonder_witruimte_ertussen_blijven_gescheiden():
             "3.2. Het aantal gebruikers”") in markdown
 
 
+GECITEERDE_TABEL = (
+    b'<QUOT.S LEVEL="1"><TBL COLS="2" NO.SEQ="0001"><CORPUS><ROW TYPE="HEADER">'
+    b'<CELL COL="1" TYPE="HEADER">Stof</CELL><CELL COL="2" TYPE="HEADER">Grenswaarde</CELL></ROW>'
+    b'<ROW><CELL COL="1"><QUOT.START CODE="201E" ID="Q1" REF.END="E1"/>Fenol'
+    b'<NOTE NOTE.ID="E0001"><P>Eerste noot.</P></NOTE></CELL>'
+    b'<CELL COL="2">5 mg/l<QUOT.END CODE="201D" ID="E1" REF.START="Q1"/></CELL></ROW></CORPUS></TBL></QUOT.S>'
+)
+
+
+def test_een_geciteerde_tabel_komt_als_blok_waar_de_tekst_haar_citeert():
+    """De PIC-verordening (32014R0167) voegt zo zes vermeldingen toe aan een tabel van een andere
+    verordening: `<P><QUOT.S><TBL>` naast de TXT van een onderdeel; dat weigerde als `inline:TBL`.
+    Een tabel bestaat alleen als blok; de alinea breekt daar, zonder eigen eenheden, en de noot
+    in de tabel krijgt haar nummer vóór die in de tekst erna."""
+    act = ACT.replace(
+        b"<TXT>eerste onderdeel;</TXT>",
+        b"<TXT>de volgende vermelding wordt toegevoegd:</TXT><P>" + GECITEERDE_TABEL + b"</P>",
+    ).replace(b"<TXT>tweede onderdeel.</TXT>",
+              b'<TXT>tweede onderdeel<NOTE NOTE.ID="E0002"><P>Tweede noot.</P></NOTE>.</TXT>')
+
+    markdown, eenheden, onbekend, _ = formex_xml.omzetten(formex_zip(act=act))
+
+    assert onbekend == {}
+    assert ("\na) de volgende vermelding wordt toegevoegd:\n\n|  |  |\n| --- | --- |\n"
+            "| Stof | Grenswaarde |\n| “Fenol (1) | 5 mg/l” |\n\nb) tweede onderdeel (2).\n") in markdown
+    assert markdown.index("(1)  Eerste noot.") < markdown.index("(2)  Tweede noot.")
+    assert [e.anker for e in eenheden if e.soort == "onderdeel"] == ["art-1-1-a", "art-1-1-b"]
+
+
+def test_een_geciteerde_alinea_voor_een_geciteerde_tabel_blijft_een_eigen_alinea():
+    """32022R0469 vervangt een overweging door een alinea met een tabel; 32017L0774 zet de
+    geciteerde tabel direct in een ALINEA, na de P die haar aankondigt."""
+    citaat = GECITEERDE_TABEL.replace(
+        b'<QUOT.S LEVEL="1">',
+        b'<QUOT.S LEVEL="1"><P><QUOT.START CODE="201C" ID="Q0" REF.END="E0"/>De percentages bedragen:</P>')
+    act = ACT.replace(b"</ARTICLE>", b"<ALINEA><P>Overweging 217 wordt vervangen door:</P>" + citaat
+                      + b"</ALINEA></ARTICLE>", 1)
+
+    markdown = formex_xml.omzetten(formex_zip(act=act))[0]
+
+    assert ("\nOverweging 217 wordt vervangen door:\n\n“De percentages bedragen:\n\n|  |  |\n"
+            "| --- | --- |\n| Stof | Grenswaarde |\n") in markdown
+
+
+def test_een_geciteerde_tabel_waar_alleen_tekst_kan_staan_wordt_geweigerd():
+    """In de TXT van een onderdeel wordt de regel zonder `schrijf()` geschreven; een tabel kan
+    daar niet, en dan zou ze nergens staan."""
+    act = ACT.replace(b"<TXT>eerste onderdeel;</TXT>", b"<TXT>eerste onderdeel: " + GECITEERDE_TABEL + b"</TXT>")
+    with pytest.raises(ConversionError, match="alleen tekst kan staan"):
+        formex_xml.omzetten(formex_zip(act=act))
+
+
+def test_een_lid_dat_met_een_geciteerde_tabel_begint_wordt_geweigerd():
+    """Het lidnummer hoort op de eerste regel tekst; die vorm is niet gemeten."""
+    act = ACT.replace(b"<ALINEA><P>Deze verordening stelt regels vast.</P>",
+                      b"<ALINEA>" + GECITEERDE_TABEL + b"</ALINEA><ALINEA><P>Deze verordening stelt regels vast.</P>")
+    with pytest.raises(ConversionError, match="lid dat met een geciteerde tabel begint"):
+        formex_xml.omzetten(formex_zip(act=act))
+
+
 def test_een_afdeling_inline_buiten_een_citaat_blijft_een_weigering():
     """Buiten een citaat is een DIVISION een eenheid van de handeling zelf; die mag niet stil
     in een alinea opgaan."""
