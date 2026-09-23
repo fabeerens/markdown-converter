@@ -1071,11 +1071,14 @@ class FormexOmzetter:
         )
         return onderscheiden, f"{nr}-{volgnummer}"
 
-    def artikel(self, el) -> None:
+    def artikel(self, el, ouder: str = "") -> None:
+        """`ouder`: het anker van de bijlage waarin het artikel staat (`annex-o1-art-3`)."""
         ti = self.kop_tekst(el.find("TI.ART")) if el.find("TI.ART") is not None else "Artikel"
         sti = self.kop_tekst(el.find("STI.ART"), "ITALIC") if el.find("STI.ART") is not None else ""
         m = re.match(r"Artikel\s+(.+)$", ti, re.I)
         anker = f"art-{nummer_anker(m.group(1))}" if m else f"art-{int(el.get('IDENTIFIER', '0'))}"
+        if ouder:
+            anker = f"{ouder}-{anker}"
         self.u.blok(f"### {ti.replace(' ', NBSP)}")
         if sti:
             self.u.blok(sti)
@@ -1617,6 +1620,14 @@ class FormexOmzetter:
                 # in de meetlat, meest wijzigingsrichtlijnen). Zoals bij een
                 # ingesloten bijlage: wel brontekst, geen eenheden.
                 self.bijlage_inhoud(kind, "", geciteerd=True)
+            elif kind.tag == "ARTICLE" and not geciteerd:
+                # Een bijlage kan een compleet reglement zijn met eigen artikelen:
+                # de statuten van een ERIC (32022D0289, elf artikelen), of de
+                # artikelen van de Internationale Gezondheidsregeling die een
+                # besluit per onderdeel wijzigt (32022D0830). Het profiel geeft ze
+                # `annex-<n>-art-<k>` (patronen.md §6); de kop is die van een
+                # artikel, en de structuurcontrole telt ze als artikelen mee.
+                self.artikel(kind, ouder=anker)
             elif kind.tag in METADATA:
                 continue
             else:

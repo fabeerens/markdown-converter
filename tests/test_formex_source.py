@@ -1051,6 +1051,23 @@ def test_a_chapter_bis_is_another_chapter_than_the_one_before_it():
     assert _ankers(formex_zip(act=act), "divisie") == ["hfd-1", "hfd-1bis"]
 
 
+def test_artikelen_van_een_bijlage_dragen_de_bijlage_in_hun_anker():
+    """Het besluit over AnaEE-ERIC (32022D0289) heeft de statuten als bijlage, met elf eigen
+    artikelen; dat weigerde als `inhoud:ARTICLE`. Het profiel ankert ze `annex-<n>-art-<k>`."""
+    artikelen = (b'<ARTICLE IDENTIFIER="001"><TI.ART>Artikel 1</TI.ART><STI.ART>Naam</STI.ART>'
+                 b'<ALINEA>Er wordt een ERIC opgericht.</ALINEA></ARTICLE>'
+                 b'<ARTICLE IDENTIFIER="002"><TI.ART>Artikel 2</TI.ART><STI.ART>Taken</STI.ART>'
+                 b'<PARAG IDENTIFIER="002.001"><NO.PARAG>1.</NO.PARAG><ALINEA>De hoofdtaak is onderzoek.</ALINEA>'
+                 b'</PARAG></ARTICLE>')
+
+    data = _met_bijlagen(_bijlage(b"BIJLAGE", artikelen))
+    markdown, eenheden, _, _ = formex_xml.omzetten(data)
+
+    assert "\n### Artikel 2\n\nTaken\n\n1.   De hoofdtaak is onderzoek.\n" in markdown
+    assert [e.anker for e in eenheden if e.soort in ("artikel", "lid")] == [
+        "art-1", "art-1-1", "annex-o1-art-1", "annex-o1-art-2", "annex-o1-art-2-1"]
+
+
 def test_an_annex_that_quotes_a_block_of_another_act_renders_it_without_units():
     """16 wijzigingshandelingen in de meetlat vervangen een bijlage elders door een geciteerd blok
     (QUOT.S met een tabel of onderdelen als kind van CONTENTS); dat weigerde als onbekende inhoud."""
