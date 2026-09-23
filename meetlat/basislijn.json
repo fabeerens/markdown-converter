@@ -1,5 +1,5 @@
 {
- "commit": "a0450f8+wijzigingen",
+ "commit": "aa7c0bb",
  "documenten": {
   "02002L0058-20091219": {
    "melding": null,
@@ -48,8 +48,8 @@
    "waarschuwingen": []
   },
   "02014L0065-20260606": {
-   "melding": "XML-element zonder eigen behandeling (inline:DIVISION); omzetting geweigerd.",
-   "oorzaak": "element inline:DIVISION",
+   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: annex-2-i-2-, annex-2-ii-ii, art-25-4-a-i, art-25-4-a-ii, art-25-4-a-iii, art-25-4-a-iv, art-4-1-1-a, art-4-1-1-b (de Formex-bron nummert op één niveau twee eenheden gelijk; alleen een herhaalde markering binnen één opsomming wordt met een volgnummer onderscheiden)",
+   "oorzaak": "structuur: dubbele structurele ankers",
    "route": "wetgeving",
    "sectie": "geconsolideerd",
    "sha256": null,
@@ -187,23 +187,26 @@
    "waarschuwingen": []
   },
   "02018R1240-20260612": {
-   "melding": "XML-element zonder eigen behandeling (inline:DIVISION); omzetting geweigerd.",
-   "oorzaak": "element inline:DIVISION",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "geconsolideerd",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
-   "waarschuwingen": []
+   "sha256": "cfa3d512175027c0ae094f9df6e2722cb691aaa1dbc558f0841b0d1ca1e68982",
+   "status": "ok",
+   "tekens": 339489,
+   "waarschuwingen": [
+    "Overwegingen en aanhef zijn overgenomen uit de oorspronkelijke handeling (CELEX:32018R1240); de geconsolideerde tekst op EUR-Lex bevat deze niet.",
+    "CLG.MDFO in de tekst noemt 32018R1240R(03), dat niet als wijziging in GR.MOD.ACT staat; amendments kan onvolledig zijn."
+   ]
   },
   "02018R1724-20260520": {
    "melding": null,
    "oorzaak": null,
    "route": "wetgeving",
    "sectie": "geconsolideerd",
-   "sha256": "5f284ff5752ee27e630939e70b1977e2efd249892dd900985f910ca57065e8e9",
+   "sha256": "c067e2fa821e5357c1cb2ccf6f49f930687e6bd7abbc898eb455acad7fb6beac",
    "status": "ok",
-   "tekens": 80708,
+   "tekens": 80709,
    "waarschuwingen": [
     "De geconsolideerde Formex bevat geen considerans en die van de basishandeling kon niet worden ingevoegd: de identiteit van de basishandeling is niet uit de bron vast te stellen. De overwegingen en hun rec-ankers ontbreken."
    ]
@@ -235,24 +238,31 @@
    ]
   },
   "02019R0817-20260612": {
-   "melding": "XML-element zonder eigen behandeling (inline:DLIST); omzetting geweigerd.",
-   "oorzaak": "element inline:DLIST",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "geconsolideerd",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
-   "waarschuwingen": []
+   "sha256": "0eba7ea05abe3d10ff95240e6d24f4afaf3fe9dbfd77b0e8bd967c0833f54ecf",
+   "status": "ok",
+   "tekens": 251306,
+   "waarschuwingen": [
+    "Overwegingen en aanhef zijn overgenomen uit de oorspronkelijke handeling (CELEX:32019R0817); de geconsolideerde tekst op EUR-Lex bevat deze niet.",
+    "CLG.MDFO in de tekst noemt 32019R0817R(01), 32019R0817R(05), dat niet als wijziging in GR.MOD.ACT staat; amendments kan onvolledig zijn."
+   ]
   },
   "02019R0818-20260612": {
-   "melding": "XML-element zonder eigen behandeling (inline:DLIST); omzetting geweigerd.",
-   "oorzaak": "element inline:DLIST",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "geconsolideerd",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
-   "waarschuwingen": []
+   "sha256": "15b8ae0465b2693ab987b78508ff8f6d7d8cdb069d42d3c00c74a6f726482600",
+   "status": "ok",
+   "tekens": 231425,
+   "waarschuwingen": [
+    "Overwegingen en aanhef zijn overgenomen uit de oorspronkelijke handeling (CELEX:32019R0818); de geconsolideerde tekst op EUR-Lex bevat deze niet.",
+    "Geen CLG.MDFO in de tekst noemt 32021R1150; van deze wijzigende handeling(en) is `shown` niet vastgesteld.",
+    "CLG.MDFO in de tekst noemt 32019R0818R(01), 32019R0818R(04), 32024R1358R(01), dat niet als wijziging in GR.MOD.ACT staat; amendments kan onvolledig zijn."
+   ]
   },
   "02019R0881-20250204": {
    "melding": null,
@@ -524,13 +534,13 @@
    "waarschuwingen": []
   },
   "32006L0136": {
-   "melding": "XML-element zonder eigen behandeling (inline:GR.SEQ); omzetting geweigerd.",
-   "oorzaak": "element inline:GR.SEQ",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "1f453917e2f3be5463b1e75db8b17bf35915004b9afa71cee65b2ca59ef87bcd",
+   "status": "ok",
+   "tekens": 16367,
    "waarschuwingen": []
   },
   "32006R0056": {
@@ -674,13 +684,13 @@
    "waarschuwingen": []
   },
   "32008L0044": {
-   "melding": "XML-element zonder eigen behandeling (inline:GR.SEQ); omzetting geweigerd.",
-   "oorzaak": "element inline:GR.SEQ",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "2b44f23f391dd7603a072639f8089f3494b7196abb0fdbff9fc0593cb8780db4",
+   "status": "ok",
+   "tekens": 21174,
    "waarschuwingen": []
   },
   "32008R0064": {
@@ -824,13 +834,13 @@
    "waarschuwingen": []
   },
   "32010L0015": {
-   "melding": "XML-element zonder eigen behandeling (inline:GR.SEQ); omzetting geweigerd.",
-   "oorzaak": "element inline:GR.SEQ",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "1a543646b2f69d486cf9282326393df9f7d8ea1e3b48bef9799285a1bcfe7310",
+   "status": "ok",
+   "tekens": 9040,
    "waarschuwingen": []
   },
   "32010L0040": {
@@ -894,13 +904,13 @@
    "waarschuwingen": []
   },
   "32011L0019": {
-   "melding": "XML-element zonder eigen behandeling (inline:GR.SEQ); omzetting geweigerd.",
-   "oorzaak": "element inline:GR.SEQ",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "eeb7e4cfc84a583f5fb30866381fda750e39cefbda9a150798a904ec7b28436d",
+   "status": "ok",
+   "tekens": 13611,
    "waarschuwingen": []
   },
   "32011L0083": {
@@ -926,13 +936,13 @@
    ]
   },
   "32011R0704": {
-   "melding": "XML-element zonder eigen behandeling (inline:GR.SEQ); omzetting geweigerd.",
-   "oorzaak": "element inline:GR.SEQ",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "89be6d09b0fa152eceef8fbe67c1e444f8738a9281e006b500e808bef127254f",
+   "status": "ok",
+   "tekens": 15643,
    "waarschuwingen": []
   },
   "32011R1041": {
@@ -976,13 +986,13 @@
    "waarschuwingen": []
   },
   "32012L0005": {
-   "melding": "XML-element zonder eigen behandeling (inline:DLIST); omzetting geweigerd.",
-   "oorzaak": "element inline:DLIST",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "ac5058637d6b03984d2d2de3ece66aad1d324979f8bf6f54a750eff091f4e5e6",
+   "status": "ok",
+   "tekens": 7184,
    "waarschuwingen": []
   },
   "32012L0027": {
@@ -1138,8 +1148,8 @@
    "waarschuwingen": []
   },
   "32014L0065": {
-   "melding": "XML-element zonder eigen behandeling (inline:DIVISION); omzetting geweigerd.",
-   "oorzaak": "element inline:DIVISION",
+   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: annex-2-i-2-, annex-2-ii-ii, art-4-1-1-a, art-4-1-1-b (de Formex-bron nummert op één niveau twee eenheden gelijk; alleen een herhaalde markering binnen één opsomming wordt met een volgnummer onderscheiden)",
+   "oorzaak": "structuur: dubbele structurele ankers",
    "route": "wetgeving",
    "sectie": "belangrijk",
    "sha256": null,
@@ -1168,13 +1178,13 @@
    "waarschuwingen": []
   },
   "32014R0167": {
-   "melding": "XML-element zonder eigen behandeling (inline:TBL); omzetting geweigerd.",
-   "oorzaak": "element inline:TBL",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "a326a4bb56a561c14f9724933b2b6426eef18eb257f8d4be7a70c2240978d2db",
+   "status": "ok",
+   "tekens": 12174,
    "waarschuwingen": []
   },
   "32014R0324": {
@@ -1288,13 +1298,13 @@
    "waarschuwingen": []
   },
   "32015R0878": {
-   "melding": "XML-element zonder eigen behandeling (inline:DLIST); omzetting geweigerd.",
-   "oorzaak": "element inline:DLIST",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "14319c8a15f33be834dcb5e6b6e621a04c62186e0e2e9d47ad9a89d3966d70d6",
+   "status": "ok",
+   "tekens": 4707,
    "waarschuwingen": []
   },
   "32015R1716": {
@@ -1480,13 +1490,13 @@
    "waarschuwingen": []
   },
   "32017L0774": {
-   "melding": "XML-element zonder eigen behandeling (inline:TBL); omzetting geweigerd.",
-   "oorzaak": "element inline:TBL",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "ba381f67763318073db657e7f8dd4a357960631a421bb5fcefde06613b0fac1d",
+   "status": "ok",
+   "tekens": 10313,
    "waarschuwingen": []
   },
   "32017R0220": {
@@ -1600,8 +1610,8 @@
    "waarschuwingen": []
   },
   "32018L1808": {
-   "melding": "XML-element zonder eigen behandeling (inline:DLIST); omzetting geweigerd.",
-   "oorzaak": "element inline:DLIST",
+   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: rec-65 (de Formex-bron nummert op één niveau twee eenheden gelijk; alleen een herhaalde markering binnen één opsomming wordt met een volgnummer onderscheiden)",
+   "oorzaak": "structuur: dubbele structurele ankers",
    "route": "wetgeving",
    "sectie": "belangrijk",
    "sha256": null,
@@ -1630,23 +1640,23 @@
    "waarschuwingen": []
   },
   "32018R1123": {
-   "melding": "XML-element zonder eigen behandeling (inline:TBL); omzetting geweigerd.",
-   "oorzaak": "element inline:TBL",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "22135ea288fcea0bd1ec87d9abb5ef985590a62d934a45caf77097ed2285092e",
+   "status": "ok",
+   "tekens": 16651,
    "waarschuwingen": []
   },
   "32018R1240": {
-   "melding": "XML-element zonder eigen behandeling (inline:DIVISION); omzetting geweigerd.",
-   "oorzaak": "element inline:DIVISION",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "belangrijk",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "d714253ac193edbe6d583af13d5cb470904463104debc0fc8ce9927117196f39",
+   "status": "ok",
+   "tekens": 306347,
    "waarschuwingen": []
   },
   "32018R1671": {
@@ -1674,9 +1684,9 @@
    "oorzaak": null,
    "route": "wetgeving",
    "sectie": "belangrijk",
-   "sha256": "68863e52c086a6b4d6312eedb4aef6e0308c5647ef2f6020cd54952a23e069c8",
+   "sha256": "92cbc2edf7b472bf850c892b7a070f919ab922cd69fc893f9dadb2984548b2db",
    "status": "ok",
-   "tekens": 153052,
+   "tekens": 153053,
    "waarschuwingen": []
   },
   "32018R1725": {
@@ -1830,23 +1840,23 @@
    "waarschuwingen": []
   },
   "32019R0817": {
-   "melding": "XML-element zonder eigen behandeling (inline:DLIST); omzetting geweigerd.",
-   "oorzaak": "element inline:DLIST",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "testset",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "17c5f4d9ebab86fbcf00104a476f5decd593dc154b7293202030ae8285bebd69",
+   "status": "ok",
+   "tekens": 247775,
    "waarschuwingen": []
   },
   "32019R0818": {
-   "melding": "XML-element zonder eigen behandeling (inline:DLIST); omzetting geweigerd.",
-   "oorzaak": "element inline:DLIST",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "belangrijk",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "446093d3281f7da0b7d9ecb749700b6f816941287d1708051936abef876ff76c",
+   "status": "ok",
+   "tekens": 221553,
    "waarschuwingen": []
   },
   "32019R0881": {
@@ -1890,13 +1900,13 @@
    "waarschuwingen": []
   },
   "32020L0363": {
-   "melding": "XML-element zonder eigen behandeling (inline:TBL); omzetting geweigerd.",
-   "oorzaak": "element inline:TBL",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "aa404aca6ad3393c1632b5842a0bd53a5fe6ed0efa324387e20f10452d9beafc",
+   "status": "ok",
+   "tekens": 6527,
    "waarschuwingen": []
   },
   "32020L1833": {
@@ -2054,13 +2064,13 @@
    "waarschuwingen": []
   },
   "32021R1452": {
-   "melding": "XML-element zonder eigen behandeling (inline:TBL); omzetting geweigerd.",
-   "oorzaak": "element inline:TBL",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "1ccddf37f1ea70ddaea2c0eb6f91ee13e65d095c59daadbe09b9768582fb4de3",
+   "status": "ok",
+   "tekens": 10112,
    "waarschuwingen": []
   },
   "32021R2191": {
@@ -2074,18 +2084,18 @@
    "waarschuwingen": []
   },
   "32022D0289": {
-   "melding": "XML-element zonder eigen behandeling (inhoud:ARTICLE); omzetting geweigerd.",
-   "oorzaak": "element inhoud:ARTICLE",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "e07b8871a159a0f02f2da3528e2b889edcde01b404d635915e089d3904cff7b9",
+   "status": "ok",
+   "tekens": 12096,
    "waarschuwingen": []
   },
   "32022D0830": {
-   "melding": "XML-element zonder eigen behandeling (inhoud:ARTICLE); omzetting geweigerd.",
-   "oorzaak": "element inhoud:ARTICLE",
+   "melding": "Formex-structuurcontrole faalt: lid: bron 13, Markdown 12",
+   "oorzaak": "structuur: lid",
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
    "sha256": null,
@@ -2114,13 +2124,13 @@
    "waarschuwingen": []
   },
   "32022L2464": {
-   "melding": "XML-element zonder eigen behandeling (inline:DIVISION); omzetting geweigerd.",
-   "oorzaak": "element inline:DIVISION",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "belangrijk",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "4290457cae533ad2cbca65e3002c8a15707245e61ef19ddca97f04edc9774d54",
+   "status": "ok",
+   "tekens": 291509,
    "waarschuwingen": []
   },
   "32022L2555": {
@@ -2144,23 +2154,23 @@
    "waarschuwingen": []
   },
   "32022R0247": {
-   "melding": "XML-element zonder eigen behandeling (inline:TBL); omzetting geweigerd.",
-   "oorzaak": "element inline:TBL",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "e82d7ee536ed66b67b36fc5511fa7e22972b91b7c8f6fd227608f308c9381530",
+   "status": "ok",
+   "tekens": 5609,
    "waarschuwingen": []
   },
   "32022R0469": {
-   "melding": "XML-element zonder eigen behandeling (inline:TBL); omzetting geweigerd.",
-   "oorzaak": "element inline:TBL",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "8ad78a29357fd8405a11c624dba3adf1e9c2c3a67cd8e782265ebd5a102bb406",
+   "status": "ok",
+   "tekens": 6809,
    "waarschuwingen": []
   },
   "32022R0612": {
@@ -2296,13 +2306,13 @@
    "waarschuwingen": []
   },
   "32023L2673": {
-   "melding": "XML-element zonder eigen behandeling (inline:GR.SEQ); omzetting geweigerd.",
-   "oorzaak": "element inline:GR.SEQ",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "c1c1a053c28364f6e81a7737ffac5b2a5e80885314d9e8f9bf85e71bd43e1249",
+   "status": "ok",
+   "tekens": 79942,
    "waarschuwingen": []
   },
   "32023R0152": {
@@ -2428,13 +2438,13 @@
    "waarschuwingen": []
   },
   "32024L1619": {
-   "melding": "XML-element zonder eigen behandeling (inline:DIVISION); omzetting geweigerd.",
-   "oorzaak": "element inline:DIVISION",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "1720efac6d8cbddcbb5c2b310bca71cddfcffd2501ccfc1a4f47fe518f72414b",
+   "status": "ok",
+   "tekens": 315800,
    "waarschuwingen": []
   },
   "32024L1640": {
@@ -2538,8 +2548,8 @@
    "waarschuwingen": []
   },
   "32024R1183": {
-   "melding": "XML-element zonder eigen behandeling (inline:DIVISION); omzetting geweigerd.",
-   "oorzaak": "element inline:DIVISION",
+   "melding": "Formex-bron geweigerd: een inclusie (INCL.ELEMENT) als los blok is alleen voor een afbeelding gemeten",
+   "oorzaak": "een inclusie als los blok is alleen voor een afbeelding gemeten",
    "route": "wetgeving",
    "sectie": "testset",
    "sha256": null,
@@ -2648,8 +2658,8 @@
    "waarschuwingen": []
   },
   "32025L0145": {
-   "melding": "XML-element zonder eigen behandeling (inline:TBL); omzetting geweigerd.",
-   "oorzaak": "element inline:TBL",
+   "melding": "XML-element zonder eigen behandeling (inline:GR.NOTES); omzetting geweigerd.",
+   "oorzaak": "element inline:GR.NOTES",
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
    "sha256": null,
@@ -2668,13 +2678,13 @@
    "waarschuwingen": []
   },
   "32025R0038": {
-   "melding": "XML-element zonder eigen behandeling (inline:GR.SEQ); omzetting geweigerd.",
-   "oorzaak": "element inline:GR.SEQ",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "belangrijk",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "4913cca0a9ec14b3d760c0b6f2c41196501c6a4d717a9fabd2bd926a924b9865",
+   "status": "ok",
+   "tekens": 164150,
    "waarschuwingen": []
   },
   "32025R0327": {
@@ -3619,6 +3629,6 @@
    ]
   }
  },
- "gemeten": "2026-09-23 15:12",
+ "gemeten": "2026-09-23 16:00",
  "taal": "NL"
 }

@@ -210,6 +210,26 @@ accountregistratie namens de gebruiker):
   haar tekst mee (`IMG.CNT`, de certificaten van Brussel I bis), dan komt die tekst als alinea's
   mee, zonder eenheden. Een ander afbeeldingstype, een afbeelding die niet in de zip zit, en een
   `IMG.CNT` midden in een zin blijven een weigering; een `FORMULA` in `IMG.CNT` ook.
+  Een **geciteerde afdeling, definitielijst of bijlageonderdeel** (`DIVISION`, `DLIST` of `GR.SEQ`
+  binnen `QUOT.S`, in de bron vrijwel altijd als `<P><QUOT.S>…</QUOT.S></P>` naast de TXT van een
+  wijzigingspunt) loopt inline door, net als een geciteerd artikel. eIDAS 2 (32024R1183) voegt zo
+  zes afdelingen met hun artikelen in, CRD VI (32024L1619) hele titels, de
+  interoperabiliteitsverordening (32019R0817) definities. Er komt geen `##`-kop, geen eigen alinea
+  per punt en geen eenheid: de kennisbank zou dat lezen als structuur van déze handeling. De kop
+  van een geciteerde afdeling verliest haar opmaak (`kop_tekst`). PREFIX, TERM en DEFINITION, en
+  losse NP's die in de bron tegen elkaar aan staan (`cyberbeveiliging3.2.`), krijgen een spatie
+  ertussen. Buiten een citaat blijven deze elementen een weigering (`citaatdiepte`). Een
+  **geciteerde tabel** kan niet inline. `geciteerde_tabel()` bouwt haar op waar ze staat, zodat
+  haar noten in documentvolgorde genummerd worden, en laat een `TABELMARKER` (U+0000) in de tekst
+  achter. `schrijf()` in `inhoud()` breekt de alinea daar: de tekst ervoor, de tabel als blok, de
+  tekst erna. Een marker die niet door `schrijf()` gaat (in een cel, een definitie of de TXT van
+  een onderdeel) laat de tabel ongeschreven, en dan weigert de omzetting; een lid dat met een
+  geciteerde tabel begint weigert ook. `DEEL A`/`DEEL B` als `GR.SEQ` in een tabelcel (de lijst
+  van werkzame stoffen, 32011R0704) worden tekst van die cel. Een `ARTICLE` in een bijlage (de
+  statuten van een ERIC, 32022D0289) is een artikel met de bijlage in zijn anker
+  (`annex-o1-art-3`, patronen.md §6). Tot 23 september 2026 weigerde de meetlat op deze vormen 31
+  documenten (inline:DIVISION, inline:DLIST, inline:GR.SEQ, inline:TBL, inhoud:ARTICLE); 25 komen
+  nu door, de overige 6 op een andere oorzaak.
   De portal-HTML (`/legal-content/…/HTML/`) blokkeert bots (HTTP 202, lege body;
   inmiddels een AWS WAF-JS-challenge, dus ook met retries permanent 202 — de portal is in de praktijk
   dood voor een simpele `requests`-scraper). Gebruik het **Cellar-archief** via content negotiation,
@@ -979,7 +999,7 @@ regel), inclusief de vloeiende tabbalk-indicator.
   weggeschreven bestand nooit als geldige staat gelezen kan worden.
 
 ## Tests
-`.venv/bin/python -m pytest tests/ -q` — 415 karakteriseringstests die het gedrag
+`.venv/bin/python -m pytest tests/ -q` — 425 karakteriseringstests die het gedrag
 vastleggen in plaats van het te beschrijven: `detect_source`-precedentie, ELI→CELEX,
 de CLG-markupnormalisatie (lidnummers, lettermarkers, voetnootankers), de
 voetnootdefinities die met de preambule meereizen, de notitievorm die een intakepoort
