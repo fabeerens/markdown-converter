@@ -1218,3 +1218,15 @@ def test_an_annotation_at_the_start_of_a_paragraph_of_an_article_is_still_refuse
                       b"<ANNOTATION><P>Opmerking vooraf.</P></ANNOTATION><ALINEA><P>Deze verordening stelt regels vast.</P>")
     with pytest.raises(ConversionError, match="annotatie aan het begin van een lid"):
         formex_xml.omzetten(formex_zip(act=act))
+
+
+def test_a_title_that_restarts_in_every_part_carries_its_part():
+    """32018L1972 begint in DEEL I en DEEL II bij TITEL I; dat gaf twee keer `tit-1` en `hfd-1-1`."""
+    def deel(nr: bytes, artikel: bytes) -> bytes:
+        return (b"<DIVISION><TITLE><TI>DEEL " + nr + b"</TI></TITLE><DIVISION><TITLE><TI>TITEL I</TI></TITLE>"
+                b"<DIVISION><TITLE><TI>HOOFDSTUK I</TI></TITLE><ARTICLE IDENTIFIER=\"" + artikel + b"\"><TI.ART>"
+                b"Artikel " + artikel + b"</TI.ART><ALINEA><P>Tekst.</P></ALINEA></ARTICLE></DIVISION>"
+                b"</DIVISION></DIVISION>")
+    act = ACT.replace(b"</ENACTING.TERMS>", deel(b"I", b"2") + deel(b"II", b"3") + b"</ENACTING.TERMS>", 1)
+    assert _ankers(formex_zip(act=act), "divisie") == [
+        "hfd-1", "deel-1", "tit-1-1", "hfd-1-1-1", "deel-2", "tit-2-1", "hfd-2-1-1"]

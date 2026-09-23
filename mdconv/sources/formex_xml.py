@@ -1022,6 +1022,10 @@ class FormexOmzetter:
         soort = m.group(1).upper()
         nr = nummer_anker(m.group(2), romeins_omrekenen=True) + (m.group(3) or "").lower()
         if soort == "TITEL":
+            # Het Europees wetboek voor elektronische communicatie (32018L1972)
+            # begint in elk DEEL opnieuw bij TITEL I; zonder het deel gaf dat twee
+            # keer `tit-1` en `hfd-1-1`. Het profiel doet hetzelfde (`tit-3-1`).
+            nr = f"{pad['deel']}-{nr}" if "deel" in pad else nr
             return f"tit-{nr}", "tit", nr
         if soort == "HOOFDSTUK":
             return (f"hfd-{pad['tit']}-{nr}" if "tit" in pad else f"hfd-{nr}"), "hfd", nr
