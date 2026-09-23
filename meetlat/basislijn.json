@@ -1,5 +1,5 @@
 {
- "commit": "aa7c0bb",
+ "commit": "c24df0c",
  "documenten": {
   "02002L0058-20091219": {
    "melding": null,
@@ -177,14 +177,17 @@
    ]
   },
   "02018L1972-20241018": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: GR.ANNOTATION (2×); omzetting geweigerd.",
-   "oorzaak": "element GR.ANNOTATION",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "geconsolideerd",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
-   "waarschuwingen": []
+   "sha256": "81ad560df08d9cb71aa6d217ddaa10374cd21ec1a5d34aaf0a06c92ed50e797d",
+   "status": "ok",
+   "tekens": 743987,
+   "waarschuwingen": [
+    "Overwegingen en aanhef zijn overgenomen uit de oorspronkelijke handeling (CELEX:32018L1972); de geconsolideerde tekst op EUR-Lex bevat deze niet.",
+    "CLG.MDFO in de tekst noemt 32018L1972R(01), 32018L1972R(05), dat niet als wijziging in GR.MOD.ACT staat; amendments kan onvolledig zijn."
+   ]
   },
   "02018R1240-20260612": {
    "melding": null,
@@ -414,13 +417,13 @@
    "waarschuwingen": []
   },
   "32005D0338": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: ANNOTATION (5×); omzetting geweigerd.",
-   "oorzaak": "element ANNOTATION",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "a397740331e2a9eda77f9e3aa6d4cb86d0950f59d44b40f802eb588687831548",
+   "status": "ok",
+   "tekens": 72529,
    "waarschuwingen": []
   },
   "32005D0478": {
@@ -454,8 +457,8 @@
    "waarschuwingen": []
   },
   "32005L0066": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: ANNOTATION (1×), FORMULA (1×), TOC (1×); omzetting geweigerd.",
-   "oorzaak": "element ANNOTATION, FORMULA, TOC",
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: FORMULA (1×), TOC (1×); omzetting geweigerd.",
+   "oorzaak": "element FORMULA, TOC",
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
    "sha256": null,
@@ -464,13 +467,13 @@
    "waarschuwingen": []
   },
   "32005R1014": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: GR.ANNOTATION (1×); omzetting geweigerd.",
-   "oorzaak": "element GR.ANNOTATION",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "cfeb8fdf1070c5a4bc848a8dab491acb93218400a7c9e8a7caadc682c1c87ae9",
+   "status": "ok",
+   "tekens": 9291,
    "waarschuwingen": []
   },
   "32005R1203": {
@@ -794,13 +797,13 @@
    "waarschuwingen": []
   },
   "32009R1293": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: ANNOTATION (2×); omzetting geweigerd.",
-   "oorzaak": "element ANNOTATION",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "85f1bbda66f433d9c753a51b4965f476921f6d3827f21c4aa78c230af71db0bc",
+   "status": "ok",
+   "tekens": 7595,
    "waarschuwingen": []
   },
   "32010D0168": {
@@ -854,13 +857,13 @@
    "waarschuwingen": []
   },
   "32010R0860": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: BLK (237×), GR.ANNOTATION (1×); omzetting geweigerd.",
-   "oorzaak": "element BLK, GR.ANNOTATION",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "caa87ec0d3d552cdf5a00f9b155eb5694d962cffc7b7c26c34103e830cf6c4bb",
+   "status": "ok",
+   "tekens": 1486771,
    "waarschuwingen": []
   },
   "32010R1165": {
@@ -996,8 +999,8 @@
    "waarschuwingen": []
   },
   "32012L0027": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: FORMULA.S (1×), GR.ANNOTATION (1×), GR.TBL (1×), NO.GR.SEQ (2×); omzetting geweigerd.",
-   "oorzaak": "element FORMULA.S, GR.ANNOTATION, GR.TBL, NO.GR.SEQ",
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: FORMULA.S (1×), GR.TBL (1×), NO.GR.SEQ (2×); omzetting geweigerd.",
+   "oorzaak": "element FORMULA.S, GR.TBL, NO.GR.SEQ",
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
    "sha256": null,
@@ -1078,8 +1081,8 @@
    "waarschuwingen": []
   },
   "32013L0052": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: ANNOTATION (9×), GR.ANNOTATION (1×); omzetting geweigerd.",
-   "oorzaak": "element ANNOTATION, GR.ANNOTATION",
+   "melding": "Formex-bron geweigerd: een inclusie (INCL.ELEMENT) als los blok is alleen voor een afbeelding gemeten",
+   "oorzaak": "een inclusie als los blok is alleen voor een afbeelding gemeten",
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
    "sha256": null,
@@ -1238,8 +1241,8 @@
    "waarschuwingen": []
   },
   "32015D0926": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: GR.ANNOTATION (1×); omzetting geweigerd.",
-   "oorzaak": "element GR.ANNOTATION",
+   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: art-1, rec-1, rec-2, rec-3 (de Formex-bron nummert op één niveau twee eenheden gelijk; alleen een herhaalde markering binnen één opsomming wordt met een volgnummer onderscheiden)",
+   "oorzaak": "structuur: dubbele structurele ankers",
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
    "sha256": null,
@@ -1480,13 +1483,13 @@
    "waarschuwingen": []
   },
   "32017L0433": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: ANNOTATION (42×), GR.ANNOTATION (26×), MARGIN (60×); omzetting geweigerd.",
-   "oorzaak": "element ANNOTATION, GR.ANNOTATION, MARGIN",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "6b0ec068e4b0001c354fa47261e69823002c2deea33ccb89733b40c9098c5b0a",
+   "status": "ok",
+   "tekens": 96430,
    "waarschuwingen": []
   },
   "32017L0774": {
@@ -1620,13 +1623,13 @@
    "waarschuwingen": []
   },
   "32018L1972": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: GR.ANNOTATION (2×); omzetting geweigerd.",
-   "oorzaak": "element GR.ANNOTATION",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "belangrijk",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "7abae5c6ceba85af98862538149ee001bf6e2d42cdd450a73a8ae79e7a7540a0",
+   "status": "ok",
+   "tekens": 743999,
    "waarschuwingen": []
   },
   "32018R0302": {
@@ -1810,13 +1813,13 @@
    "waarschuwingen": []
   },
   "32019R0089": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: BLK (36×), GR.ANNOTATION (8×); omzetting geweigerd.",
-   "oorzaak": "element BLK, GR.ANNOTATION",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "7644bbfc5a53129c99980aeecd6de5dd75c0dcad3f7260808c0f251105e60cf3",
+   "status": "ok",
+   "tekens": 76945,
    "waarschuwingen": []
   },
   "32019R0627": {
@@ -2074,13 +2077,13 @@
    "waarschuwingen": []
   },
   "32021R2191": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: GR.ANNOTATION (1×); omzetting geweigerd.",
-   "oorzaak": "element GR.ANNOTATION",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "e3a9887291966341e617c8bac49744a3ef3c207ffecc60d3672b6d915a435c11",
+   "status": "ok",
+   "tekens": 9833,
    "waarschuwingen": []
   },
   "32022D0289": {
@@ -2266,8 +2269,8 @@
    "waarschuwingen": []
   },
   "32023L0544": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: GR.ANNOTATION (1×); omzetting geweigerd.",
-   "oorzaak": "element GR.ANNOTATION",
+   "melding": "Formex-bron geweigerd: een inclusie (INCL.ELEMENT) staat midden in een zin; alleen een inclusie als eigen alinea binnen QUOT.S is gemeten",
+   "oorzaak": "een inclusie staat midden in een zin",
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
    "sha256": null,
@@ -2326,8 +2329,8 @@
    "waarschuwingen": []
   },
   "32023R0173": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: GR.ANNOTATION (6×); omzetting geweigerd.",
-   "oorzaak": "element GR.ANNOTATION",
+   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['1h'], extra=['1', 'h']).",
+   "oorzaak": "woordcontrole: tekst verschilt",
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
    "sha256": null,
@@ -2428,13 +2431,13 @@
    "waarschuwingen": []
   },
   "32024D2627": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: GR.ANNOTATION (1×); omzetting geweigerd.",
-   "oorzaak": "element GR.ANNOTATION",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "2fc803d8f1d9f782f7589ac9112853f115e5bd1af1536be82dc9ae75d28778ef",
+   "status": "ok",
+   "tekens": 14655,
    "waarschuwingen": []
   },
   "32024L1619": {
@@ -2498,8 +2501,8 @@
    "waarschuwingen": []
   },
   "32024R0771": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: FORMULA (41×), GR.ANNOTATION (28×); omzetting geweigerd.",
-   "oorzaak": "element FORMULA, GR.ANNOTATION",
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: FORMULA (41×); omzetting geweigerd.",
+   "oorzaak": "element FORMULA",
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
    "sha256": null,
@@ -2648,13 +2651,13 @@
    "waarschuwingen": []
   },
   "32025D2554": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: GR.ANNOTATION (1×); omzetting geweigerd.",
-   "oorzaak": "element GR.ANNOTATION",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "a2a4631e6e9c02af0bf0f5265ef31ff68893fe808de6f18b6cdb04bbc2d0f741",
+   "status": "ok",
+   "tekens": 15539,
    "waarschuwingen": []
   },
   "32025L0145": {
@@ -2748,8 +2751,8 @@
    "waarschuwingen": []
   },
   "32026L0706": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: ANNOTATION (3×); omzetting geweigerd.",
-   "oorzaak": "element ANNOTATION",
+   "melding": "XML-element zonder eigen behandeling (inline:ANNOTATION); omzetting geweigerd.",
+   "oorzaak": "element inline:ANNOTATION",
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
    "sha256": null,
@@ -2778,8 +2781,8 @@
    "waarschuwingen": []
   },
   "32026R1383": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: ANNOTATION (2×); omzetting geweigerd.",
-   "oorzaak": "element ANNOTATION",
+   "melding": "Formex-bron geweigerd: een inclusie (INCL.ELEMENT) staat midden in een zin; alleen een inclusie als eigen alinea binnen QUOT.S is gemeten",
+   "oorzaak": "een inclusie staat midden in een zin",
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
    "sha256": null,
@@ -3629,6 +3632,6 @@
    ]
   }
  },
- "gemeten": "2026-09-23 16:00",
+ "gemeten": "2026-09-23 16:02",
  "taal": "NL"
 }

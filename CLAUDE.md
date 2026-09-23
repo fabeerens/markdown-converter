@@ -230,6 +230,29 @@ accountregistratie namens de gebruiker):
   (`annex-o1-art-3`, patronen.md §6). Tot 23 september 2026 weigerde de meetlat op deze vormen 31
   documenten (inline:DIVISION, inline:DLIST, inline:GR.SEQ, inline:TBL, inhoud:ARTICLE); 25 komen
   nu door, de overige 6 op een andere oorzaak.
+  Een **annotatie** (`GR.ANNOTATION`/`ANNOTATION`) is in Formex de noot die geen voetnoot is: een
+  NB, een opmerking, een technische noot, een legenda. Ze komt als gewone alinea's op de plek waar
+  de bron haar zet. De titel (`Noot 1`, `Technische noot:`) wordt een eigen alinea, zoals de
+  HTML-route haar als `oj-ti-annotation` levert, en nooit een kop. De inhoud gaat door `inhoud(…,
+  basis="")` en krijgt dus geen eenheden, want haar `a)` of `NB:` is geen onderdeel van de
+  handeling. Een P die alleen een annotatie omhult (57 van de 58) splitst zoals bij een lijst. In
+  `TBL/GR.NOTES` staat ze als alinea direct onder de tabel (de HTML-route maakt er de laatste
+  tabelrij van); de genummerde tabelnoten gaan zoals altijd naar het notenblok. In een cel is ze
+  een blok van die cel, en boven de titel van een handeling (`ONTWERP`, 32015D0926) een alinea.
+  Een annotatie aan het begin van een lid is niet gemeten en weigert. **Kanttekst** (`MARGIN`: de
+  categorie `ML1` in de kantlijn van de militaire lijst, 32017L0433) staat vooraan op de regel van
+  haar alinea of kop, met een spatie ervoor zodat ze niet aan het eerste woord plakt; de
+  HTML-route zet er een `<br/>` achter. Een **groep tabelrijen** (`BLK`, de PRODCOM-lijst
+  32010R0860) krijgt voor haar titel (`TI.BLK`) een rij met één samengevoegde cel over `COL.START`
+  tot en met `COL.END`. Zoals elke samengevoegde cel staat die op elke bezette plek, en
+  `_bronwoorden` herhaalt haar woorden even vaak. Een BLK zonder titel groepeert alleen. Een regel
+  die met `*`, `+` of `-` en een spatie zou beginnen, zoals het lijstteken `*` in 32025D2554 of de
+  legendaterm `*` in 32010R0860, krijgt een harde spatie achter de markering (`_geen_opsomming`).
+  Zo maakt Markdown er geen opsomming van en blijft het teken staan; het profiel doet hetzelfde
+  met markeercellen uit de HTML-route. Een `TITEL` onder een `DEEL` draagt dat deel in haar anker
+  (`tit-2-1`, `hfd-2-1-3`), omdat het Europees wetboek voor elektronische communicatie
+  (32018L1972) elk deel opnieuw bij TITEL I begint. Tot 23 september 2026 weigerde elk van deze
+  gevallen het hele document; de wetgeving in de meetlat ging daardoor van 167/266 naar 176/266.
   De portal-HTML (`/legal-content/…/HTML/`) blokkeert bots (HTTP 202, lege body;
   inmiddels een AWS WAF-JS-challenge, dus ook met retries permanent 202 — de portal is in de praktijk
   dood voor een simpele `requests`-scraper). Gebruik het **Cellar-archief** via content negotiation,
@@ -999,7 +1022,7 @@ regel), inclusief de vloeiende tabbalk-indicator.
   weggeschreven bestand nooit als geldige staat gelezen kan worden.
 
 ## Tests
-`.venv/bin/python -m pytest tests/ -q` — 425 karakteriseringstests die het gedrag
+`.venv/bin/python -m pytest tests/ -q` — 437 karakteriseringstests die het gedrag
 vastleggen in plaats van het te beschrijven: `detect_source`-precedentie, ELI→CELEX,
 de CLG-markupnormalisatie (lidnummers, lettermarkers, voetnootankers), de
 voetnootdefinities die met de preambule meereizen, de notitievorm die een intakepoort
