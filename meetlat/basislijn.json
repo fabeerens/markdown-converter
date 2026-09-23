@@ -1,0 +1,3594 @@
+{
+ "commit": "31180e6",
+ "documenten": {
+  "02002L0058-20091219": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "testset",
+   "sha256": "7cee08b1974d1bf71e8518eb106f6670c6c2f89140b6050aa01385fc122c0498",
+   "status": "ok",
+   "tekens": 35607,
+   "waarschuwingen": [
+    "De geconsolideerde Formex bevat geen considerans en die van de basishandeling kon niet worden ingevoegd: de Formex van de basishandeling 32002L0058 is niet beschikbaar (HTTP 404). De overwegingen en hun rec-ankers ontbreken.",
+    "CLG.MDFO in de tekst noemt 32009L0136R(01), 32009L0136R(03), dat niet als wijziging in GR.MOD.ACT staat; amendments kan onvolledig zijn."
+   ]
+  },
+  "02010L0013-20250208": {
+   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['concordantietabel'], extra=niets).",
+   "oorzaak": "woordcontrole: tekst valt weg",
+   "route": "wetgeving",
+   "sectie": "geconsolideerd",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "02012R1215-20150226": {
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: INCL.ELEMENT (7×); omzetting geweigerd.",
+   "oorzaak": "element INCL.ELEMENT",
+   "route": "wetgeving",
+   "sectie": "geconsolideerd",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "02013R0575-20270101": {
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: FORMULA (220×), GR.TBL (1×); omzetting geweigerd.",
+   "oorzaak": "element FORMULA, GR.TBL",
+   "route": "wetgeving",
+   "sectie": "geconsolideerd",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "02014L0065-20260606": {
+   "melding": "XML-element zonder eigen behandeling (inline:DIVISION); omzetting geweigerd.",
+   "oorzaak": "element inline:DIVISION",
+   "route": "wetgeving",
+   "sectie": "geconsolideerd",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "02014R0600-20251123": {
+   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['verordening', 'verordening', 'eu', 'eu', 'nr', 'nr', '600', '2014', '2014', '2014', 'van', 'van'], extra=niets).",
+   "oorzaak": "woordcontrole: tekst valt weg",
+   "route": "wetgeving",
+   "sectie": "geconsolideerd",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "02014R0910-20241018": {
+   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['betreffende', '2016', 'over', '2022'], extra=['2016betreffende', '2022over']).",
+   "oorzaak": "woordcontrole: woorden aan elkaar",
+   "route": "wetgeving",
+   "sectie": "testset",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "02015L2366-20250117": {
+   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['concordantietabel'], extra=niets).",
+   "oorzaak": "woordcontrole: tekst valt weg",
+   "route": "wetgeving",
+   "sectie": "geconsolideerd",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "02015R0848-20251106": {
+   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['concordantietabel'], extra=niets).",
+   "oorzaak": "woordcontrole: tekst valt weg",
+   "route": "wetgeving",
+   "sectie": "geconsolideerd",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "02016L0680-20160504": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "geconsolideerd",
+   "sha256": "13cd1bcf652e74292ceb2d5fe23ecbf09ec9e09a5ecad7094ef4e917cc8bd745",
+   "status": "ok",
+   "tekens": 195579,
+   "waarschuwingen": [
+    "Overwegingen en aanhef zijn overgenomen uit de oorspronkelijke handeling (CELEX:32016L0680); de geconsolideerde tekst op EUR-Lex bevat deze niet."
+   ]
+  },
+  "02016R0679-20160504": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "testset",
+   "sha256": "96b54cd09569009a2c0638d419c7529cbc29bbe8370ce65184aa44944a1e213a",
+   "status": "ok",
+   "tekens": 395980,
+   "waarschuwingen": [
+    "Overwegingen en aanhef zijn overgenomen uit de oorspronkelijke handeling (CELEX:32016R0679); de geconsolideerde tekst op EUR-Lex bevat deze niet."
+   ]
+  },
+  "02016R0794-20260111": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "geconsolideerd",
+   "sha256": "4cf94fed51bad0e74f49d7fd14d5e46b0ef8feab8afcc8e5bf939505884dec28",
+   "status": "ok",
+   "tekens": 282404,
+   "waarschuwingen": [
+    "Overwegingen en aanhef zijn overgenomen uit de oorspronkelijke handeling (CELEX:32016R0794); de geconsolideerde tekst op EUR-Lex bevat deze niet."
+   ]
+  },
+  "02017R0745-20260719": {
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: NO.GR.SEQ (294×), TOC (1×); omzetting geweigerd.",
+   "oorzaak": "element NO.GR.SEQ, TOC",
+   "route": "wetgeving",
+   "sectie": "geconsolideerd",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "02017R1939-20210110": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "geconsolideerd",
+   "sha256": "df5c87b14d68232773fb732e00f44cd796cd3028acf31bb7c0a14aaeea26e907",
+   "status": "ok",
+   "tekens": 293294,
+   "waarschuwingen": [
+    "Overwegingen en aanhef zijn overgenomen uit de oorspronkelijke handeling (CELEX:32017R1939); de geconsolideerde tekst op EUR-Lex bevat deze niet.",
+    "CLG.MDFO in de tekst noemt 32017R1939R(05), dat niet als wijziging in GR.MOD.ACT staat; amendments kan onvolledig zijn."
+   ]
+  },
+  "02017R2226-20260612": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "geconsolideerd",
+   "sha256": "f077fa58987ba9eb4521b275359379531e5b561e67b3f91e424e5899f3ebb439",
+   "status": "ok",
+   "tekens": 273876,
+   "waarschuwingen": [
+    "Overwegingen en aanhef zijn overgenomen uit de oorspronkelijke handeling (CELEX:32017R2226); de geconsolideerde tekst op EUR-Lex bevat deze niet.",
+    "CLG.MDFO in de tekst noemt 32017R2226R(01), 32017R2226R(03), dat niet als wijziging in GR.MOD.ACT staat; amendments kan onvolledig zijn."
+   ]
+  },
+  "02018L1972-20241018": {
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: GR.ANNOTATION (2×); omzetting geweigerd.",
+   "oorzaak": "element GR.ANNOTATION",
+   "route": "wetgeving",
+   "sectie": "geconsolideerd",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "02018R1240-20260612": {
+   "melding": "XML-element zonder eigen behandeling (inline:DIVISION); omzetting geweigerd.",
+   "oorzaak": "element inline:DIVISION",
+   "route": "wetgeving",
+   "sectie": "geconsolideerd",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "02018R1724-20260520": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "geconsolideerd",
+   "sha256": "5f284ff5752ee27e630939e70b1977e2efd249892dd900985f910ca57065e8e9",
+   "status": "ok",
+   "tekens": 80708,
+   "waarschuwingen": [
+    "De geconsolideerde Formex bevat geen considerans en die van de basishandeling kon niet worden ingevoegd: de identiteit van de basishandeling is niet uit de bron vast te stellen. De overwegingen en hun rec-ankers ontbreken."
+   ]
+  },
+  "02018R1727-20251104": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "geconsolideerd",
+   "sha256": "600d6366ed1e2e7a2b4a7f12d1b063ed1027f98d37233c676fa276714c083c28",
+   "status": "ok",
+   "tekens": 158096,
+   "waarschuwingen": [
+    "De geconsolideerde Formex bevat geen considerans en die van de basishandeling kon niet worden ingevoegd: de identiteit van de basishandeling is niet uit de bron vast te stellen. De overwegingen en hun rec-ankers ontbreken.",
+    "CLG.MDFO in de tekst noemt 32023R2131R(01), dat niet als wijziging in GR.MOD.ACT staat; amendments kan onvolledig zijn."
+   ]
+  },
+  "02018R1862-20220801": {
+   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: hfd-9",
+   "oorzaak": "structuur: dubbele structurele ankers",
+   "route": "wetgeving",
+   "sectie": "geconsolideerd",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "02019R0817-20260612": {
+   "melding": "XML-element zonder eigen behandeling (inline:DLIST); omzetting geweigerd.",
+   "oorzaak": "element inline:DLIST",
+   "route": "wetgeving",
+   "sectie": "geconsolideerd",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "02019R0818-20260612": {
+   "melding": "XML-element zonder eigen behandeling (inline:DLIST); omzetting geweigerd.",
+   "oorzaak": "element inline:DLIST",
+   "route": "wetgeving",
+   "sectie": "geconsolideerd",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "02019R0881-20250204": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "geconsolideerd",
+   "sha256": "1f9e8324cbeb657ca9036972f74c9061e8fd55e1cfb2c78ae694988c19b5ebde",
+   "status": "ok",
+   "tekens": 238514,
+   "waarschuwingen": [
+    "Overwegingen en aanhef zijn overgenomen uit de oorspronkelijke handeling (CELEX:32019R0881); de geconsolideerde tekst op EUR-Lex bevat deze niet."
+   ]
+  },
+  "02021R0953-20220630": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "geconsolideerd",
+   "sha256": "9347886adeb922806a52531a07d4bf404b414fe892486bb092f096df4afe1548",
+   "status": "ok",
+   "tekens": 106374,
+   "waarschuwingen": [
+    "Overwegingen en aanhef zijn overgenomen uit de oorspronkelijke handeling (CELEX:32021R0953); de geconsolideerde tekst op EUR-Lex bevat deze niet.",
+    "Geen CLG.MDFO in de tekst noemt 32021R2288; van deze wijzigende handeling(en) is `shown` niet vastgesteld.",
+    "CLG.MDFO in de tekst noemt 32021R0953R(03), dat niet als wijziging in GR.MOD.ACT staat; amendments kan onvolledig zijn."
+   ]
+  },
+  "02022L2555-20221227": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "geconsolideerd",
+   "sha256": "754a71c0bf1472df52484cd0b445976166d8ef5893f3276abc259b2e7826a323",
+   "status": "ok",
+   "tekens": 307002,
+   "waarschuwingen": [
+    "Overwegingen en aanhef zijn overgenomen uit de oorspronkelijke handeling (CELEX:32022L2555); de geconsolideerde tekst op EUR-Lex bevat deze niet."
+   ]
+  },
+  "02022R1925-20221012": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "geconsolideerd",
+   "sha256": "b1ad591c186767a10fd3a6a5fd0fde58fe50844abb5184225e86fbbf8b30f09b",
+   "status": "ok",
+   "tekens": 278992,
+   "waarschuwingen": [
+    "Overwegingen en aanhef zijn overgenomen uit de oorspronkelijke handeling (CELEX:32022R1925); de geconsolideerde tekst op EUR-Lex bevat deze niet."
+   ]
+  },
+  "02022R2554-20221227": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "geconsolideerd",
+   "sha256": "ee97cfddb3e923f34230049abee981084f85823ad505c0c996b3ca67d3792578",
+   "status": "ok",
+   "tekens": 335283,
+   "waarschuwingen": [
+    "Overwegingen en aanhef zijn overgenomen uit de oorspronkelijke handeling (CELEX:32022R2554); de geconsolideerde tekst op EUR-Lex bevat deze niet."
+   ]
+  },
+  "02023R1114-20240109": {
+   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: annex-1-1, annex-1-10, annex-1-2, annex-1-3, annex-1-4, annex-1-5, annex-1-6, annex-1-7",
+   "oorzaak": "structuur: dubbele structurele ankers",
+   "route": "wetgeving",
+   "sectie": "geconsolideerd",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "02024R1689-20260727": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "testset",
+   "sha256": "c35f2bb25c4ae5f84e23d477d475adb192d3d9d21f3110b90ede78b92b3e1bd0",
+   "status": "ok",
+   "tekens": 708402,
+   "waarschuwingen": [
+    "Overwegingen en aanhef zijn overgenomen uit de oorspronkelijke handeling (CELEX:32024R1689); de geconsolideerde tekst op EUR-Lex bevat deze niet.",
+    "De vindplaats van de basishandeling in de geconsolideerde Formex is onvolledig (NO.OJ); oj_reference is leeg.",
+    "CLG.MDFO in de tekst noemt 32024R1689R(04), dat niet als wijziging in GR.MOD.ACT staat; amendments kan onvolledig zijn."
+   ]
+  },
+  "31995L0046": {
+   "melding": "Formex niet beschikbaar (HTTP 404); HTML-route gebruikt.",
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "testset",
+   "sha256": null,
+   "status": "geen-formex",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32000L0031": {
+   "melding": "Formex niet beschikbaar (HTTP 404); HTML-route gebruikt.",
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": null,
+   "status": "geen-formex",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32001R0045": {
+   "melding": "Formex niet beschikbaar (HTTP 404); HTML-route gebruikt.",
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": null,
+   "status": "geen-formex",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32002L0058": {
+   "melding": "Formex niet beschikbaar (HTTP 404); HTML-route gebruikt.",
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": null,
+   "status": "geen-formex",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32003L0098": {
+   "melding": "Formex niet beschikbaar (HTTP 404); HTML-route gebruikt.",
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": null,
+   "status": "geen-formex",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32004L0038": {
+   "melding": "Formex niet beschikbaar (HTTP 404); HTML-route gebruikt.",
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": null,
+   "status": "geen-formex",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32005D0338": {
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: ANNOTATION (5×); omzetting geweigerd.",
+   "oorzaak": "element ANNOTATION",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32005D0478": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "77dc4feb3302ad5b792a109220e3d843a661a460ec3f95ca7b3466ae5ded45c2",
+   "status": "ok",
+   "tekens": 1222,
+   "waarschuwingen": []
+  },
+  "32005L0029": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": "68c6d3d173f541a3cf23788d2796e777f329591225d5f72674687df898d4060e",
+   "status": "ok",
+   "tekens": 65208,
+   "waarschuwingen": []
+  },
+  "32005L0056": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "dd5710a3f11f4294583b67af2f686dd47c44126b5f97cf29dc483f24861a9a01",
+   "status": "ok",
+   "tekens": 38306,
+   "waarschuwingen": []
+  },
+  "32005L0066": {
+   "melding": "Formex-bron geweigerd: een inclusie heeft het onbekende type 'TIFF'",
+   "oorzaak": "inclusie van type TIFF",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32005R1014": {
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: GR.ANNOTATION (1×); omzetting geweigerd.",
+   "oorzaak": "element GR.ANNOTATION",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32005R1203": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "48c96bb75c05777db7555379040727f61ad7b902ef51bf44db28164dd0ae347b",
+   "status": "ok",
+   "tekens": 3322,
+   "waarschuwingen": []
+  },
+  "32005R1418": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "c368190fcc5864c21b0f99e61043baa53f678238912a9d99df3fd99e4faf0a82",
+   "status": "ok",
+   "tekens": 4377,
+   "waarschuwingen": []
+  },
+  "32006D0041": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "1d311df47f80fe5f65072704d03c6dd029fc4f0189cc8117be108ecf0aaca121",
+   "status": "ok",
+   "tekens": 8386,
+   "waarschuwingen": []
+  },
+  "32006D0857": {
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: GENERAL (1×); omzetting geweigerd.",
+   "oorzaak": "element GENERAL",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32006L0054": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "55f61f816bf0ba891bde9fa03f5b3128eea0449a23460f9942d2f022011395f8",
+   "status": "ok",
+   "tekens": 59092,
+   "waarschuwingen": []
+  },
+  "32006L0123": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": "d6b9e77c5df36fee7620743e6ea5ba5252dd0df33ef3b6b0b985de1db6111593",
+   "status": "ok",
+   "tekens": 164656,
+   "waarschuwingen": []
+  },
+  "32006L0136": {
+   "melding": "XML-element zonder eigen behandeling (inhoud:QUOT.S); omzetting geweigerd.",
+   "oorzaak": "element inhoud:QUOT.S",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32006R0056": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "28aa471c756371f09ec58fa2056a3f5a0d3cc160b40107ffae6916b5293b17c8",
+   "status": "ok",
+   "tekens": 2873,
+   "waarschuwingen": []
+  },
+  "32006R0419": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "95d4e47946ba74363121e4ec8ab5facfa2042e2730920fc3fe9a653adaffdb8c",
+   "status": "ok",
+   "tekens": 2535,
+   "waarschuwingen": []
+  },
+  "32006R1655": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "9638a912d02fed9dbfd68aa8ddd501d15ed107fdb48fbd2e6308b4956ba90ae1",
+   "status": "ok",
+   "tekens": 1924,
+   "waarschuwingen": []
+  },
+  "32007D0618": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "71c5968a61c4f47e367753b09bb87382073a4b7cfb7486e45c91cf9dc60339f2",
+   "status": "ok",
+   "tekens": 1472,
+   "waarschuwingen": []
+  },
+  "32007D0834": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "7e9ab81cacf9522df7ddbabaa725ebabfd76b426683e69358e2553e16e964005",
+   "status": "ok",
+   "tekens": 3587,
+   "waarschuwingen": []
+  },
+  "32007L0008": {
+   "melding": "XML-element zonder eigen behandeling (inhoud:QUOT.S); omzetting geweigerd.",
+   "oorzaak": "element inhoud:QUOT.S",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32007L0011": {
+   "melding": "XML-element zonder eigen behandeling (inhoud:QUOT.S); omzetting geweigerd.",
+   "oorzaak": "element inhoud:QUOT.S",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32007R0116": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "b782114b3888ca58c27399f14e9703964e729cd7b2c1a20bc53fa81d217dadb8",
+   "status": "ok",
+   "tekens": 4580,
+   "waarschuwingen": []
+  },
+  "32007R0864": {
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: GENERAL (1×); omzetting geweigerd.",
+   "oorzaak": "element GENERAL",
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32007R1071": {
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: DIV.CONSID (7×); omzetting geweigerd.",
+   "oorzaak": "element DIV.CONSID",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32007R1208": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "8b730680fcfa1744e4911a18d2bc6ff95e100f9d6339490040254286e45555c0",
+   "status": "ok",
+   "tekens": 3604,
+   "waarschuwingen": []
+  },
+  "32008D0556": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "69765ff45e81237f32e2666f2a236f4c77fb1bc8766a0b74b695157dff05aca7",
+   "status": "ok",
+   "tekens": 3697,
+   "waarschuwingen": []
+  },
+  "32008D0785": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "7980ab330c81aadcf22d74e8dc227ff60e39760d4a1d6eb3fde9d3aa1e06ab73",
+   "status": "ok",
+   "tekens": 12809,
+   "waarschuwingen": []
+  },
+  "32008L0001": {
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: NO.GR.SEQ (35×); omzetting geweigerd.",
+   "oorzaak": "element NO.GR.SEQ",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32008L0044": {
+   "melding": "XML-element zonder eigen behandeling (inhoud:QUOT.S); omzetting geweigerd.",
+   "oorzaak": "element inhoud:QUOT.S",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32008R0064": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "70c58f17d46d308174ee9937aeb57275a790b65aa043c88e481cc27ea52352cd",
+   "status": "ok",
+   "tekens": 3551,
+   "waarschuwingen": []
+  },
+  "32008R0465": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "ea186ac2ce0909c8501ea7c575dc06c121957fe3e8967e3ad094f2106ad6e7f7",
+   "status": "ok",
+   "tekens": 6377,
+   "waarschuwingen": []
+  },
+  "32008R0593": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": "fb3287c6a366e59303dba736d2efa88d3ccb9fb657c14a13cef1b8a99c54d603",
+   "status": "ok",
+   "tekens": 56908,
+   "waarschuwingen": []
+  },
+  "32008R0683": {
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: GENERAL (1×); omzetting geweigerd.",
+   "oorzaak": "element GENERAL",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32009D0584": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "4292c73f1291197a78d1e22302d9edfa02d2298184433ac0e075c8bd667e7641",
+   "status": "ok",
+   "tekens": 6200,
+   "waarschuwingen": []
+  },
+  "32009D0958": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "18eee175787764f6a3fc59944fea6ddc2accce91c037591c4b0fb0ac27ed6f63",
+   "status": "ok",
+   "tekens": 1988,
+   "waarschuwingen": []
+  },
+  "32009L0086": {
+   "melding": "XML-element zonder eigen behandeling (inhoud:QUOT.S); omzetting geweigerd.",
+   "oorzaak": "element inhoud:QUOT.S",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32009L0135": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "d9f9d5f5446f32e0343ca068bf9dac76990456816432fee5353d404b0757d421",
+   "status": "ok",
+   "tekens": 8840,
+   "waarschuwingen": []
+  },
+  "32009R0391": {
+   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['concordantietabel'], extra=niets).",
+   "oorzaak": "woordcontrole: tekst valt weg",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32009R1148": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "38be36bdc4ed67bd724292525db7eb2f2d483f355538b2e779314eb7d1920d68",
+   "status": "ok",
+   "tekens": 2374,
+   "waarschuwingen": []
+  },
+  "32009R1293": {
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: ANNOTATION (2×); omzetting geweigerd.",
+   "oorzaak": "element ANNOTATION",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32010D0168": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "1f5d7183fcaf87add3a9b50ca8802b01dfbc763ee97af744b668fabc19401488",
+   "status": "ok",
+   "tekens": 12819,
+   "waarschuwingen": []
+  },
+  "32010D0293": {
+   "melding": "Formex niet beschikbaar (HTTP 404); HTML-route gebruikt.",
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "geen-formex",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32010L0013": {
+   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['concordantietabel'], extra=niets).",
+   "oorzaak": "woordcontrole: tekst valt weg",
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32010L0015": {
+   "melding": "XML-element zonder eigen behandeling (inhoud:QUOT.S); omzetting geweigerd.",
+   "oorzaak": "element inhoud:QUOT.S",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32010L0040": {
+   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: annex-1-1, annex-1-1-1-1, annex-1-1-1-2, annex-1-2, annex-1-3, annex-1-4",
+   "oorzaak": "structuur: dubbele structurele ankers",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32010R0860": {
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: BLK (237×), GR.ANNOTATION (1×); omzetting geweigerd.",
+   "oorzaak": "element BLK, GR.ANNOTATION",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32010R1165": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "7103761859674383dd476fdc2a277ed0a5befba1e038c16f452cd91a6c36232f",
+   "status": "ok",
+   "tekens": 1938,
+   "waarschuwingen": []
+  },
+  "32010R1231": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "846d895874bbe1cfa3911d9d2daf01add79c4ded769f1cf73cf383841dee00d5",
+   "status": "ok",
+   "tekens": 10305,
+   "waarschuwingen": []
+  },
+  "32011D0072": {
+   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['van', 'de', 'personen', 'en', 'entiteiten', 'in', 'artikel', '1', 'lijst', 'bedoelde'], extra=niets).",
+   "oorzaak": "woordcontrole: tekst valt weg",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32011D0311": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "331b6bfc4fabec1eaed1df97293a7d86baeb870ea358342fcf3814cd97c37ac1",
+   "status": "ok",
+   "tekens": 1241,
+   "waarschuwingen": []
+  },
+  "32011L0019": {
+   "melding": "XML-element zonder eigen behandeling (inhoud:QUOT.S); omzetting geweigerd.",
+   "oorzaak": "element inhoud:QUOT.S",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32011L0083": {
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: GR.TBL (1×); omzetting geweigerd.",
+   "oorzaak": "element GR.TBL",
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32011L0099": {
+   "melding": "Formex-bron geweigerd: een inclusie heeft het onbekende type 'TIFF'",
+   "oorzaak": "inclusie van type TIFF",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32011R0704": {
+   "melding": "XML-element zonder eigen behandeling (inline:GR.SEQ); omzetting geweigerd.",
+   "oorzaak": "element inline:GR.SEQ",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32011R1041": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "a1326dc30939f08e465feb4316ed5b21619c4660cd4b3cb664b23f4e17f1e520",
+   "status": "ok",
+   "tekens": 2711,
+   "waarschuwingen": []
+  },
+  "32011R1042": {
+   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=niets, extra=['uitvoeringsverordening', 'eu', 'nr', '2011', 'van', 'van', 'van', 'de', 'de', 'de', 'de', 'de']).",
+   "oorzaak": "woordcontrole: tekst dubbel",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32012D0519": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "7c973e31f9cd9e6cf40d6ad61bd7c43c41a9903e29b4947a0c9f6bef5a4b6775",
+   "status": "ok",
+   "tekens": 1400,
+   "waarschuwingen": []
+  },
+  "32012D0722": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "dc7e2cb239a8f1acb87844de63bf3bc37d161c4065beb5f1e93b65e9b44a9703",
+   "status": "ok",
+   "tekens": 6871,
+   "waarschuwingen": []
+  },
+  "32012L0005": {
+   "melding": "XML-element zonder eigen behandeling (inline:DLIST); omzetting geweigerd.",
+   "oorzaak": "element inline:DLIST",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32012L0027": {
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: FORMULA.S (1×), GR.ANNOTATION (1×), GR.TBL (1×), NO.GR.SEQ (2×); omzetting geweigerd.",
+   "oorzaak": "element FORMULA.S, GR.ANNOTATION, GR.TBL, NO.GR.SEQ",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32012R0358": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "ebff776514c38d87b35c7deca95773bd46784e5196fb90884ebc544016d47c9b",
+   "status": "ok",
+   "tekens": 3497,
+   "waarschuwingen": []
+  },
+  "32012R0926": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "ce53d3dfabd95fd8b0c9b8cb4151bc8e099bb4cb894ab8390db0bb86cf94d708",
+   "status": "ok",
+   "tekens": 3370,
+   "waarschuwingen": []
+  },
+  "32012R1050": {
+   "melding": "XML-element zonder eigen behandeling (inhoud:QUOT.S); omzetting geweigerd.",
+   "oorzaak": "element inhoud:QUOT.S",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32012R1215": {
+   "melding": "Formex-bron geweigerd: een inclusie heeft het onbekende type 'TIFF'",
+   "oorzaak": "inclusie van type TIFF",
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32013D0287": {
+   "melding": "Formex-bron geweigerd: inclusie(s) nergens in de tekst aangeroepen: L_2013162NL.01001302.xml",
+   "oorzaak": "inclusie nergens in de tekst aangeroepen",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32013D0785": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "ea7eaa07a20e7e27d1dae50ebe4ee02154b3ed0b5abf1b262ddbfaa99516ebe9",
+   "status": "ok",
+   "tekens": 6955,
+   "waarschuwingen": []
+  },
+  "32013L0031": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "725ac6998e4761803f83ad63ede6aa572b4c33888c58a87c7e3ff94cf640b745",
+   "status": "ok",
+   "tekens": 7573,
+   "waarschuwingen": []
+  },
+  "32013L0052": {
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: ANNOTATION (9×), GR.ANNOTATION (1×); omzetting geweigerd.",
+   "oorzaak": "element ANNOTATION, GR.ANNOTATION",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32013R0390": {
+   "melding": "Formex-bron geweigerd: een inclusie (INCL.ELEMENT) staat midden in een zin; alleen een inclusie als eigen alinea binnen QUOT.S is gemeten",
+   "oorzaak": "een inclusie staat midden in een zin",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32013R0503": {
+   "melding": "Formex-bron geweigerd: een inclusie heeft het onbekende type 'TIFF'",
+   "oorzaak": "inclusie van type TIFF",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32013R0575": {
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: FORMULA (36×), FORMULA.S (72×), GR.TBL (1×); omzetting geweigerd.",
+   "oorzaak": "element FORMULA, FORMULA.S, GR.TBL",
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32013R1261": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "63992d92f019edad9c3b147702159e824881b07805d2eb6562b7743d0874066f",
+   "status": "ok",
+   "tekens": 4848,
+   "waarschuwingen": []
+  },
+  "32014D0087": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "85eda841e405b005578f8d00cf30bb97206f4edcd1a7dc4e9ee2842a5c038e2b",
+   "status": "ok",
+   "tekens": 11020,
+   "waarschuwingen": []
+  },
+  "32014D0945": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "24f7a40a22adef1b3863a92ac768ac72080d00f604175ce5dfe63cf19fdf0c17",
+   "status": "ok",
+   "tekens": 9094,
+   "waarschuwingen": []
+  },
+  "32014L0065": {
+   "melding": "XML-element zonder eigen behandeling (inline:DIVISION); omzetting geweigerd.",
+   "oorzaak": "element inline:DIVISION",
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32014L0071": {
+   "melding": "XML-element zonder eigen behandeling (inhoud:QUOT.S); omzetting geweigerd.",
+   "oorzaak": "element inhoud:QUOT.S",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32014L0106": {
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: NO.GR.SEQ (10×); omzetting geweigerd.",
+   "oorzaak": "element NO.GR.SEQ",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32014R0167": {
+   "melding": "XML-element zonder eigen behandeling (inline:TBL); omzetting geweigerd.",
+   "oorzaak": "element inline:TBL",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32014R0324": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "c38a81daa97ae383633e0ff8e937282b352336c8baf069ad4e2a731d11ea220f",
+   "status": "ok",
+   "tekens": 11986,
+   "waarschuwingen": []
+  },
+  "32014R0514": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "e0dbdf98bff862a6b5046ab83adaa4f1201ae08c3191a5262ac676b4d1166382",
+   "status": "ok",
+   "tekens": 116446,
+   "waarschuwingen": []
+  },
+  "32014R0600": {
+   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['verordening', 'verordening', 'eu', 'eu', 'nr', 'nr', '600', '2014', '2014', '2014', 'van', 'van'], extra=niets).",
+   "oorzaak": "woordcontrole: tekst valt weg",
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32014R0910": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": "99824c037ba2a51588505c5426a79a0ec3afc11df49ceae917c089bbd3fcf674",
+   "status": "ok",
+   "tekens": 144018,
+   "waarschuwingen": []
+  },
+  "32015D0048": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "f1755ac1688cc8ffa9ab1ebfc15f81ce0ecea2ef58c897721c72eeb805426db0",
+   "status": "ok",
+   "tekens": 11313,
+   "waarschuwingen": []
+  },
+  "32015D0926": {
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: GR.ANNOTATION (1×); omzetting geweigerd.",
+   "oorzaak": "element GR.ANNOTATION",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32015L0849": {
+   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['concordantietabel'], extra=niets).",
+   "oorzaak": "woordcontrole: tekst valt weg",
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32015L1139": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "e05a4dc2593887a1e3c52354f06fce62ac692bb701c02baf7d7acdccac8b313d",
+   "status": "ok",
+   "tekens": 4270,
+   "waarschuwingen": []
+  },
+  "32015L2366": {
+   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['concordantietabel'], extra=niets).",
+   "oorzaak": "woordcontrole: tekst valt weg",
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32015L2436": {
+   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['concordantietabel'], extra=niets).",
+   "oorzaak": "woordcontrole: tekst valt weg",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32015R0848": {
+   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['concordantietabel'], extra=niets).",
+   "oorzaak": "woordcontrole: tekst valt weg",
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32015R0878": {
+   "melding": "XML-element zonder eigen behandeling (inline:DLIST); omzetting geweigerd.",
+   "oorzaak": "element inline:DLIST",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32015R1716": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "b150d007d8787fd3d1672411b447cf5330ed6e2d1a70284a093cd8f8762c6ab1",
+   "status": "ok",
+   "tekens": 2456,
+   "waarschuwingen": []
+  },
+  "32015R2068": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "ffd859018af4bbe4a6c20d5fb2e9b961fe588f5c40274f45f379a1d7be4eaea4",
+   "status": "ok",
+   "tekens": 8696,
+   "waarschuwingen": []
+  },
+  "32016D0649": {
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: DIV.CONSID (7×); omzetting geweigerd.",
+   "oorzaak": "element DIV.CONSID",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32016D2393": {
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: DIV.CONSID (9×); omzetting geweigerd.",
+   "oorzaak": "element DIV.CONSID",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32016L0011": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "a653c2e63f22dde9df185f36b88c6e01b4e1a916c1c7b8a8f635390d55488966",
+   "status": "ok",
+   "tekens": 3156,
+   "waarschuwingen": []
+  },
+  "32016L0680": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": "1cbf949fd2fee63d286625d9542fc921c5d81e643abd7caef218fdbee9dbcc2b",
+   "status": "ok",
+   "tekens": 195719,
+   "waarschuwingen": []
+  },
+  "32016L0681": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "testset",
+   "sha256": "e3064187efa0b99a4be5d3e0a34c78a98085bb0fd3c8596900d077ecb53b5c18",
+   "status": "ok",
+   "tekens": 67464,
+   "waarschuwingen": []
+  },
+  "32016L0943": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": "24c6412295e9980eddf753b1cdadd33ca4b646c9b418c1623dddf29d6161e582",
+   "status": "ok",
+   "tekens": 74061,
+   "waarschuwingen": []
+  },
+  "32016L1148": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": "6bd46f8e15e36b7cb9e4e17606ad649070e51dbbea179ec91dd277bfa15efaa9",
+   "status": "ok",
+   "tekens": 114668,
+   "waarschuwingen": []
+  },
+  "32016L2258": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "eed4c7dc80c9667f041c68108285733939fcb8a7d467e87a0942c6b4f18dcf55",
+   "status": "ok",
+   "tekens": 8120,
+   "waarschuwingen": []
+  },
+  "32016R0679": {
+   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: art-13-1-d",
+   "oorzaak": "structuur: dubbele structurele ankers",
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32016R0794": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": "230e30fc4f815bf2785f3cfaa8c701fa65a24ddd42c2fe925360f04baad4113d",
+   "status": "ok",
+   "tekens": 205141,
+   "waarschuwingen": []
+  },
+  "32016R1051": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "ffd2469dc5d12cbbe23231e5df31e3d3c6f2a9bb31056339c366637d99b0fced",
+   "status": "ok",
+   "tekens": 54263,
+   "waarschuwingen": []
+  },
+  "32016R2119": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "96a0eb53bea8ec36607aec3a7817b98ee6a3d130a9deb21daae49bd145e944f5",
+   "status": "ok",
+   "tekens": 13597,
+   "waarschuwingen": []
+  },
+  "32016R2390": {
+   "melding": "Formex-bron geweigerd: inclusie(s) nergens in de tekst aangeroepen: L_2016360NL.01001602.xml",
+   "oorzaak": "inclusie nergens in de tekst aangeroepen",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32017D1426": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "f1211ea3d0f2f42592cedbb1b78df5b53a8635414c16930aeab178f477b6c837",
+   "status": "ok",
+   "tekens": 7691,
+   "waarschuwingen": []
+  },
+  "32017D2116": {
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: DIV.CONSID (8×); omzetting geweigerd.",
+   "oorzaak": "element DIV.CONSID",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32017L0433": {
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: ANNOTATION (42×), GR.ANNOTATION (26×), MARGIN (60×); omzetting geweigerd.",
+   "oorzaak": "element ANNOTATION, GR.ANNOTATION, MARGIN",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32017L0774": {
+   "melding": "XML-element zonder eigen behandeling (inline:TBL); omzetting geweigerd.",
+   "oorzaak": "element inline:TBL",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32017R0220": {
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: DIV.CONSID (5×); omzetting geweigerd.",
+   "oorzaak": "element DIV.CONSID",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32017R0745": {
+   "melding": "Formex-bron geweigerd: een inclusie heeft het onbekende type 'TIFF'",
+   "oorzaak": "inclusie van type TIFF",
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32017R0746": {
+   "melding": "Formex-bron geweigerd: een inclusie heeft het onbekende type 'TIFF'",
+   "oorzaak": "inclusie van type TIFF",
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32017R0941": {
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: DIV.CONSID (3×); omzetting geweigerd.",
+   "oorzaak": "element DIV.CONSID",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32017R1782": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "64c4805caa045ce391146e4ac31717733c463f8bb308fbade65b0c791a2e6455",
+   "status": "ok",
+   "tekens": 2911,
+   "waarschuwingen": []
+  },
+  "32017R1939": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": "78ced88889f2b49817813b8833c0e4ad9c65801210ab3dfa31d1e24f7f4630fb",
+   "status": "ok",
+   "tekens": 290143,
+   "waarschuwingen": []
+  },
+  "32017R2226": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": "a8242942980d6324fa027f59b8fa6c220c90b73e574b025fc30643df6374c374",
+   "status": "ok",
+   "tekens": 258758,
+   "waarschuwingen": []
+  },
+  "32018D0187": {
+   "melding": "Formex-bron geweigerd: inclusie(s) nergens in de tekst aangeroepen: L_2018034NL.01003802.xml",
+   "oorzaak": "inclusie nergens in de tekst aangeroepen",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32018D1622": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "9ce36658c1b5cff7c9b4c3e9abfd66c46a0631bf29a5d7d9fff0acad8dee92c2",
+   "status": "ok",
+   "tekens": 6807,
+   "waarschuwingen": []
+  },
+  "32018L0100": {
+   "melding": "Formex-bron geweigerd: inclusie(s) nergens in de tekst aangeroepen: L_2018017NL.01003602.xml, L_2018017NL.01003701.xml, L_2018017NL.01003801.xml, L_2018017NL.01003901.xml",
+   "oorzaak": "inclusie nergens in de tekst aangeroepen",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32018L0597": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "6ae0dbd07ebba18419fcf7dc04711b9e67a4a6d4850a4e60de215071584c04ba",
+   "status": "ok",
+   "tekens": 13448,
+   "waarschuwingen": []
+  },
+  "32018L1808": {
+   "melding": "XML-element zonder eigen behandeling (inline:DLIST); omzetting geweigerd.",
+   "oorzaak": "element inline:DLIST",
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32018L1972": {
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: GR.ANNOTATION (2×); omzetting geweigerd.",
+   "oorzaak": "element GR.ANNOTATION",
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32018R0302": {
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: GENERAL (1×); omzetting geweigerd.",
+   "oorzaak": "element GENERAL",
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32018R1123": {
+   "melding": "XML-element zonder eigen behandeling (inline:TBL); omzetting geweigerd.",
+   "oorzaak": "element inline:TBL",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32018R1240": {
+   "melding": "XML-element zonder eigen behandeling (inline:DIVISION); omzetting geweigerd.",
+   "oorzaak": "element inline:DIVISION",
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32018R1671": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "29a96e2b78e6b546a0e5d4a4d2c463d52bd854f6681e03800f872813da8f9df7",
+   "status": "ok",
+   "tekens": 10118,
+   "waarschuwingen": []
+  },
+  "32018R1693": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "fadfbc6fac44f07dcbeb2b5375d627f470257a908624af33d7c86d6cc98f7ea7",
+   "status": "ok",
+   "tekens": 1966,
+   "waarschuwingen": []
+  },
+  "32018R1724": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": "68863e52c086a6b4d6312eedb4aef6e0308c5647ef2f6020cd54952a23e069c8",
+   "status": "ok",
+   "tekens": 153052,
+   "waarschuwingen": []
+  },
+  "32018R1725": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "testset",
+   "sha256": "6201366ac8f60b6d7ce6218318ad95a613e13a1319882daea031547b7326356b",
+   "status": "ok",
+   "tekens": 276814,
+   "waarschuwingen": []
+  },
+  "32018R1727": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": "9e0b70a908bf00036a3a7110ec4df47042731597285d07eed7a73423b8a99798",
+   "status": "ok",
+   "tekens": 184874,
+   "waarschuwingen": []
+  },
+  "32018R1807": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": "072dbd8085059f3e2488a59cfa4d986cd72f83b864edfd001fb2c4fc7d7b00da",
+   "status": "ok",
+   "tekens": 48546,
+   "waarschuwingen": []
+  },
+  "32018R1862": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": "09acdac32fcc2fc66c078ac0f76231382019bbff54dda4e683faf826c25146f5",
+   "status": "ok",
+   "tekens": 224290,
+   "waarschuwingen": []
+  },
+  "32019D0992": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "b9ed4174ccf7ab2ae4be7cb1bdb08c5c1cd7c170712888b904f142afb3ade7dc",
+   "status": "ok",
+   "tekens": 2643,
+   "waarschuwingen": []
+  },
+  "32019D1278": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "f472012d20426a51b21e901b831d2ebb5d0ceb4a626f069452405df9c58059a4",
+   "status": "ok",
+   "tekens": 10105,
+   "waarschuwingen": []
+  },
+  "32019L0114": {
+   "melding": "XML-element zonder eigen behandeling (inhoud:QUOT.S); omzetting geweigerd.",
+   "oorzaak": "element inhoud:QUOT.S",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32019L0782": {
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: NO.GR.SEQ (13×); omzetting geweigerd.",
+   "oorzaak": "element NO.GR.SEQ",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32019L0790": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": "8c2f4da94e960893533b956c1b37fb914f362b41f258952e3a6554a15186efe6",
+   "status": "ok",
+   "tekens": 169319,
+   "waarschuwingen": []
+  },
+  "32019L0882": {
+   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['van', 'van', 'de', 'toegankelijkheidsvoorschriften', 'aan', 'niet', 'in', 'die', 'bindende', 'voorbeelden', 'bijlage', 'mogelijke'], extra=niets).",
+   "oorzaak": "woordcontrole: tekst valt weg",
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32019L1024": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": "77b7d60e11ce09cdd547bc4d16f266e8181869008e83fbaf0c610719b8fd601e",
+   "status": "ok",
+   "tekens": 111234,
+   "waarschuwingen": []
+  },
+  "32019L1937": {
+   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: annex-1-a, annex-1-a-1, annex-1-a-1-i, annex-1-a-1-ii, annex-1-a-1-iii, annex-1-a-1-iv, annex-1-a-2, annex-1-a-2-i",
+   "oorzaak": "structuur: dubbele structurele ankers",
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32019R0089": {
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: BLK (36×), GR.ANNOTATION (8×); omzetting geweigerd.",
+   "oorzaak": "element BLK, GR.ANNOTATION",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32019R0627": {
+   "melding": "Formex-bron geweigerd: een inclusie heeft het onbekende type 'TIFF'",
+   "oorzaak": "inclusie van type TIFF",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32019R0649": {
+   "melding": "XML-element zonder eigen behandeling (inhoud:QUOT.S); omzetting geweigerd.",
+   "oorzaak": "element inhoud:QUOT.S",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32019R0817": {
+   "melding": "XML-element zonder eigen behandeling (inline:DLIST); omzetting geweigerd.",
+   "oorzaak": "element inline:DLIST",
+   "route": "wetgeving",
+   "sectie": "testset",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32019R0818": {
+   "melding": "XML-element zonder eigen behandeling (inline:DLIST); omzetting geweigerd.",
+   "oorzaak": "element inline:DLIST",
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32019R0881": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": "52e11777bf39301250f6860efca5418743a5d6f9ede73cb8fe3e870bd9bbb1db",
+   "status": "ok",
+   "tekens": 230400,
+   "waarschuwingen": []
+  },
+  "32019R1150": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": "fb9dfbaff53eedf4bd2a46d680255830f4f01409095b84a4f82d48bc261284d1",
+   "status": "ok",
+   "tekens": 110008,
+   "waarschuwingen": []
+  },
+  "32020D1402": {
+   "melding": "XML-element zonder eigen behandeling (inhoud:QUOT.S); omzetting geweigerd.",
+   "oorzaak": "element inhoud:QUOT.S",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32020D1675": {
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: ADDR.S (44×); omzetting geweigerd.",
+   "oorzaak": "element ADDR.S",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32020L0363": {
+   "melding": "XML-element zonder eigen behandeling (inline:TBL); omzetting geweigerd.",
+   "oorzaak": "element inline:TBL",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32020L1833": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "d107fc822697c8633f6b1e271c5ae8aafbfe2b231cebe806760c89a1714b8191",
+   "status": "ok",
+   "tekens": 3699,
+   "waarschuwingen": []
+  },
+  "32020R0461": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "78dce2b24fdbffef0730b90076ee7e637f77ceed243c5b51926d8febc25a7919",
+   "status": "ok",
+   "tekens": 13397,
+   "waarschuwingen": []
+  },
+  "32020R0606": {
+   "melding": "XML-element zonder eigen behandeling (inhoud:QUOT.S); omzetting geweigerd.",
+   "oorzaak": "element inhoud:QUOT.S",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32020R2156": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "357263f7a479109c476029f24cc7e9a83d2ff988012b6ae822789d2d41d087c1",
+   "status": "ok",
+   "tekens": 16479,
+   "waarschuwingen": []
+  },
+  "32021D0084": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "9f77ddcffdfc62c36e0b9d3d32cbee68762d7e87a7ab10d8def77d0bf8517f4c",
+   "status": "ok",
+   "tekens": 3468,
+   "waarschuwingen": []
+  },
+  "32021D0914": {
+   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: annex-1, annex-1-15, annex-1-15-a, annex-1-15-b, annex-1-15-c, annex-1-8, annex-1-8-a, annex-1-8-b",
+   "oorzaak": "structuur: dubbele structurele ankers",
+   "route": "wetgeving",
+   "sectie": "testset",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32021D0915": {
+   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: annex-1, annex-1-7, annex-1-7-a, annex-1-7-b, annex-1-7-c, annex-1-7-d, annex-1-7-e, annex-1-9",
+   "oorzaak": "structuur: dubbele structurele ankers",
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32021D1402": {
+   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['2021', '2021', '2014', 'en', 'en', 'en', 'en', 'en', 'en', 'en', 'en', 'en'], extra=niets).",
+   "oorzaak": "woordcontrole: tekst valt weg",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32021D1772": {
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: DIV.CONSID (8×); omzetting geweigerd.",
+   "oorzaak": "element DIV.CONSID",
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32021L1159": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "5e5e62988b729aa50e6027cb6d2f629ea2215e65fc639d0040a87bc91c962156",
+   "status": "ok",
+   "tekens": 8828,
+   "waarschuwingen": []
+  },
+  "32021L2167": {
+   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['inzake', '2015'], extra=['2015inzake']).",
+   "oorzaak": "woordcontrole: woorden aan elkaar",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32021R0784": {
+   "melding": "Formex-bron geweigerd: een inclusie heeft het onbekende type 'TIFF'",
+   "oorzaak": "inclusie van type TIFF",
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32021R0931": {
+   "melding": "Formex-bron geweigerd: een inclusie heeft het onbekende type 'TIFF'",
+   "oorzaak": "inclusie van type TIFF",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32021R0953": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": "7a4682fe8413706e5623fb93c971676029dcdd2abf999c7fa3756a1fdfeceeea",
+   "status": "ok",
+   "tekens": 101382,
+   "waarschuwingen": []
+  },
+  "32021R1232": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": "3e74230db1dedfa6fbef977e1e9a4408e70a8cb6044911e473014883790ebd4d",
+   "status": "ok",
+   "tekens": 48411,
+   "waarschuwingen": []
+  },
+  "32021R1452": {
+   "melding": "XML-element zonder eigen behandeling (inline:TBL); omzetting geweigerd.",
+   "oorzaak": "element inline:TBL",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32021R2191": {
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: GR.ANNOTATION (1×); omzetting geweigerd.",
+   "oorzaak": "element GR.ANNOTATION",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32022D0289": {
+   "melding": "XML-element zonder eigen behandeling (inhoud:ARTICLE); omzetting geweigerd.",
+   "oorzaak": "element inhoud:ARTICLE",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32022D0830": {
+   "melding": "XML-element zonder eigen behandeling (inhoud:ARTICLE); omzetting geweigerd.",
+   "oorzaak": "element inhoud:ARTICLE",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32022L0281": {
+   "melding": "XML-element zonder eigen behandeling (inhoud:QUOT.S); omzetting geweigerd.",
+   "oorzaak": "element inhoud:QUOT.S",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32022L1648": {
+   "melding": "Formex-bron geweigerd: inclusie(s) nergens in de tekst aangeroepen: L_2022248NL.01005502.xml",
+   "oorzaak": "inclusie nergens in de tekst aangeroepen",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32022L2464": {
+   "melding": "XML-element zonder eigen behandeling (inline:DIVISION); omzetting geweigerd.",
+   "oorzaak": "element inline:DIVISION",
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32022L2555": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": "e3c17f776d534856e53c076a24fc24f1540dc0b26ed296784833ec5a7c840f42",
+   "status": "ok",
+   "tekens": 307128,
+   "waarschuwingen": []
+  },
+  "32022L2557": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": "0eb15e3828301c914b2f5ff79bc98a1f54ab8eda227f6e4262b42b9b01a7ddfa",
+   "status": "ok",
+   "tekens": 138953,
+   "waarschuwingen": []
+  },
+  "32022R0247": {
+   "melding": "XML-element zonder eigen behandeling (inline:TBL); omzetting geweigerd.",
+   "oorzaak": "element inline:TBL",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32022R0469": {
+   "melding": "XML-element zonder eigen behandeling (inline:TBL); omzetting geweigerd.",
+   "oorzaak": "element inline:TBL",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32022R0612": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": "ba8a42bdcacd209ba3527c75d59927b16a05e84a0c8dc39787050d9529fcdebb",
+   "status": "ok",
+   "tekens": 169766,
+   "waarschuwingen": []
+  },
+  "32022R0868": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": "8753bd2242690233d89cb1416cc59004d273af248bca0f53a324b2d9e607cf20",
+   "status": "ok",
+   "tekens": 205241,
+   "waarschuwingen": []
+  },
+  "32022R1925": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": "90c0b3d3a91398744e747ea6214f7d9c096ea6d6322974ec03f6416a519fae78",
+   "status": "ok",
+   "tekens": 279104,
+   "waarschuwingen": []
+  },
+  "32022R1985": {
+   "melding": "XML-element zonder eigen behandeling (inhoud:QUOT.S); omzetting geweigerd.",
+   "oorzaak": "element inhoud:QUOT.S",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32022R2065": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": "4452efaf62aee0fd1c86cfe60cede465e40a433f968fe1aa316939e47dc5c4ed",
+   "status": "ok",
+   "tekens": 449156,
+   "waarschuwingen": []
+  },
+  "32022R2554": {
+   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: hfd-3",
+   "oorzaak": "structuur: dubbele structurele ankers",
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32023D1011": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "301dad29c61afe04ad995515b550614a214d039ec5418014bb5bd8072e2d2c0d",
+   "status": "ok",
+   "tekens": 5968,
+   "waarschuwingen": []
+  },
+  "32023D1795": {
+   "melding": "Formex-bron geweigerd: een inclusie heeft het onbekende type 'TIFF'",
+   "oorzaak": "inclusie van type TIFF",
+   "route": "wetgeving",
+   "sectie": "testset",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32023D2692": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "8597e3d7e4e5c71d860c32d35e37fb9ac6b4f4e8857e9cd6e100dfbf5300f66b",
+   "status": "ok",
+   "tekens": 8705,
+   "waarschuwingen": []
+  },
+  "32023L0544": {
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: GR.ANNOTATION (1×); omzetting geweigerd.",
+   "oorzaak": "element GR.ANNOTATION",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32023L0970": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": "9599c037fb70a42b164763df96a8819fea3c8e799934917aef579d4dc980375a",
+   "status": "ok",
+   "tekens": 100333,
+   "waarschuwingen": []
+  },
+  "32023L1544": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": "8e5adfcefe9ba1a1a2bc64a137a7544a223a496a5313e7d5b80d116fc7a73b23",
+   "status": "ok",
+   "tekens": 48875,
+   "waarschuwingen": []
+  },
+  "32023L2225": {
+   "melding": "Formex-bron geweigerd: een inclusie heeft het onbekende type 'TIFF'",
+   "oorzaak": "inclusie van type TIFF",
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32023L2673": {
+   "melding": "XML-element zonder eigen behandeling (inline:GR.SEQ); omzetting geweigerd.",
+   "oorzaak": "element inline:GR.SEQ",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32023R0152": {
+   "melding": "XML-element zonder eigen behandeling (inhoud:QUOT.S); omzetting geweigerd.",
+   "oorzaak": "element inhoud:QUOT.S",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32023R0173": {
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: GR.ANNOTATION (6×); omzetting geweigerd.",
+   "oorzaak": "element GR.ANNOTATION",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32023R0988": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": "41677861e963f24b14f222f3f0d36a15d1a387e596e77e589bd6fa234acb7121",
+   "status": "ok",
+   "tekens": 207010,
+   "waarschuwingen": []
+  },
+  "32023R1114": {
+   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: annex-1-1, annex-1-10, annex-1-2, annex-1-3, annex-1-4, annex-1-5, annex-1-6, annex-1-7",
+   "oorzaak": "structuur: dubbele structurele ankers",
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32023R1230": {
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: NO.GR.SEQ (14×); omzetting geweigerd.",
+   "oorzaak": "element NO.GR.SEQ",
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32023R1542": {
+   "melding": "Formex-bron geweigerd: een inclusie heeft het onbekende type 'TIFF'",
+   "oorzaak": "inclusie van type TIFF",
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32023R1543": {
+   "melding": "Formex-bron geweigerd: een inclusie heeft het onbekende type 'TIFF'",
+   "oorzaak": "inclusie van type TIFF",
+   "route": "wetgeving",
+   "sectie": "testset",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32023R1704": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "af00dfd459dd287d8e9bc82245ef80a7995c575e033e6bee92ddb01582ba9653",
+   "status": "ok",
+   "tekens": 10572,
+   "waarschuwingen": []
+  },
+  "32023R1781": {
+   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: annex-1-a, annex-1-b",
+   "oorzaak": "structuur: dubbele structurele ankers",
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32023R2854": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": "e7243a420f8b069767357b0efc325ca0c81743ced71773db8f00152abd992e11",
+   "status": "ok",
+   "tekens": 329621,
+   "waarschuwingen": []
+  },
+  "32024D1733": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "1b82990010f5c97554b0771ebedee2ef0f7299b790d0c02419f2d0b1eff92aec",
+   "status": "ok",
+   "tekens": 3208,
+   "waarschuwingen": []
+  },
+  "32024D2627": {
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: GR.ANNOTATION (1×); omzetting geweigerd.",
+   "oorzaak": "element GR.ANNOTATION",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32024L1619": {
+   "melding": "XML-element zonder eigen behandeling (inline:DIVISION); omzetting geweigerd.",
+   "oorzaak": "element inline:DIVISION",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32024L1640": {
+   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['concordantietabel'], extra=niets).",
+   "oorzaak": "woordcontrole: tekst valt weg",
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32024L1712": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "a755aad65cb8680e95b189ea444b5cc2d292c3842e377471dc042e63fe64c2ef",
+   "status": "ok",
+   "tekens": 55746,
+   "waarschuwingen": []
+  },
+  "32024L1760": {
+   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: annex-1-1, annex-1-2",
+   "oorzaak": "structuur: dubbele structurele ankers",
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32024L2831": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": "a430db64116ce8dc6670dd25102f149be3047d16c3589b2d5a271af41c1738da",
+   "status": "ok",
+   "tekens": 124373,
+   "waarschuwingen": []
+  },
+  "32024L2853": {
+   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['concordantietabel'], extra=niets).",
+   "oorzaak": "woordcontrole: tekst valt weg",
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32024R0771": {
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: FORMULA (41×), GR.ANNOTATION (28×); omzetting geweigerd.",
+   "oorzaak": "element FORMULA, GR.ANNOTATION",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32024R0900": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "testset",
+   "sha256": "57c07e9adc062eca29352edaf3892d224ec77c37f3acfbbc7490086f93f6a7c6",
+   "status": "ok",
+   "tekens": 189559,
+   "waarschuwingen": []
+  },
+  "32024R0903": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": "f6c1c29e5210700feb1c2b2ac89d3a2d35f8203cc1b1391022ac5766b7742d21",
+   "status": "ok",
+   "tekens": 110960,
+   "waarschuwingen": []
+  },
+  "32024R0982": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": "615a37fd8137bf103fc052da8d4c64f6220222f28591f7abd75220aba77b8e7f",
+   "status": "ok",
+   "tekens": 151848,
+   "waarschuwingen": []
+  },
+  "32024R1083": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": "132ee0a594d49c1d109b18a42423559669b838d9425c90d202e6d18e8be27fe5",
+   "status": "ok",
+   "tekens": 196132,
+   "waarschuwingen": []
+  },
+  "32024R1183": {
+   "melding": "XML-element zonder eigen behandeling (inline:DIVISION); omzetting geweigerd.",
+   "oorzaak": "element inline:DIVISION",
+   "route": "wetgeving",
+   "sectie": "testset",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32024R1309": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": "62d61db2d283e19b4dd7ec31dfd46e29a2eb6d7cc57153fe0770a39109cb3b57",
+   "status": "ok",
+   "tekens": 179473,
+   "waarschuwingen": []
+  },
+  "32024R1358": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": "d8f71b8a29ce5d7d987ebf8113ad87c5cfd81a9a6000d7a7d61eba827c31750b",
+   "status": "ok",
+   "tekens": 271097,
+   "waarschuwingen": []
+  },
+  "32024R1624": {
+   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['concordantietabel'], extra=niets).",
+   "oorzaak": "woordcontrole: tekst valt weg",
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32024R1689": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": "502b67f5cfbb227ed5a6b8a188ce7a9b559ae276217e1288da7ac41f940123a2",
+   "status": "ok",
+   "tekens": 655107,
+   "waarschuwingen": []
+  },
+  "32024R1781": {
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: NO.GR.SEQ (1×); omzetting geweigerd.",
+   "oorzaak": "element NO.GR.SEQ",
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32024R2623": {
+   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: annex-1-a, annex-1-b, annex-1-c, annex-1-d, annex-1-e, annex-1-f, annex-1-g, annex-1-h",
+   "oorzaak": "structuur: dubbele structurele ankers",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32024R2847": {
+   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: annex-1-1, annex-1-2, annex-3-1, annex-3-2, annex-3-3, annex-3-4, annex-8-1, annex-8-2",
+   "oorzaak": "structuur: dubbele structurele ankers",
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32024R2959": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "88de0e3b5b068b6d2e3754e5b83c58be2ab5a878ba87333e1e72b09eeef4c147",
+   "status": "ok",
+   "tekens": 26106,
+   "waarschuwingen": []
+  },
+  "32025D0489": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "489e59d02241e1a385aa4bfa52978d901758806a93ebd77c33bbcddc4767e7a5",
+   "status": "ok",
+   "tekens": 7541,
+   "waarschuwingen": []
+  },
+  "32025D2554": {
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: GR.ANNOTATION (1×); omzetting geweigerd.",
+   "oorzaak": "element GR.ANNOTATION",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32025L0145": {
+   "melding": "XML-element zonder eigen behandeling (inline:TBL); omzetting geweigerd.",
+   "oorzaak": "element inline:TBL",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32025L2205": {
+   "melding": "Formex-bron geweigerd: een inclusie heeft het onbekende type 'TIFF'",
+   "oorzaak": "inclusie van type TIFF",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32025R0038": {
+   "melding": "XML-element zonder eigen behandeling (inline:GR.SEQ); omzetting geweigerd.",
+   "oorzaak": "element inline:GR.SEQ",
+   "route": "wetgeving",
+   "sectie": "belangrijk",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32025R0327": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "testset",
+   "sha256": "f1d17a339d16003e757d3e6c5891187a8c341134b29eea906b40f3bf6ed6ebf4",
+   "status": "ok",
+   "tekens": 461202,
+   "waarschuwingen": []
+  },
+  "32025R1068": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "eaaec2fbe72714d452e7ed3cdc220a80f6a7a25beba927f06940c0c14df2eade",
+   "status": "ok",
+   "tekens": 2712,
+   "waarschuwingen": []
+  },
+  "32025R1330": {
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: DIV.CONSID (9×); omzetting geweigerd.",
+   "oorzaak": "element DIV.CONSID",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32025R2339": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "e34b9d4ba1a6cf7d2f7b4b9325643f4a8bba3877ce7dedbe46ebd585f2189216",
+   "status": "ok",
+   "tekens": 2902,
+   "waarschuwingen": []
+  },
+  "32026D0816": {
+   "melding": "Formex-bron geweigerd: inclusie(s) nergens in de tekst aangeroepen: L_202600816NL.000302.fmx.xml",
+   "oorzaak": "inclusie nergens in de tekst aangeroepen",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32026D1552": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "dd86aa89650e373b561bd58f762baf73724e0982d0c20d738dce42ffd7ca0a77",
+   "status": "ok",
+   "tekens": 2438,
+   "waarschuwingen": []
+  },
+  "32026L0706": {
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: ANNOTATION (3×); omzetting geweigerd.",
+   "oorzaak": "element ANNOTATION",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32026L1194": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "5566d0a0c041cf4ef6b8b7322bce114c58208e002df6c099f1dfd83710707d82",
+   "status": "ok",
+   "tekens": 47317,
+   "waarschuwingen": []
+  },
+  "32026R1359": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "898620dc372972cbb81a171e33033c2d1fb996d4a8972f71c476bcaa44531924",
+   "status": "ok",
+   "tekens": 3981,
+   "waarschuwingen": []
+  },
+  "32026R1383": {
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: ANNOTATION (2×); omzetting geweigerd.",
+   "oorzaak": "element ANNOTATION",
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "32026R1744": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "testset",
+   "sha256": "ea9e4154406269fe024fb56f32d9cf2806ceab065affa00c7f2fe79a05884cdc",
+   "status": "ok",
+   "tekens": 165073,
+   "waarschuwingen": []
+  },
+  "32026R2105": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "wetgeving",
+   "sectie": "steekproef-wetgeving",
+   "sha256": "c0d904fb3ba4aa48566542845968827a09528b0e70bc10ac783d0b9043cefaa5",
+   "status": "ok",
+   "tekens": 2822,
+   "waarschuwingen": []
+  },
+  "62010CJ0139": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": "06b75209e2367ad999da787446f22e6edc6326ab5107601feab06ad4d0d42873",
+   "status": "ok",
+   "tekens": 24434,
+   "waarschuwingen": [
+    "De bron noemt geen ECLI; het CELEX-nummer is de identiteit van dit document.",
+    "8 keer vet of cursief niet overgenomen; de tekst blijft."
+   ]
+  },
+  "62010CJ0277": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": "9e76f2695a58a95b8ccb1a5cfee904c1404b5523eb1e84ada84d84e71adaaa8b",
+   "status": "ok",
+   "tekens": 64323,
+   "waarschuwingen": [
+    "23 keer vet of cursief niet overgenomen; de tekst blijft."
+   ]
+  },
+  "62010CO0084": {
+   "melding": "Voor 62010CO0084 is geen Formex-manifestatie in de Cellar (HTTP 404) in taal NL. Een arrest van de laatste dagen of weken staat er nog niet; probeer het later opnieuw. Er is geen terugval op HTML.",
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": null,
+   "status": "geen-formex",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "62010TJ0420": {
+   "melding": "Voor 62010TJ0420 is geen Formex-manifestatie in de Cellar (HTTP 404) in taal NL. Een arrest van de laatste dagen of weken staat er nog niet; probeer het later opnieuw. Er is geen terugval op HTML.",
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": null,
+   "status": "geen-formex",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "62011CJ0097": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": "71a650c6068eacc39e373032b14dfb0a019ace8e757a72bcff79e5800ebfc577",
+   "status": "ok",
+   "tekens": 20735,
+   "waarschuwingen": [
+    "14 keer vet of cursief niet overgenomen; de tekst blijft."
+   ]
+  },
+  "62011CJ0607": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": "395da9a8c612e8fafe1b2b824cf91d99f2994bb9fdee235c6bae34294ce0cf07",
+   "status": "ok",
+   "tekens": 27173,
+   "waarschuwingen": [
+    "27 keer vet of cursief niet overgenomen; de tekst blijft."
+   ]
+  },
+  "62011CO0200": {
+   "melding": "Voor 62011CO0200 is geen Formex-manifestatie in de Cellar (HTTP 404) in taal NL. Een arrest van de laatste dagen of weken staat er nog niet; probeer het later opnieuw. Er is geen terugval op HTML.",
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": null,
+   "status": "geen-formex",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "62011TJ0413": {
+   "melding": "Voor 62011TJ0413 is geen Formex-manifestatie in de Cellar (HTTP 404) in taal NL. Een arrest van de laatste dagen of weken staat er nog niet; probeer het later opnieuw. Er is geen terugval op HTML.",
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": null,
+   "status": "geen-formex",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "62012CJ0061": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": "e4b7226492263c331cbba7cd1db9ff510faad84b5299c2b7320ec5ae5889cf36",
+   "status": "ok",
+   "tekens": 41869,
+   "waarschuwingen": [
+    "21 keer vet of cursief niet overgenomen; de tekst blijft."
+   ]
+  },
+  "62012CJ0409": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": "0724482fa5d9b2fb8ba6a7d56290228a4d8a698f0418c18b423fed40a72f09ff",
+   "status": "ok",
+   "tekens": 23923,
+   "waarschuwingen": [
+    "18 keer vet of cursief niet overgenomen; de tekst blijft."
+   ]
+  },
+  "62012CO0581": {
+   "melding": "Voor 62012CO0581 is geen Formex-manifestatie in de Cellar (HTTP 404) in taal NL. Een arrest van de laatste dagen of weken staat er nog niet; probeer het later opnieuw. Er is geen terugval op HTML.",
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": null,
+   "status": "geen-formex",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "62012TJ0235": {
+   "melding": "Formex-uitspraak geweigerd: de zip bevat naast de XML ook ECR_62012TJ0235_NL_01_01.tif, ECR_62012TJ0235_NL_01_02.tif, ECR_62012TJ0235_NL_01_03.tif, ECR_62012TJ0235_NL_01_06.tif; een afbeelding of bijlage zou buiten de omzetting blijven",
+   "oorzaak": "zip bevat ook andere bestanden",
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": null,
+   "status": "weigering",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "62013CJ0148": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": "4d234a40a66b74e93d83f296348cc0142757f4d5a25daabb2e1389fd974c3181",
+   "status": "ok",
+   "tekens": 42510,
+   "waarschuwingen": [
+    "20 keer vet of cursief niet overgenomen; de tekst blijft."
+   ]
+  },
+  "62013CJ0553": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": "7e4589b8ea4ede321592a5f32d76c9f94c7ff350d4842f8ee05da71efa19148e",
+   "status": "ok",
+   "tekens": 33015,
+   "waarschuwingen": [
+    "12 keer vet of cursief niet overgenomen; de tekst blijft."
+   ]
+  },
+  "62013CO0683": {
+   "melding": "Voor 62013CO0683 is geen Formex-manifestatie in de Cellar (HTTP 404) in taal NL. Een arrest van de laatste dagen of weken staat er nog niet; probeer het later opnieuw. Er is geen terugval op HTML.",
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": null,
+   "status": "geen-formex",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "62013TJ0026": {
+   "melding": "Voor 62013TJ0026 is geen Formex-manifestatie in de Cellar (HTTP 404) in taal NL. Een arrest van de laatste dagen of weken staat er nog niet; probeer het later opnieuw. Er is geen terugval op HTML.",
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": null,
+   "status": "geen-formex",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "62014CJ0169": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": "2e52e587783022f40a59f7ef0a37ad80aea82191475de7956986177a48b487e2",
+   "status": "ok",
+   "tekens": 40553,
+   "waarschuwingen": [
+    "11 keer vet of cursief niet overgenomen; de tekst blijft."
+   ]
+  },
+  "62014CJ0239": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": "e852e88701c27dd110ace145f7f7597b2cc6b613b7950ccabc8dfc788b167eee",
+   "status": "ok",
+   "tekens": 32387,
+   "waarschuwingen": [
+    "16 keer vet of cursief niet overgenomen; de tekst blijft."
+   ]
+  },
+  "62014CO0507": {
+   "melding": "Voor 62014CO0507 is geen Formex-manifestatie in de Cellar (HTTP 404) in taal NL. Een arrest van de laatste dagen of weken staat er nog niet; probeer het later opnieuw. Er is geen terugval op HTML.",
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": null,
+   "status": "geen-formex",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "62014TJ0446": {
+   "melding": "Voor 62014TJ0446 is geen Formex-manifestatie in de Cellar (HTTP 404) in taal NL. Een arrest van de laatste dagen of weken staat er nog niet; probeer het later opnieuw. Er is geen terugval op HTML.",
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": null,
+   "status": "geen-formex",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "62015CJ0467": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": "bde3a5bc0e3ea167b042610efb25a17779916e4b21bf06ec8ec57b06a344c144",
+   "status": "ok",
+   "tekens": 39994,
+   "waarschuwingen": [
+    "17 keer vet of cursief niet overgenomen; de tekst blijft."
+   ]
+  },
+  "62015CJ0624": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": "d142c06259af34d32647b4c32f90914bd3810535acd6cbf439c77945dc1fb67b",
+   "status": "ok",
+   "tekens": 36022,
+   "waarschuwingen": [
+    "20 keer vet of cursief niet overgenomen; de tekst blijft."
+   ]
+  },
+  "62015CO0426": {
+   "melding": "Voor 62015CO0426 is geen Formex-manifestatie in de Cellar (HTTP 404) in taal NL. Een arrest van de laatste dagen of weken staat er nog niet; probeer het later opnieuw. Er is geen terugval op HTML.",
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": null,
+   "status": "geen-formex",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "62015TJ0344": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": "7a94092199c4c40dd5a908b546e00bfed2a4206d1bf09aed05e59db94d853701",
+   "status": "ok",
+   "tekens": 51087,
+   "waarschuwingen": [
+    "20 keer vet of cursief niet overgenomen; de tekst blijft."
+   ]
+  },
+  "62016CJ0104": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": "f11dcd7c653cc83e6f8ceaf2ca3a5384f6c12bb539ec67ff501f1a9723dfa13c",
+   "status": "ok",
+   "tekens": 75100,
+   "waarschuwingen": [
+    "33 keer vet of cursief niet overgenomen; de tekst blijft."
+   ]
+  },
+  "62016CJ0193": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": "912c84cf06ccaad0e73688af85d240729149be63a69b66bd5b4504d6951a479b",
+   "status": "ok",
+   "tekens": 19743,
+   "waarschuwingen": [
+    "5 keer vet of cursief niet overgenomen; de tekst blijft."
+   ]
+  },
+  "62016CO0406": {
+   "melding": "Voor 62016CO0406 is geen Formex-manifestatie in de Cellar (HTTP 404) in taal NL. Een arrest van de laatste dagen of weken staat er nog niet; probeer het later opnieuw. Er is geen terugval op HTML.",
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": null,
+   "status": "geen-formex",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "62016TJ0133": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": "0324db4e4cb3c346f7427f8aa9cf8f876d307fec70c4ee470df6f2333962842f",
+   "status": "ok",
+   "tekens": 62901,
+   "waarschuwingen": [
+    "25 keer vet of cursief niet overgenomen; de tekst blijft."
+   ]
+  },
+  "62017CJ0017": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": "01f00fa198ca9d0d4e1334e620c24d83cdd432c9239187342871c39a0ce427dc",
+   "status": "ok",
+   "tekens": 38383,
+   "waarschuwingen": [
+    "21 keer vet of cursief niet overgenomen; de tekst blijft."
+   ]
+  },
+  "62017CJ0668": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": "771e08815d5c0ca17652125d5a0cd3aac67b5549053d9bf9b2b52aaf32412621",
+   "status": "ok",
+   "tekens": 38255,
+   "waarschuwingen": [
+    "29 keer vet of cursief niet overgenomen; de tekst blijft."
+   ]
+  },
+  "62017CO0424": {
+   "melding": "Voor 62017CO0424 is geen Formex-manifestatie in de Cellar (HTTP 404) in taal NL. Een arrest van de laatste dagen of weken staat er nog niet; probeer het later opnieuw. Er is geen terugval op HTML.",
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": null,
+   "status": "geen-formex",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "62017TJ0460": {
+   "melding": "Voor 62017TJ0460 is geen Formex-manifestatie in de Cellar (HTTP 404) in taal NL. Een arrest van de laatste dagen of weken staat er nog niet; probeer het later opnieuw. Er is geen terugval op HTML.",
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": null,
+   "status": "geen-formex",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "62018CJ0281": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": "1f4c0641394a20fd1f99ac540ce942fbafc73f78e9597f9310f4c0c538fad4ce",
+   "status": "ok",
+   "tekens": 31660,
+   "waarschuwingen": [
+    "24 keer vet of cursief niet overgenomen; de tekst blijft."
+   ]
+  },
+  "62018CJ0454": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": "a555ab946b83ec8a5b51e3dc0f484cf1b52d222e82b516cac53d9b2972240a27",
+   "status": "ok",
+   "tekens": 52333,
+   "waarschuwingen": [
+    "25 keer vet of cursief niet overgenomen; de tekst blijft."
+   ]
+  },
+  "62018CO0023": {
+   "melding": "Voor 62018CO0023 is geen Formex-manifestatie in de Cellar (HTTP 404) in taal NL. Een arrest van de laatste dagen of weken staat er nog niet; probeer het later opnieuw. Er is geen terugval op HTML.",
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": null,
+   "status": "geen-formex",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "62018TJ0299": {
+   "melding": "Voor 62018TJ0299 is geen Formex-manifestatie in de Cellar (HTTP 404) in taal NL. Een arrest van de laatste dagen of weken staat er nog niet; probeer het later opnieuw. Er is geen terugval op HTML.",
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": null,
+   "status": "geen-formex",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "62019CJ0229": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": "b7a0332e38c32cb94ae2f87e37fba981773714032680edba0648769787a1f120",
+   "status": "ok",
+   "tekens": 43364,
+   "waarschuwingen": [
+    "24 keer vet of cursief niet overgenomen; de tekst blijft."
+   ]
+  },
+  "62019CJ0391": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": "b8ad8bec01bb66d8601ba00a3857cc963bee1cf3c49034ddb7db32d6902884fe",
+   "status": "ok",
+   "tekens": 24433,
+   "waarschuwingen": [
+    "16 keer vet of cursief niet overgenomen; de tekst blijft."
+   ]
+  },
+  "62019CJ0645": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "testset",
+   "sha256": "3738eaf731d584b860b7a1a07fb570dfc5518c6dc8f9658ac9bc881acfae2fd8",
+   "status": "ok",
+   "tekens": 100004,
+   "waarschuwingen": [
+    "41 keer vet of cursief niet overgenomen; de tekst blijft."
+   ]
+  },
+  "62019CO0325": {
+   "melding": "Voor 62019CO0325 is geen Formex-manifestatie in de Cellar (HTTP 404) in taal NL. Een arrest van de laatste dagen of weken staat er nog niet; probeer het later opnieuw. Er is geen terugval op HTML.",
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": null,
+   "status": "geen-formex",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "62019TJ0085": {
+   "melding": "Voor 62019TJ0085 is geen Formex-manifestatie in de Cellar (HTTP 404) in taal NL. Een arrest van de laatste dagen of weken staat er nog niet; probeer het later opnieuw. Er is geen terugval op HTML.",
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": null,
+   "status": "geen-formex",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "62020CJ0054": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": "e818f33c629398f2894a27f403a01ebc8155e875b8205d7faf8b75b93a5be3e5",
+   "status": "ok",
+   "tekens": 51714,
+   "waarschuwingen": [
+    "26 keer vet of cursief niet overgenomen; de tekst blijft."
+   ]
+  },
+  "62020CJ0257": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": "1665e681bd8c8db6a5a37388d4486f2f9a689881b6923a757f691b1a7a9fcff1",
+   "status": "ok",
+   "tekens": 77664,
+   "waarschuwingen": [
+    "33 keer vet of cursief niet overgenomen; de tekst blijft."
+   ]
+  },
+  "62020CO0676": {
+   "melding": "Voor 62020CO0676 is geen Formex-manifestatie in de Cellar (HTTP 404) in taal NL. Een arrest van de laatste dagen of weken staat er nog niet; probeer het later opnieuw. Er is geen terugval op HTML.",
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": null,
+   "status": "geen-formex",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "62020TJ0225": {
+   "melding": "Voor 62020TJ0225 is geen Formex-manifestatie in de Cellar (HTTP 404) in taal NL. Een arrest van de laatste dagen of weken staat er nog niet; probeer het later opnieuw. Er is geen terugval op HTML.",
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": null,
+   "status": "geen-formex",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "62021CJ0097": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": "8a0d8c584ffc0f37b01cf48c3d024c198b421b9c52ce32ead1860447b38b7216",
+   "status": "ok",
+   "tekens": 45472,
+   "waarschuwingen": [
+    "27 keer vet of cursief niet overgenomen; de tekst blijft."
+   ]
+  },
+  "62021CJ0409": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": "21e1ed38826bf199cae942eae66a851c06c18b8338dadf2f6a7c5431ba822cf8",
+   "status": "ok",
+   "tekens": 31356,
+   "waarschuwingen": [
+    "31 keer vet of cursief niet overgenomen; de tekst blijft."
+   ]
+  },
+  "62021CO0611": {
+   "melding": "Voor 62021CO0611 is geen Formex-manifestatie in de Cellar (HTTP 404) in taal NL. Een arrest van de laatste dagen of weken staat er nog niet; probeer het later opnieuw. Er is geen terugval op HTML.",
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": null,
+   "status": "geen-formex",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "62021TJ0280": {
+   "melding": "Voor 62021TJ0280 is geen Formex-manifestatie in de Cellar (HTTP 404) in taal NL. Een arrest van de laatste dagen of weken staat er nog niet; probeer het later opnieuw. Er is geen terugval op HTML.",
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": null,
+   "status": "geen-formex",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "62022CJ0020": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": "b3721e56a59b68dddd3ed8f3391554b237fcb8c2f1922246ba6d8eea36e9ef71",
+   "status": "ok",
+   "tekens": 24585,
+   "waarschuwingen": [
+    "14 keer vet of cursief niet overgenomen; de tekst blijft."
+   ]
+  },
+  "62022CJ0259": {
+   "melding": "Voor 62022CJ0259 is geen Formex-manifestatie in de Cellar (HTTP 404) in taal NL. Een arrest van de laatste dagen of weken staat er nog niet; probeer het later opnieuw. Er is geen terugval op HTML.",
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": null,
+   "status": "geen-formex",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "62022CO0690": {
+   "melding": "Voor 62022CO0690 is geen Formex-manifestatie in de Cellar (HTTP 404) in taal NL. Een arrest van de laatste dagen of weken staat er nog niet; probeer het later opnieuw. Er is geen terugval op HTML.",
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": null,
+   "status": "geen-formex",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "62022TJ0108": {
+   "melding": "Voor 62022TJ0108 is geen Formex-manifestatie in de Cellar (HTTP 404) in taal NL. Een arrest van de laatste dagen of weken staat er nog niet; probeer het later opnieuw. Er is geen terugval op HTML.",
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": null,
+   "status": "geen-formex",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "62023CJ0209": {
+   "melding": "Voor 62023CJ0209 is geen Formex-manifestatie in de Cellar (HTTP 406) in taal NL. Een arrest van de laatste dagen of weken staat er nog niet; probeer het later opnieuw. Er is geen terugval op HTML.",
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": null,
+   "status": "geen-formex",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "62023CJ0413": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "testset",
+   "sha256": "6104f9ecd5941989ded3ded99f93d1ca5f529ae0bf6a635aeeee58f72601eeab",
+   "status": "ok",
+   "tekens": 75882,
+   "waarschuwingen": [
+    "68 keer vet of cursief niet overgenomen; de tekst blijft."
+   ]
+  },
+  "62023CJ0789": {
+   "melding": "Voor 62023CJ0789 is geen Formex-manifestatie in de Cellar (HTTP 404) in taal NL. Een arrest van de laatste dagen of weken staat er nog niet; probeer het later opnieuw. Er is geen terugval op HTML.",
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": null,
+   "status": "geen-formex",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "62023CO0768": {
+   "melding": "Voor 62023CO0768 is geen Formex-manifestatie in de Cellar (HTTP 404) in taal NL. Een arrest van de laatste dagen of weken staat er nog niet; probeer het later opnieuw. Er is geen terugval op HTML.",
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": null,
+   "status": "geen-formex",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "62023TJ0295": {
+   "melding": "Voor 62023TJ0295 is geen Formex-manifestatie in de Cellar (HTTP 404) in taal NL. Een arrest van de laatste dagen of weken staat er nog niet; probeer het later opnieuw. Er is geen terugval op HTML.",
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": null,
+   "status": "geen-formex",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "62023TJ0553": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "testset",
+   "sha256": "727695574c51c0465fae6fea42cdb5a6e6d92425029cb3dbadc95e0017236a69",
+   "status": "ok",
+   "tekens": 121984,
+   "waarschuwingen": [
+    "91 keer vet of cursief niet overgenomen; de tekst blijft."
+   ]
+  },
+  "62024CJ0134": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": "aa6dc0b56af4ceffb34d31d7df2f971d64efb8883e4133aac6eff5fe2f84bdba",
+   "status": "ok",
+   "tekens": 47285,
+   "waarschuwingen": [
+    "33 keer vet of cursief niet overgenomen; de tekst blijft."
+   ]
+  },
+  "62024CJ0291": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": "68d1249a743f8c546c986579bda377bd20b6ce347483bc428a190f396a038a0b",
+   "status": "ok",
+   "tekens": 37939,
+   "waarschuwingen": [
+    "24 keer vet of cursief niet overgenomen; de tekst blijft."
+   ]
+  },
+  "62024CO0860": {
+   "melding": "Voor 62024CO0860 is geen Formex-manifestatie in de Cellar (HTTP 406) in taal NL. Een arrest van de laatste dagen of weken staat er nog niet; probeer het later opnieuw. Er is geen terugval op HTML.",
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": null,
+   "status": "geen-formex",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "62024TJ0541": {
+   "melding": "Voor 62024TJ0541 is geen Formex-manifestatie in de Cellar (HTTP 404) in taal NL. Een arrest van de laatste dagen of weken staat er nog niet; probeer het later opnieuw. Er is geen terugval op HTML.",
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": null,
+   "status": "geen-formex",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "62025CJ0234": {
+   "melding": "Voor 62025CJ0234 is geen Formex-manifestatie in de Cellar (HTTP 404) in taal NL. Een arrest van de laatste dagen of weken staat er nog niet; probeer het later opnieuw. Er is geen terugval op HTML.",
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": null,
+   "status": "geen-formex",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "62025CJ0467": {
+   "melding": "Voor 62025CJ0467 is geen Formex-manifestatie in de Cellar (HTTP 404) in taal NL. Een arrest van de laatste dagen of weken staat er nog niet; probeer het later opnieuw. Er is geen terugval op HTML.",
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": null,
+   "status": "geen-formex",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "62025CO0561": {
+   "melding": "Voor 62025CO0561 is geen Formex-manifestatie in de Cellar (HTTP 404) in taal NL. Een arrest van de laatste dagen of weken staat er nog niet; probeer het later opnieuw. Er is geen terugval op HTML.",
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": null,
+   "status": "geen-formex",
+   "tekens": null,
+   "waarschuwingen": []
+  },
+  "62025TJ0177": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "steekproef-hof",
+   "sha256": "3732f6538d1de752aa593c5b7dcbfb965ed30971549aa4423714d8283ec6b653",
+   "status": "ok",
+   "tekens": 37592,
+   "waarschuwingen": [
+    "23 keer vet of cursief niet overgenomen; de tekst blijft."
+   ]
+  },
+  "ECLI:EU:C:2014:317": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "testset",
+   "sha256": "64410656a0d2d275bdc4059ee03bf5a97b1f56a5cfacba977d0180b291ca36c4",
+   "status": "ok",
+   "tekens": 82079,
+   "waarschuwingen": [
+    "23 keer vet of cursief niet overgenomen; de tekst blijft."
+   ]
+  },
+  "ECLI:EU:C:2021:483": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "testset",
+   "sha256": "3738eaf731d584b860b7a1a07fb570dfc5518c6dc8f9658ac9bc881acfae2fd8",
+   "status": "ok",
+   "tekens": 100004,
+   "waarschuwingen": [
+    "41 keer vet of cursief niet overgenomen; de tekst blijft."
+   ]
+  },
+  "ECLI:EU:C:2022:491": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "testset",
+   "sha256": "b4e9c0a99cdf02ab611ff1b20070e0778a1e4370c10f0aec846059f0e8fdbc87",
+   "status": "ok",
+   "tekens": 255437,
+   "waarschuwingen": [
+    "136 keer vet of cursief niet overgenomen; de tekst blijft."
+   ]
+  },
+  "ECLI:EU:C:2023:957": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "testset",
+   "sha256": "b78f9bcbbfe140191acc7328611ab0dec3e3bd887bc0bdc39f6679e407cb455a",
+   "status": "ok",
+   "tekens": 51122,
+   "waarschuwingen": [
+    "20 keer vet of cursief niet overgenomen; de tekst blijft."
+   ]
+  },
+  "ECLI:EU:C:2025:645": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "testset",
+   "sha256": "6104f9ecd5941989ded3ded99f93d1ca5f529ae0bf6a635aeeee58f72601eeab",
+   "status": "ok",
+   "tekens": 75882,
+   "waarschuwingen": [
+    "68 keer vet of cursief niet overgenomen; de tekst blijft."
+   ]
+  },
+  "ECLI:EU:T:2023:219": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "testset",
+   "sha256": "712448fae28742510ca07f7e52d543aa169a5de0ad88bb459fae362957885e71",
+   "status": "ok",
+   "tekens": 54304,
+   "waarschuwingen": [
+    "28 keer vet of cursief niet overgenomen; de tekst blijft."
+   ]
+  },
+  "ECLI:EU:T:2025:831": {
+   "melding": null,
+   "oorzaak": null,
+   "route": "hof",
+   "sectie": "testset",
+   "sha256": "727695574c51c0465fae6fea42cdb5a6e6d92425029cb3dbadc95e0017236a69",
+   "status": "ok",
+   "tekens": 121984,
+   "waarschuwingen": [
+    "91 keer vet of cursief niet overgenomen; de tekst blijft."
+   ]
+  }
+ },
+ "gemeten": "2026-09-23 14:34",
+ "taal": "NL"
+}

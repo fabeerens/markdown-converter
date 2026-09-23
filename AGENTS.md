@@ -40,8 +40,15 @@ verandert zit aan de achterkant.
 
 - **Tests zijn karakteriseringstests**: ze leggen het *bestaande* gedrag vast.
   Verandert er gedrag, dan verander je de test bewust en zeg je dat in de
-  commit. Draai `.venv/bin/python -m pytest tests/ -q` (nu 355 tests, 1
-  overgeslagen) vóór je klaar bent.
+  commit. Draai `.venv/bin/python -m pytest tests/ -q` (nu 394 tests) vóór
+  je klaar bent.
+- **Raak je een Formex-omzetter** (`formex_xml.py`, `formex_hof.py`,
+  `xml_gedeeld.py` of de Formex-tak van `eurlex.py`), **draai dan de meetlat**:
+  `.venv/bin/python meetlat/meetlat.py meten`. Geen document dat doorkwam mag
+  nu geweigerd worden, en andere uitvoer leg je alleen vast met `--bijwerken`
+  als je in de commit zegt waarom. Een reparatie begint bij de oorzaken die de
+  meetlat telt, niet bij het ene document dat iemand tegenkwam; noem in de commit
+  de doorlaat vóór en na (bv. "wetgeving 127/266 → 139/266").
 - **Geen netwerk in tests.** Vervang `net.documents` met `monkeypatch`; zie
   `_fake_cellar` in `tests/test_characterisation.py`.
 - **Lui laden blijft lui.** MarkItDown en pdf-inspector kosten honderden ms bij
