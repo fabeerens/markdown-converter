@@ -1947,3 +1947,28 @@ def test_een_enkele_ongenummerde_overweging_komt_een_keer_en_telt_als_overweging
     overwegingen = [e for e in eenheden if e.soort == "overweging"]
     assert [(e.anker, e.tekst) for e in overwegingen] == [
         ("", "Bij Verordening (EU) nr. 543/2011 zijn de criteria vastgesteld,")]
+
+
+def _bijlage_met_losse_inclusie(ingesloten: bytes) -> bytes:
+    bijlage = (b'<ANNEX><BIB.INSTANCE><INCLUSIONS><INCL.ELEMENT FILEREF="L_test.005402.fmx.xml" '
+               b'TYPE="FORMEX.DOC"/></INCLUSIONS></BIB.INSTANCE><TITLE><TI><P>BIJLAGE V</P></TI></TITLE>'
+               b'<CONTENTS><INCL.ELEMENT FILEREF="L_test.005402.fmx.xml" TYPE="FORMEX.DOC"/></CONTENTS></ANNEX>')
+    doc = DOC.replace(b"</FMX>", b'<REF.PHYS TYPE="DOC.XML" FILE="bijlage.xml"/></FMX>')
+    return formex_zip(doc=doc, extra={"bijlage.xml": bijlage, "L_test.005402.fmx.xml": ingesloten})
+
+
+def test_an_annex_that_is_only_an_inclusion_is_quoted_text_when_the_inclusion_opens_with_a_quote():
+    """eIDAS 2 (32024R1183), bijlage V-VII: CONTENTS draagt alleen een inclusie, en die begint met `“BIJLAGE V`."""
+    ingesloten = (b'<ANNEX><TITLE><TI><P><QUOT.START CODE="201C" ID="Q1" REF.END="E1"/>BIJLAGE V</P></TI>'
+                  b'<STI><P>EISEN VOOR ATTESTERING</P></STI></TITLE><CONTENTS><NP><NO.P>a)</NO.P><TXT>een '
+                  b'aanduiding<QUOT.END CODE="201D" ID="E1" REF.START="Q1"/>.</TXT></NP></CONTENTS></ANNEX>')
+    markdown, eenheden, _, _ = formex_xml.omzetten(_bijlage_met_losse_inclusie(ingesloten))
+    assert "## BIJLAGE V\n\n“BIJLAGE V\n\nEISEN VOOR ATTESTERING\n\na) een aanduiding”." in markdown
+    assert [e.anker for e in eenheden if e.anker.startswith("annex")] == ["annex-5"]
+
+
+def test_an_annex_that_is_only_an_inclusion_without_a_quote_is_still_refused():
+    ingesloten = (b'<ANNEX><TITLE><TI><P>BIJLAGE V</P></TI></TITLE><CONTENTS><P>Eigen tekst.</P>'
+                  b'</CONTENTS></ANNEX>')
+    with pytest.raises(ConversionError, match="als los blok is alleen voor een afbeelding gemeten"):
+        formex_xml.omzetten(_bijlage_met_losse_inclusie(ingesloten))

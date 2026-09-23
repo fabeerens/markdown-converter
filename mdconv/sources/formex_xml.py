@@ -1464,6 +1464,27 @@ class FormexOmzetter:
             return None
         return kinderen, begin, einde, staart
 
+    def begint_met_aanhaling(self, incl) -> bool:
+        """Of de tekst van een ingesloten document met een aanhalingsteken begint."""
+        root = self.inclusies.get((incl.get("FILEREF") or "").rsplit("/", 1)[-1])
+
+        def eerste(el) -> str | None:
+            if el.tag in METADATA:
+                return None
+            if el.tag == "QUOT.START":
+                return "aanhaling"
+            if ws(el.text or ""):
+                return "tekst"
+            for kind in el:
+                gevonden = eerste(kind)
+                if gevonden:
+                    return gevonden
+                if ws(kind.tail or ""):
+                    return "tekst"
+            return None
+
+        return root is not None and eerste(root) == "aanhaling"
+
     def geciteerde_inclusies(self, inclusies: list, begin, einde, staart: str) -> None:
         """Eén of meer geciteerde bijlagen, met de aanhalingstekens eromheen.
 
@@ -2148,6 +2169,15 @@ class FormexOmzetter:
                 # en zonder aanhalingstekens: `<CONTENTS><QUOT.S><INCL.ELEMENT/>`
                 # (32013D0287, 32016R2390). Buiten een citaat blijft een losse
                 # inclusie een weigering in `inhoud()`.
+                self.geciteerde_inclusies([kind], None, None, "")
+            elif (kind.tag == "INCL.ELEMENT" and (kind.get("TYPE") or "").upper() == "FORMEX.DOC"
+                  and self.begint_met_aanhaling(kind)):
+                # Een eigen bijlage die niets draagt dan een inclusie, zonder QUOT.S
+                # eromheen: bijlage V, VI en VII van eIDAS 2 (32024R1183) bevatten
+                # elk alleen de nieuwe bijlage die ze aan 910/2014 toevoegen. Dat die
+                # tekst geciteerd is, zegt de inclusie zelf: ze begint met het
+                # aanhalingsteken (`“BIJLAGE V`). Alleen dan is het een citaat;
+                # een losse inclusie zonder dat teken blijft een weigering.
                 self.geciteerde_inclusies([kind], None, None, "")
             elif kind.tag in METADATA:
                 continue

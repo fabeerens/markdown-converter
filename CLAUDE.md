@@ -356,6 +356,10 @@ accountregistratie namens de gebruiker):
   `_plat_bron` af: ze zet om elk element behalve `HT` een woordgrens en telt de herhaalde
   nootinhoud mee. Deze vijf blijven geweigerd tot besloten is of de brontelling mag meebewegen. De
   omzetter corrigeert de bron niet.
+  Een **eigen bijlage die alleen een inclusie draagt** (`<CONTENTS><INCL.ELEMENT TYPE="FORMEX.DOC"/>`,
+  zonder QUOT.S: bijlage V, VI en VII van eIDAS 2, 32024R1183) is geciteerde tekst als de inclusie
+  zelf met een aanhalingsteken begint (`“BIJLAGE V`, `begint_met_aanhaling()`); dan gaat ze door
+  `geciteerde_inclusies()`. Zonder dat teken blijft een losse inclusie een weigering.
   De portal-HTML (`/legal-content/…/HTML/`) blokkeert bots (HTTP 202, lege body;
   inmiddels een AWS WAF-JS-challenge, dus ook met retries permanent 202 — de portal is in de praktijk
   dood voor een simpele `requests`-scraper). Gebruik het **Cellar-archief** via content negotiation,
@@ -1126,7 +1130,7 @@ regel), inclusief de vloeiende tabbalk-indicator.
   weggeschreven bestand nooit als geldige staat gelezen kan worden.
 
 ## Tests
-`.venv/bin/python -m pytest tests/ -q` — 496 karakteriseringstests die het gedrag
+`.venv/bin/python -m pytest tests/ -q` — 498 karakteriseringstests die het gedrag
 vastleggen in plaats van het te beschrijven: `detect_source`-precedentie, ELI→CELEX,
 de CLG-markupnormalisatie (lidnummers, lettermarkers, voetnootankers), de
 voetnootdefinities die met de preambule meereizen, de notitievorm die een intakepoort
