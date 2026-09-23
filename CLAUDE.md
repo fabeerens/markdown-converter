@@ -354,12 +354,22 @@ accountregistratie namens de gebruiker):
   (32007L0011), en MiFIR artikel 53, waar een `NOTE.REF` de tekst van een eerdere noot herhaalt
   terwijl de druk die noot één keer afdrukt, met twee `(*)`. Hier wijkt de brontelling
   `_plat_bron` af: ze zet om elk element behalve `HT` een woordgrens en telt de herhaalde
-  nootinhoud mee. Deze vijf blijven geweigerd tot besloten is of de brontelling mag meebewegen. De
+  nootinhoud mee. Voor alle vijf heeft de gebruiker besloten dat de brontelling meebeweegt (zie hieronder). De
   omzetter corrigeert de bron niet.
   Een **eigen bijlage die alleen een inclusie draagt** (`<CONTENTS><INCL.ELEMENT TYPE="FORMEX.DOC"/>`,
   zonder QUOT.S: bijlage V, VI en VII van eIDAS 2, 32024R1183) is geciteerde tekst als de inclusie
   zelf met een aanhalingsteken begint (`“BIJLAGE V`, `begint_met_aanhaling()`); dan gaat ze door
   `geciteerde_inclusies()`. Zonder dat teken blijft een losse inclusie een weigering.
+  **Een datum of getal dat de bron aan een woord vastschrijft blijft vast, met een melding.** De
+  brontelling van de woordcontrole (`_plat_bron`) zette om elk inline element behalve `HT` een
+  woordgrens, maar de bron schrijft soms `27 april 2016</DATE>betreffende` (de noten van
+  2024/1183, en daarmee de geconsolideerde eIDAS), `19 augustus 2015</DATE>inzake` (32021L2167)
+  en `8,9</FT>Z-MA4` (32007L0011), en de authentieke PDF drukt ze net zo. Op besluit van de
+  gebruiker (23 september 2026) volgt de telling daar de bron: `DATE` en `FT` zijn, net als `HT`,
+  geen woordgrens (`AANEEN_IN_BRON`). De omzetter corrigeert de bron niet, maar `let_op_aaneen()`
+  en `meld_aaneen()` zetten elk zo'n woord (`'2016betreffende'`) als waarschuwing in de herkomst,
+  zoals bij de dubbele `d)` in de AVG. Staat er in de bron wél een spatie, dan staat die in
+  `.tail` en telt ze gewoon mee.
   De portal-HTML (`/legal-content/…/HTML/`) blokkeert bots (HTTP 202, lege body;
   inmiddels een AWS WAF-JS-challenge, dus ook met retries permanent 202 — de portal is in de praktijk
   dood voor een simpele `requests`-scraper). Gebruik het **Cellar-archief** via content negotiation,
@@ -1130,7 +1140,7 @@ regel), inclusief de vloeiende tabbalk-indicator.
   weggeschreven bestand nooit als geldige staat gelezen kan worden.
 
 ## Tests
-`.venv/bin/python -m pytest tests/ -q` — 498 karakteriseringstests die het gedrag
+`.venv/bin/python -m pytest tests/ -q` — 500 karakteriseringstests die het gedrag
 vastleggen in plaats van het te beschrijven: `detect_source`-precedentie, ELI→CELEX,
 de CLG-markupnormalisatie (lidnummers, lettermarkers, voetnootankers), de
 voetnootdefinities die met de preambule meereizen, de notitievorm die een intakepoort

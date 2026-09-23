@@ -1972,3 +1972,31 @@ def test_an_annex_that_is_only_an_inclusion_without_a_quote_is_still_refused():
                   b'</CONTENTS></ANNEX>')
     with pytest.raises(ConversionError, match="als los blok is alleen voor een afbeelding gemeten"):
         formex_xml.omzetten(_bijlage_met_losse_inclusie(ingesloten))
+
+
+# ------------------------------------------------------------------ brontelling
+# Twee beslissingen van de gebruiker (23 september 2026): de woordcontrole volgt de
+# bron waar die een datum of getal aan een woord vastschrijft, en telt de herhaalde
+# tekst van een nootverwijzing niet mee, zolang die de noot zelf is.
+
+def test_a_date_the_source_writes_against_a_word_is_kept_and_reported():
+    """De noten van 2024/1183 (en de geconsolideerde eIDAS): `27 april 2016</DATE>betreffende`, ook zo in de PDF."""
+    act = ACT.replace(b"Deze verordening stelt regels vast.",
+                      b'Zie Verordening (EU) 2016/679 van <DATE ISO="20160427">27 april 2016</DATE>betreffende '
+                      b'gegevens, en <DATE ISO="20221214">14 december 2022</DATE> over netwerken.')
+    markdown, _, _, extra = formex_xml.omzetten(formex_zip(act=act))
+    assert "van 27 april 2016betreffende gegevens, en 14 december 2022 over netwerken." in markdown
+    meldingen = [w for w in extra["metadata"]["waarschuwingen"] if "aaneen" in w]
+    assert meldingen == ["De Formex-bron schrijft 1 keer een datum of getal aaneen met het woord ervoor "
+                         "of erna ('2016betreffende'); de omzetter neemt dat ongewijzigd over."]
+
+
+def test_a_number_the_source_writes_against_a_word_in_a_table_cell_is_reported_too():
+    """32007L0011: `<FT TYPE="DECIMAL">8,9</FT>Z-MA4` in een cel, de scheikundige naam."""
+    act = ACT.replace(
+        b"</ARTICLE>",
+        b'<ALINEA><TBL COLS="1"><CORPUS><ROW><CELL COL="1">Som van MA4 + <FT TYPE="DECIMAL">8,9</FT>Z-MA4'
+        b'</CELL></ROW></CORPUS></TBL></ALINEA></ARTICLE>', 1)
+    markdown, _, _, extra = formex_xml.omzetten(formex_zip(act=act))
+    assert "| Som van MA4 + 8,9Z-MA4 |" in markdown
+    assert any("('9Z')" in w for w in extra["metadata"]["waarschuwingen"])

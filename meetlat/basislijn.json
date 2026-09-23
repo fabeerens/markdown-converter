@@ -1,5 +1,5 @@
 {
- "commit": "f551a1f+wijzigingen",
+ "commit": "5b191e7+wijzigingen",
  "documenten": {
   "02002L0058-20091219": {
    "melding": null,
@@ -72,14 +72,18 @@
    "waarschuwingen": []
   },
   "02014R0910-20241018": {
-   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['betreffende', '2016', 'over', '2022'], extra=['2016betreffende', '2022over']).",
-   "oorzaak": "woordcontrole: woorden aan elkaar",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "testset",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
-   "waarschuwingen": []
+   "sha256": "2b20b4e14811069acf15c1f0fbc26d1c5f3da245a58e8e5f8b12b41756bf36a5",
+   "status": "ok",
+   "tekens": 254521,
+   "waarschuwingen": [
+    "Overwegingen en aanhef zijn overgenomen uit de oorspronkelijke handeling (CELEX:32014R0910); de geconsolideerde tekst op EUR-Lex bevat deze niet.",
+    "CLG.MDFO in de tekst noemt 32024R1183R(01), 32024R1183R(02), dat niet als wijziging in GR.MOD.ACT staat; amendments kan onvolledig zijn.",
+    "De Formex-bron schrijft 2 keer een datum of getal aaneen met het woord ervoor of erna ('2016betreffende', '2022over'); de omzetter neemt dat ongewijzigd over."
+   ]
   },
   "02015L2366-20250117": {
    "melding": null,
@@ -615,14 +619,16 @@
    "waarschuwingen": []
   },
   "32007L0011": {
-   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['9', '9', 'z', 'z'], extra=['9z', '9z']).",
-   "oorzaak": "woordcontrole: woorden aan elkaar",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
-   "waarschuwingen": []
+   "sha256": "5c7a7a7e8f7227454a311ee7272b242a418ce3414dfe38efcb94495c4693384f",
+   "status": "ok",
+   "tekens": 20403,
+   "waarschuwingen": [
+    "De Formex-bron schrijft 2 keer een datum of getal aaneen met het woord ervoor of erna ('9Z'); de omzetter neemt dat ongewijzigd over."
+   ]
   },
   "32007R0116": {
    "melding": null,
@@ -2027,14 +2033,16 @@
    "waarschuwingen": []
   },
   "32021L2167": {
-   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['inzake', '2015'], extra=['2015inzake']).",
-   "oorzaak": "woordcontrole: woorden aan elkaar",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
-   "waarschuwingen": []
+   "sha256": "25c1e8cb3f9d72441c63f8faf3fd3a36f148827f3098a5b128cc02198f8cd5d8",
+   "status": "ok",
+   "tekens": 156249,
+   "waarschuwingen": [
+    "De Formex-bron schrijft 1 keer een datum of getal aaneen met het woord ervoor of erna ('2015inzake'); de omzetter neemt dat ongewijzigd over."
+   ]
   },
   "32021R0784": {
    "melding": null,
@@ -2571,14 +2579,16 @@
    "waarschuwingen": []
   },
   "32024R1183": {
-   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['betreffende', '2022', 'over', '2016'], extra=['2016betreffende', '2022over']).",
-   "oorzaak": "woordcontrole: woorden aan elkaar",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "testset",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
-   "waarschuwingen": []
+   "sha256": "f3a5878cf4bc5a35d7d47aa51a55838e610d738abe630bbfeeb293ef309f96f5",
+   "status": "ok",
+   "tekens": 224787,
+   "waarschuwingen": [
+    "De Formex-bron schrijft 2 keer een datum of getal aaneen met het woord ervoor of erna ('2016betreffende', '2022over'); de omzetter neemt dat ongewijzigd over."
+   ]
   },
   "32024R1309": {
    "melding": null,
@@ -3657,6 +3667,6 @@
    ]
   }
  },
- "gemeten": "2026-09-23 16:10",
+ "gemeten": "2026-09-23 16:16",
  "taal": "NL"
 }

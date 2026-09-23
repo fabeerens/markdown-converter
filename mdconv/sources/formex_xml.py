@@ -117,6 +117,9 @@ FORMULE_ELEMENTEN = {"FORMULA", "FORMULA.S"}
 # Het enige afbeeldingstype dat in de meetlat voorkomt (257 inclusies in 14
 # documenten, 23 september 2026). Een ander type blijft een weigering.
 AFBEELDINGSTYPE = "TIFF"
+# Inline elementen die geen woordgrens zijn: wat de bron eraan vastschrijft, is
+# één woord (zie `_plat_bron`).
+AANEEN_IN_BRON = {"HT", "DATE", "FT"}
 # De aanhalingstekens om een geciteerde inclusie, naar hun `CODE` (het Unicode-
 # codepunt). Gemeten om de inclusies in de meetlat: 201E en 201C openen, 201D
 # sluit. Een andere code is een weigering: een verkeerd teken is een andere tekst.
@@ -340,8 +343,15 @@ def _plat_bron(el) -> str:
         # door een datum). Voor woordbehoud moet die grens zichtbaar blijven.
         # Een `HT` is opmaak binnen de zin en geen grens: `cyberbeveiliging<HT
         # TYPE="BOLD">s</HT>certificering` is één woord, en de Markdown schrijft
-        # het ook als één woord (zie `inline`).
-        uit += stuk if kind.tag == "HT" else f" {stuk} "
+        # het ook als één woord (zie `inline`). Een datum of getal (`DATE`, `FT`)
+        # evenmin: de bron schrijft `27 april 2016</DATE>betreffende` (de noten
+        # van 2024/1183, en daarmee de geconsolideerde eIDAS), `19 augustus
+        # 2015</DATE>inzake` (32021L2167) en `8,9</FT>Z-MA4` (32007L0011), en de
+        # authentieke PDF drukt ze net zo aaneen. De omzetter schrijft wat de
+        # bron zegt en meldt het (`meld_aaneen`); met een grens hier weigerde de
+        # woordcontrole die getrouwe tekst. Staat er in de bron wél een spatie,
+        # dan staat die in `.tail` en telt ze gewoon mee.
+        uit += stuk if kind.tag in AANEEN_IN_BRON else f" {stuk} "
         uit += kind.tail or ""
     return uit
 
@@ -457,6 +467,7 @@ class FormexOmzetter:
         self.noten: list[tuple[int, str]] = []      # wachtende definities van de huidige reeks
         self.nootnummer = 0
         self.nootlabels: dict[str, int] = {}
+        self.aaneen: dict[int, str] = {}            # id(element) -> aaneengeschreven woord
         self.herhaalde_cellen = 0
         self.bijlagen = 0
         self.metadata: dict = {}
@@ -518,7 +529,10 @@ class FormexOmzetter:
             # sterretjes ertussen valt het woord in twee tokens uiteen en vindt de
             # kennisbank het niet meer terug; de opmaak gaat dan liever verloren.
             vast = vorige.isalnum() or volgende.isalnum()
-            delen.append(self.inline_el(kind, vast_aan_woord=vast))
+            stuk = self.inline_el(kind, vast_aan_woord=vast)
+            erna = (kind.tail or "") or (kinderen[index + 1].text or "" if index + 1 < len(kinderen) else "")
+            self.let_op_aaneen(kind, stuk, "".join(delen), erna)
+            delen.append(stuk)
             delen.append(kind.tail or "")
         return "".join(delen)
 
@@ -713,6 +727,8 @@ class FormexOmzetter:
             raise _xml_fout("een geciteerde tabel staat op een plek waar alleen tekst kan staan")
         if self.afbeeldingen_weggelaten:
             self.meld_afbeeldingen()
+        if self.aaneen:
+            self.meld_aaneen()
         if self.basis is not None:
             # De ingevoegde considerans is brontekst als elke andere: dezelfde
             # controles op verlies, verdubbeling en verweving gelden ook voor haar.
@@ -1547,6 +1563,24 @@ class FormexOmzetter:
                 self.inhoud(kind, basis="", teller={"lijsten": 0})
         return True
 
+    def let_op_aaneen(self, el, stuk: str, ervoor: str, erna: str) -> None:
+        """Onthoud een datum of getal die zonder spatie aan een woord vastzit (`2016betreffende`)."""
+        if el.tag not in ("DATE", "FT") or not stuk:
+            return
+        voor = re.search(r"\w*$", ervoor).group(0) if stuk[0].isalnum() else ""
+        na = re.match(r"\w*", erna).group(0) if stuk[-1].isalnum() else ""
+        if voor or na:
+            woorden = re.findall(r"\w+", stuk)
+            self.aaneen[id(el)] = (voor + stuk if voor else "") + (woorden[-1] + na if na and not voor else na)
+
+    def meld_aaneen(self) -> None:
+        """Een datum of getal die de bron aan een woord vastschrijft: overgenomen, en gemeld."""
+        woorden = list(dict.fromkeys(self.aaneen.values()))
+        voorbeeld = ", ".join(f"'{w}'" for w in woorden[:5]) + (f" en {len(woorden) - 5} meer" if len(woorden) > 5 else "")
+        self.metadata.setdefault("waarschuwingen", []).append(
+            f"De Formex-bron schrijft {len(self.aaneen)} keer een datum of getal aaneen met het woord "
+            f"ervoor of erna ({voorbeeld}); de omzetter neemt dat ongewijzigd over.")
+
     def meld_afbeeldingen(self) -> None:
         weg = self.afbeeldingen_weggelaten
         bestanden = list(dict.fromkeys(b["fileref"] for b in weg))
@@ -1818,7 +1852,9 @@ class FormexOmzetter:
                 sluit()
                 delen.append(self.cel_tekst(kind))
             else:
-                lopend.append(self.inline_el(kind))
+                stuk = self.inline_el(kind)
+                self.let_op_aaneen(kind, stuk, "".join(lopend), kind.tail or "")
+                lopend.append(stuk)
             lopend.append(kind.tail or "")
         sluit()
         return ws(" ".join(d for d in delen if d))
