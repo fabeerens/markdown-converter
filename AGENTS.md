@@ -40,8 +40,8 @@ verandert zit aan de achterkant.
 
 - **Tests zijn karakteriseringstests**: ze leggen het *bestaande* gedrag vast.
   Verandert er gedrag, dan verander je de test bewust en zeg je dat in de
-  commit. Draai `.venv/bin/python -m pytest tests/ -q` (nu 355 tests, 1
-  overgeslagen) vóór je klaar bent.
+  commit. Draai `.venv/bin/python -m pytest tests/ -q` (nu 375 tests)
+  vóór je klaar bent.
 - **Geen netwerk in tests.** Vervang `net.documents` met `monkeypatch`; zie
   `_fake_cellar` in `tests/test_characterisation.py`.
 - **Lui laden blijft lui.** MarkItDown en pdf-inspector kosten honderden ms bij

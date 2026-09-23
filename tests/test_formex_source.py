@@ -644,3 +644,78 @@ def test_a_quoted_list_inside_a_definition_stays_inline():
     # nooit een basis mee, en had geen van de definitiepunten er een.
     assert "art-2-30" in ankers
     assert not [a for a in ankers if a.startswith("art-2-30-")]
+
+
+# --- een herhaalde markering binnen één opsomming (AVG artikel 13, lid 1) -------------
+
+DUBBELE_D = (
+    b'<LIST TYPE="alpha"><ITEM><NP><NO.P>a)</NO.P><TXT>eerste onderdeel;</TXT></NP></ITEM>'
+    b'<ITEM><NP><NO.P>d)</NO.P><TXT>de gerechtvaardigde belangen;</TXT></NP></ITEM>'
+    b'<ITEM><NP><NO.P>d)</NO.P><TXT>in voorkomend geval, de ontvangers;</TXT></NP></ITEM>'
+    b'<ITEM><NP><NO.P>e)</NO.P><TXT>laatste onderdeel.</TXT></NP></ITEM></LIST>'
+)
+
+
+def met_dubbele_d(tweede_d: bytes = b"") -> bytes:
+    """De opsomming van het testartikel vervangen door a), d), d), e); `tweede_d`
+    is optionele inhoud achter de TXT van het eerste d) (bijvoorbeeld een geneste
+    opsomming)."""
+    act = ACT.replace(
+        b'<LIST TYPE="ALPHA"><ITEM><NP><NO.P>a)</NO.P><TXT>eerste onderdeel;</TXT></NP></ITEM>\n'
+        b'<ITEM><NP><NO.P>b)</NO.P><TXT>tweede onderdeel.</TXT></NP></ITEM></LIST>',
+        DUBBELE_D.replace(b"belangen;</TXT>", b"belangen;</TXT>" + tweede_d, 1),
+    )
+    assert act != ACT
+    return formex_zip(act=act)
+
+
+def test_a_repeated_list_marker_gets_an_ordinal_anchor_and_a_warning_instead_of_a_refusal():
+    """De Nederlandse Formex van de AVG (32016R0679, `L_2016119NL.01000101.xml`,
+    gemeten 23 september 2026) nummert in artikel 13, lid 1 de onderdelen
+    a), b), c), d), d), e) waar het Publicatieblad a) t/m f) heeft; de Engelse
+    manifestatie heeft wél (a)–(f). Een `ITEM`/`NP` draagt geen IDENTIFIER, dus
+    de oplossing van artikel 73 van 2024/1689 gaat hier niet. De tekst komt wel
+    volledig aan, dus de omzetter weigert niet: het tweede d) krijgt zijn
+    volgnummer als anker, de markering en de tekst blijven zoals de bron ze
+    heeft, en de herkomst zegt het."""
+    markdown, eenheden, _, extra = formex_xml.omzetten(met_dubbele_d())
+    ankers = [e.anker for e in eenheden]
+
+    assert ankers.count("art-1-1-d") == 1
+    assert "art-1-1-d-2" in ankers
+    assert "art-1-1-e" in ankers
+    assert "d) de gerechtvaardigde belangen;" in markdown
+    assert "d) in voorkomend geval, de ontvangers;" in markdown
+    assert "e) de gerechtvaardigde" not in markdown and "e) in voorkomend" not in markdown
+    meldingen = extra["metadata"]["waarschuwingen"]
+    assert len(meldingen) == 1
+    assert "artikel 1, lid 1" in meldingen[0]
+    assert "d) 2 keer" in meldingen[0]
+    assert "art-1-1-d-2" in meldingen[0]
+    assert "ongewijzigd" in meldingen[0]
+
+
+def test_the_repeated_marker_warning_reaches_the_provenance(monkeypatch):
+    data = met_dubbele_d()
+    from mdconv.sources import eurlex
+    monkeypatch.setattr(
+        eurlex.net, "documents",
+        lambda: SimpleNamespace(get=lambda url, **kw: SimpleNamespace(status_code=200, content=data, url=url)),
+    )
+
+    document = from_link("32022R1925", "NL")
+
+    assert document.provenance.format == "formex"
+    assert any("art-1-1-d-2" in m and "artikel 1, lid 1" in m
+               for m in document.provenance.waarschuwingen)
+
+
+def test_a_repeated_marker_whose_ordinal_collides_with_a_nested_point_is_still_refused():
+    """Het volgnummer is een anker als elk ander: draagt het eerste d) een geneste
+    opsomming `1.`, `2.`, dan bestaat `art-1-1-d-2` al en blijft de zelfcontrole
+    fail-closed, met een melding die zegt wat het dubbele anker betekent."""
+    genest = (b'<LIST TYPE="arabic"><ITEM><NP><NO.P>1.</NO.P><TXT>eerste punt;</TXT></NP></ITEM>'
+              b'<ITEM><NP><NO.P>2.</NO.P><TXT>tweede punt;</TXT></NP></ITEM></LIST>')
+
+    with pytest.raises(ConversionError, match=r"structuurcontrole.*art-1-1-d-2.*nummert op één niveau"):
+        formex_xml.omzetten(met_dubbele_d(tweede_d=genest))

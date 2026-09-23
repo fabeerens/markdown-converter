@@ -156,6 +156,21 @@ accountregistratie namens de gebruiker):
   `inline()` en kreeg een `DLIST` nooit een basis mee, waardoor artikel 4 AVG en artikel 3 LED
   één samengevoegde alinea per punt gaven, geen van de 26 definitiepunten een eenheid had, en
   het bronbewijs van de kennisbank de regel niet terugvond.
+  Een **herhaalde markering binnen één opsomming** weigert niet. De Nederlandse Formex van
+  de AVG (`32016R0679`, `L_2016119NL.01000101.xml`) nummert in artikel 13, lid 1 de onderdelen
+  a), b), c), d), d), e) waar het Publicatieblad a) t/m f) heeft — een bronfout die alleen in
+  de NL-manifestatie zit (de Engelse heeft (a)–(f)). Een `ITEM`/`NP` draagt geen `IDENTIFIER`
+  (0 van 558 in die bron), dus de machine-identiteit waarmee artikel 73 van 2024/1689 zijn
+  twee leden `11.` uniek houdt bestaat hier niet. Wat de bron wél geeft is de volgorde:
+  `FormexOmzetter.dubbele_markering()` geeft het tweede d) zijn volgnummer als anker
+  (`art-13-1-d-2`), laat de gedrukte markering en de tekst ongewijzigd (de omzetter corrigeert
+  de bron niet tot e); dat zou raden zijn) en zet de bronfout — artikel, lid, markering, anker —
+  als waarschuwing in `Herkomst.waarschuwingen`. Tot 23 september 2026 weigerde de
+  structuurcontrole hier de hele AVG met "dubbele structurele ankers: art-13-1-d", terwijl
+  de tekst van beide onderdelen wél volledig aankwam. Elk ánder dubbel anker (twee artikelen
+  met hetzelfde nummer, een lid zonder onderscheidende IDENTIFIER, of een volgnummer dat botst
+  met een genest punt `d) … 2.`) blijft fail-closed; de melding zegt nu wat zo'n dubbel anker
+  betekent en dat alleen een herhaalde markering in één opsomming wordt onderscheiden.
   De portal-HTML (`/legal-content/…/HTML/`) blokkeert bots (HTTP 202, lege body;
   inmiddels een AWS WAF-JS-challenge, dus ook met retries permanent 202 — de portal is in de praktijk
   dood voor een simpele `requests`-scraper). Gebruik het **Cellar-archief** via content negotiation,
@@ -900,7 +915,7 @@ regel), inclusief de vloeiende tabbalk-indicator.
   weggeschreven bestand nooit als geldige staat gelezen kan worden.
 
 ## Tests
-`.venv/bin/python -m pytest tests/ -q` — 355 karakteriseringstests die het gedrag
+`.venv/bin/python -m pytest tests/ -q` — 375 karakteriseringstests die het gedrag
 vastleggen in plaats van het te beschrijven: `detect_source`-precedentie, ELI→CELEX,
 de CLG-markupnormalisatie (lidnummers, lettermarkers, voetnootankers), de
 voetnootdefinities die met de preambule meereizen, de notitievorm die een intakepoort
