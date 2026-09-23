@@ -461,6 +461,7 @@ class FormexOmzetter:
         self.zonder: frozenset = frozenset()       # opmaaksoorten die nu niet geschreven worden
         self.inclusies: dict[str, ET.Element] = {}  # geciteerde bijlagen, op bestandsnaam
         self.gebruikte_inclusies: set[str] = set()
+        self.nootruimte = ""                        # voorvoegsel van een nootsleutel binnen een inclusie
         self.afbeeldingen: set[str] = set()         # gedeclareerde TIFF-inclusies
         self.afbeeldingen_weggelaten: list[dict] = []
         self.citaatdiepte = 0                       # >0 binnen een QUOT.S die inline loopt
@@ -646,6 +647,8 @@ class FormexOmzetter:
     def noot(self, el) -> str:
         """Een nootverwijzing; de definitie wacht op het einde van haar reeks."""
         sleutel = el.get("NOTE.REF") or el.get("NOTE.ID")
+        if sleutel:
+            sleutel = self.nootruimte + sleutel
         nummer = self.nootlabels.get(sleutel) if sleutel else None
         if nummer is None:
             self.nootnummer += 1
@@ -1564,6 +1567,11 @@ class FormexOmzetter:
         self.gebruikte_inclusies.add(naam)
         if root.tag != "ANNEX":
             raise _xml_fout(f"inclusie {naam} is geen bijlage (ANNEX) maar {root.tag}")
+        # Een NOTE.ID is uniek binnen één bestand, niet binnen de zip: de vier
+        # geciteerde bijlagen van 32018L0100 en 32019L0114 heten elk `E0001`, net
+        # als de eerste noot van de handeling. Op de kale sleutel kregen ze
+        # allemaal hetzelfde nummer, met vier definities `(1)` in één notenblok.
+        eerder, self.nootruimte = self.nootruimte, f"{naam}#"
         titel = root.find("TITLE")
         if titel is not None:
             if titel.find("TI") is not None:
@@ -1577,6 +1585,7 @@ class FormexOmzetter:
         inhoud = root.find("CONTENTS")
         if inhoud is not None:
             self.bijlage_inhoud(inhoud, "", geciteerd=True)
+        self.nootruimte = eerder
 
     def geciteerde_tabel(self, el) -> str:
         """Een tabel binnen een citaat dat inline loopt: een marker op haar plek in de tekst.
@@ -1814,6 +1823,8 @@ class FormexOmzetter:
             self.annotatie(annotatie)
         for noot in definities:
             sleutel = noot.get("NOTE.ID")
+            if sleutel:
+                sleutel = self.nootruimte + sleutel
             nummer = self.nootlabels.get(sleutel)
             if nummer is None:
                 self.nootnummer += 1

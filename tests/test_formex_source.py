@@ -677,6 +677,24 @@ def test_a_bare_inclusion_under_an_amendment_point_is_quoted_text_without_struct
     assert not [e for e in eenheden if e.soort in ("bijlage", "bijlagedeel")]
 
 
+def test_the_notes_of_two_inclusions_with_the_same_note_id_stay_two_notes():
+    """32019L0114: elke geciteerde bijlage heeft haar noot `E0001` en een NOTE.REF ernaar.
+    Een NOTE.ID is uniek per bestand; op de kale sleutel werden het vier keer `(1)`."""
+    def met_noot(nummer: bytes) -> bytes:
+        return _geciteerde_bijlage(
+            nummer, b'<P>Lijst ' + nummer + b'<NOTE NOTE.ID="E0001" NUMBERING="ARAB" TYPE="FOOTNOTE">'
+            b"<P>Noot van " + nummer + b".</P></NOTE></P>",
+            b'<P>Nogmaals<NOTE NOTE.REF="E0001" TYPE="FOOTNOTE"/></P>')
+    data = _vervangende_bijlage(b"<P>" + _QS + _incl(b"i1.xml") + _incl(b"i2.xml") + _QE + b"</P>",
+                                i1=met_noot(b"I"), i2=met_noot(b"II"))
+
+    markdown = formex_xml.omzetten(data)[0]
+
+    assert "Lijst I (1)\n\nNogmaals (1)\n" in markdown
+    assert "Lijst II (2)\n\nNogmaals (2)”" in markdown
+    assert "\n(1)  Noot van I.\n\n(2)  Noot van II.\n" in markdown
+
+
 @pytest.mark.parametrize("citaat, reden", [
     (b"<P>" + _QS.replace(b"201E", b"ZZZZ") + _incl(b"i1.xml") + _QE + b"</P>", "onbekende code 'ZZZZ'"),
     (b"<P>" + _QS + _incl(b"i1.xml") + _QE + b" en verder.</P>", "midden in een zin"),
