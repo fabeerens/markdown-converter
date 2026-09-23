@@ -1,5 +1,5 @@
 {
- "commit": "c07d69e",
+ "commit": "66297b7+wijzigingen",
  "documenten": {
   "02002L0058-20091219": {
    "melding": null,
@@ -15,8 +15,8 @@
    ]
   },
   "02010L0013-20250208": {
-   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['concordantietabel'], extra=niets).",
-   "oorzaak": "woordcontrole: tekst valt weg",
+   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: art-28bis-2-a, art-28bis-2-b, hfd-9 (de Formex-bron nummert op één niveau twee eenheden gelijk; alleen een herhaalde markering binnen één opsomming wordt met een volgnummer onderscheiden)",
+   "oorzaak": "structuur: dubbele structurele ankers",
    "route": "wetgeving",
    "sectie": "geconsolideerd",
    "sha256": null,
@@ -75,24 +75,31 @@
    "waarschuwingen": []
   },
   "02015L2366-20250117": {
-   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['concordantietabel'], extra=niets).",
-   "oorzaak": "woordcontrole: tekst valt weg",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "geconsolideerd",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
-   "waarschuwingen": []
+   "sha256": "03445b019db7af6e72e2ddda71656c2d8da91c2a116cfbaf8d9bfe822e6a75ec",
+   "status": "ok",
+   "tekens": 355699,
+   "waarschuwingen": [
+    "Overwegingen en aanhef zijn overgenomen uit de oorspronkelijke handeling (CELEX:32015L2366); de geconsolideerde tekst op EUR-Lex bevat deze niet.",
+    "CLG.MDFO in de tekst noemt 32015L2366R(05), dat niet als wijziging in GR.MOD.ACT staat; amendments kan onvolledig zijn."
+   ]
   },
   "02015R0848-20251106": {
-   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['concordantietabel'], extra=niets).",
-   "oorzaak": "woordcontrole: tekst valt weg",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "geconsolideerd",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
-   "waarschuwingen": []
+   "sha256": "0d30295c5c1a0e7449c0ab929a813f04519d002176f8cb7409dec97abf9549ed",
+   "status": "ok",
+   "tekens": 184451,
+   "waarschuwingen": [
+    "Overwegingen en aanhef zijn overgenomen uit de oorspronkelijke handeling (CELEX:32015R0848); de geconsolideerde tekst op EUR-Lex bevat deze niet.",
+    "Geen CLG.MDFO in de tekst noemt 32017R0353, 32018R0946, 32021R2260; van deze wijzigende handeling(en) is `shown` niet vastgesteld.",
+    "CLG.MDFO in de tekst noemt 32015R0848R(02), 32015R0848R(04), dat niet als wijziging in GR.MOD.ACT staat; amendments kan onvolledig zijn."
+   ]
   },
   "02016L0680-20160504": {
    "melding": null,
@@ -748,13 +755,13 @@
    "waarschuwingen": []
   },
   "32009R0391": {
-   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['concordantietabel'], extra=niets).",
-   "oorzaak": "woordcontrole: tekst valt weg",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "81a23a88be3a9f5d7b358b3f98d95c1155d3924279b75b72c57ae0220d71e6ac",
+   "status": "ok",
+   "tekens": 49988,
    "waarschuwingen": []
   },
   "32009R1148": {
@@ -798,13 +805,13 @@
    "waarschuwingen": []
   },
   "32010L0013": {
-   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['concordantietabel'], extra=niets).",
-   "oorzaak": "woordcontrole: tekst valt weg",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "belangrijk",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "f193f00d0322b29503224fa2ab1243fec54d68aa6fffdc82a75e59e0eba39f49",
+   "status": "ok",
+   "tekens": 113431,
    "waarschuwingen": []
   },
   "32010L0015": {
@@ -858,13 +865,13 @@
    "waarschuwingen": []
   },
   "32011D0072": {
-   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['van', 'de', 'personen', 'en', 'entiteiten', 'in', 'artikel', '1', 'lijst', 'bedoelde'], extra=niets).",
-   "oorzaak": "woordcontrole: tekst valt weg",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "b3ead72ba5ed399a28e16b6cdf002e18e1173f6b2839c2b7d83ad7d02caaf2ad",
+   "status": "ok",
+   "tekens": 7715,
    "waarschuwingen": []
   },
   "32011D0311": {
@@ -1218,13 +1225,13 @@
    "waarschuwingen": []
   },
   "32015L0849": {
-   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['concordantietabel'], extra=niets).",
-   "oorzaak": "woordcontrole: tekst valt weg",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "belangrijk",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "e2dc516094d7a6e460560c9e62be57d36913a3ce3f94c7fa8215e39d8bc54e76",
+   "status": "ok",
+   "tekens": 182339,
    "waarschuwingen": []
   },
   "32015L1139": {
@@ -1238,33 +1245,33 @@
    "waarschuwingen": []
   },
   "32015L2366": {
-   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['concordantietabel'], extra=niets).",
-   "oorzaak": "woordcontrole: tekst valt weg",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "belangrijk",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "ae7ab1c7e13ebbddc338f97911f0b9fa0f2735f24030648e3b1e5b0e9d5f63d8",
+   "status": "ok",
+   "tekens": 346321,
    "waarschuwingen": []
   },
   "32015L2436": {
-   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['concordantietabel'], extra=niets).",
-   "oorzaak": "woordcontrole: tekst valt weg",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "254cb99f01c91c5044cea1b12ca35e3fe6215d570d414f7bd478bce67cf24f37",
+   "status": "ok",
+   "tekens": 85816,
    "waarschuwingen": []
   },
   "32015R0848": {
-   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['concordantietabel'], extra=niets).",
-   "oorzaak": "woordcontrole: tekst valt weg",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "belangrijk",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "fc1fe4ac6e195f56ec6b2a2ddd9b8c186fcac8cedba86c6fd4999b905a05229d",
+   "status": "ok",
+   "tekens": 181619,
    "waarschuwingen": []
   },
   "32015R0878": {
@@ -1750,8 +1757,8 @@
    "waarschuwingen": []
   },
   "32019L0882": {
-   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['van', 'van', 'de', 'toegankelijkheidsvoorschriften', 'aan', 'niet', 'in', 'die', 'bindende', 'voorbeelden', 'bijlage', 'mogelijke'], extra=niets).",
-   "oorzaak": "woordcontrole: tekst valt weg",
+   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: annex-1-a, annex-1-b, annex-1-b-i, annex-1-b-ii, annex-1-b-iii, annex-1-b-iv, annex-1-b-v, annex-1-b-vi (de Formex-bron nummert op één niveau twee eenheden gelijk; alleen een herhaalde markering binnen één opsomming wordt met een volgnummer onderscheiden)",
+   "oorzaak": "structuur: dubbele structurele ankers",
    "route": "wetgeving",
    "sectie": "belangrijk",
    "sha256": null,
@@ -2410,13 +2417,13 @@
    "waarschuwingen": []
   },
   "32024L1640": {
-   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['concordantietabel'], extra=niets).",
-   "oorzaak": "woordcontrole: tekst valt weg",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "belangrijk",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "3c0caff927284ef084e542d68e227c8badbf31e8e37791a734182ea3443f771d",
+   "status": "ok",
+   "tekens": 409939,
    "waarschuwingen": []
   },
   "32024L1712": {
@@ -2450,13 +2457,13 @@
    "waarschuwingen": []
   },
   "32024L2853": {
-   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['concordantietabel'], extra=niets).",
-   "oorzaak": "woordcontrole: tekst valt weg",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "belangrijk",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "0d7245573e5b944ca837e8360378f5f11195638c4f73d299862ab1728f4f440d",
+   "status": "ok",
+   "tekens": 97812,
    "waarschuwingen": []
   },
   "32024R0771": {
@@ -2540,13 +2547,13 @@
    "waarschuwingen": []
   },
   "32024R1624": {
-   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['concordantietabel'], extra=niets).",
-   "oorzaak": "woordcontrole: tekst valt weg",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "belangrijk",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "d36f8e721f292b02d2fd425738668c765506917c01ad710d7ed5b5d8900ae553",
+   "status": "ok",
+   "tekens": 471371,
    "waarschuwingen": []
   },
   "32024R1689": {
@@ -3591,6 +3598,6 @@
    ]
   }
  },
- "gemeten": "2026-09-23 14:40",
+ "gemeten": "2026-09-23 14:41",
  "taal": "NL"
 }

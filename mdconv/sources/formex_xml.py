@@ -1285,6 +1285,17 @@ class FormexOmzetter:
             raise ConversionError(
                 "Geneste inhoudstabel vereist afzonderlijke broncontrole; omzetting geweigerd."
             )
+        # De titel van een tabel (`TBL/TITLE`) is brontekst. Hij bleef weg, en
+        # daarmee weigerde de woordcontrole 12 van de 347 documenten in de meetlat
+        # op één woord: "CONCORDANTIETABEL" (23 september 2026). Een losse alinea
+        # boven de tabel is de vorm die de raw van NIS 2 al heeft, waar hetzelfde
+        # woord als opschrift van bijlage III binnenkomt.
+        titel = el.find("TITLE")
+        if titel is not None:
+            for deel in titel:
+                tekst = self.kop_tekst(deel)
+                if tekst:
+                    self.u.blok(tekst)
         gr = el.find("GR.NOTES")
         definities = list(gr.findall("NOTE")) if gr is not None else []
         rijen, koprijen = [], 0

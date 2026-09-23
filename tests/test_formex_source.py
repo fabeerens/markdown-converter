@@ -635,6 +635,19 @@ def test_a_numbered_point_inside_a_quoted_amendment_keeps_a_space_after_its_numb
     assert "67)Verordening" not in markdown
 
 
+def test_the_title_of_a_table_is_written_as_a_paragraph_above_it():
+    """`TBL/TITLE` viel weg; de woordcontrole weigerde daardoor 12 documenten op "CONCORDANTIETABEL"."""
+    act = ACT.replace(
+        b"</ARTICLE>",
+        b'<ALINEA><TBL COLS="2" NO.SEQ="0001"><TITLE><TI><P><HT TYPE="BOLD">CONCORDANTIETABEL</HT></P>'
+        b'</TI></TITLE><CORPUS><ROW TYPE="HEADER"><CELL COL="1" TYPE="HEADER">Richtlijn 2007/64/EG</CELL>'
+        b'<CELL COL="2" TYPE="HEADER">Deze richtlijn</CELL></ROW><ROW><CELL COL="1">Artikel 1</CELL>'
+        b'<CELL COL="2">Artikel 2</CELL></ROW></CORPUS></TBL></ALINEA></ARTICLE>', 1)
+    markdown = formex_xml.omzetten(formex_zip(act=act))[0]
+    assert "\n\nCONCORDANTIETABEL\n\n|  |  |\n" in markdown
+    assert "**CONCORDANTIETABEL**" not in markdown
+
+
 def test_quotation_marks_and_emphasis_inside_a_table_cell_do_not_get_spaces():
     """`“ smart home ” -apparaat`: in een cel kreeg elk inline element spaties om zich heen."""
     act = ACT.replace(

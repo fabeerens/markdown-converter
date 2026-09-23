@@ -185,6 +185,9 @@ accountregistratie namens de gebruiker):
   met hetzelfde nummer, een lid zonder onderscheidende IDENTIFIER, of een volgnummer dat botst
   met een genest punt `d) … 2.`) blijft fail-closed; de melding zegt nu wat zo'n dubbel anker
   betekent en dat alleen een herhaalde markering in één opsomming wordt onderscheiden.
+  De **titel van een tabel** (`TBL/TITLE`) komt als losse alinea boven de tabel, zonder opmaak —
+  de vorm die de raw van NIS 2 al had. Tot 23 september 2026 viel hij weg en weigerde de
+  woordcontrole 12 van de 347 documenten in de meetlat op één woord: "CONCORDANTIETABEL".
   De portal-HTML (`/legal-content/…/HTML/`) blokkeert bots (HTTP 202, lege body;
   inmiddels een AWS WAF-JS-challenge, dus ook met retries permanent 202 — de portal is in de praktijk
   dood voor een simpele `requests`-scraper). Gebruik het **Cellar-archief** via content negotiation,
@@ -954,7 +957,7 @@ regel), inclusief de vloeiende tabbalk-indicator.
   weggeschreven bestand nooit als geldige staat gelezen kan worden.
 
 ## Tests
-`.venv/bin/python -m pytest tests/ -q` — 401 karakteriseringstests die het gedrag
+`.venv/bin/python -m pytest tests/ -q` — 402 karakteriseringstests die het gedrag
 vastleggen in plaats van het te beschrijven: `detect_source`-precedentie, ELI→CELEX,
 de CLG-markupnormalisatie (lidnummers, lettermarkers, voetnootankers), de
 voetnootdefinities die met de preambule meereizen, de notitievorm die een intakepoort
