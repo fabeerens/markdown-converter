@@ -1141,6 +1141,15 @@ class FormexOmzetter:
         self.u.blok(regel)
         if nr:
             self.u.eenheid(f"rec-{nummer_anker(nr)}", "overweging", regel)
+        elif txt_el is None:
+            # Eén enkele overweging is ongenummerd: `<CONSID><P>…</P></CONSID>`
+            # zonder NP (32011R1042, de dagelijkse forfaitaire invoerwaarden).
+            # `inline(doel)` heeft dan alle kinderen al geschreven; ze hieronder
+            # nog eens als vervolg schrijven gaf de overweging twee keer. Het is
+            # wél een overweging van de bron, maar zonder nummer heeft ze geen
+            # anker (het profiel herkent een overweging aan haar nummer).
+            self.u.eenheid("", "overweging", regel)
+            return
         for vervolg in doel:
             if vervolg.tag not in ("NO.P", "TXT"):
                 self.inhoud(vervolg, basis="", teller={"lijsten": 0})

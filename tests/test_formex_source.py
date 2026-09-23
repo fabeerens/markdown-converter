@@ -1900,3 +1900,18 @@ def test_wat_een_punt_in_een_tabelcel_na_zijn_tekst_draagt_blijft_in_de_cel():
     markdown = formex_xml.omzetten(formex_zip(act=act))[0]
     assert ("| 1. Kwik CAS-nr. 7439-97-6 EG-nr. 231-106-7 en de verbindingen daarvan "
             "| a) de volgende normen: i) EN 55032:2015 ii) EN 60068-2-5:2018 |") in markdown
+
+
+def test_een_enkele_ongenummerde_overweging_komt_een_keer_en_telt_als_overweging():
+    """32011R1042 heeft één overweging, zonder nummer en zonder NP: `<CONSID><P>…</P></CONSID>`.
+    Ze stond twee keer in de Markdown (eerst als tekst van de overweging, daarna nog eens
+    als vervolgblok) en de woordcontrole weigerde terecht ("tekst dubbel")."""
+    act = ACT.replace(
+        b"<CONSID><NP><NO.P>(1)</NO.P>\n<TXT>Digitale diensten vragen duidelijke regels.</TXT></NP></CONSID>",
+        b"<CONSID><P>Bij Verordening (EU) nr. 543/2011 zijn de criteria vastgesteld,</P></CONSID>")
+    assert act != ACT
+    markdown, eenheden, _, _ = formex_xml.omzetten(formex_zip(act=act))
+    assert markdown.count("Bij Verordening (EU) nr. 543/2011 zijn de criteria vastgesteld,") == 1
+    overwegingen = [e for e in eenheden if e.soort == "overweging"]
+    assert [(e.anker, e.tekst) for e in overwegingen] == [
+        ("", "Bij Verordening (EU) nr. 543/2011 zijn de criteria vastgesteld,")]
