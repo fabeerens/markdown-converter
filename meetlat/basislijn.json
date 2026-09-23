@@ -1,5 +1,5 @@
 {
- "commit": "c24e556",
+ "commit": "6a304d0",
  "documenten": {
   "02002L0058-20091219": {
    "melding": null,
@@ -38,8 +38,8 @@
    "waarschuwingen": []
   },
   "02013R0575-20270101": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: FORMULA (220×), GR.TBL (1×); omzetting geweigerd.",
-   "oorzaak": "element FORMULA, GR.TBL",
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: FORMULA (220×); omzetting geweigerd. Een formule wordt bewust niet omgezet: een index, breuk of operator heeft geen tekstvorm die leesbaar blijft en door de woordcontrole te bewijzen is.",
+   "oorzaak": "element FORMULA",
    "route": "wetgeving",
    "sectie": "geconsolideerd",
    "sha256": null,
@@ -457,7 +457,7 @@
    "waarschuwingen": []
   },
   "32005L0066": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: FORMULA (1×), TOC (1×); omzetting geweigerd.",
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: FORMULA (1×), TOC (1×); omzetting geweigerd. Een formule wordt bewust niet omgezet: een index, breuk of operator heeft geen tekstvorm die leesbaar blijft en door de woordcontrole te bewijzen is.",
    "oorzaak": "element FORMULA, TOC",
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
@@ -507,13 +507,13 @@
    "waarschuwingen": []
   },
   "32006D0857": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: GENERAL (1×); omzetting geweigerd.",
-   "oorzaak": "element GENERAL",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "29397b2d633e4d2b736ee1861bf36832a43afab19fe46a09cbe5d061496b2584",
+   "status": "ok",
+   "tekens": 5387,
    "waarschuwingen": []
   },
   "32006L0054": {
@@ -627,13 +627,13 @@
    "waarschuwingen": []
   },
   "32007R0864": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: GENERAL (1×); omzetting geweigerd.",
-   "oorzaak": "element GENERAL",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "belangrijk",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "e9e0fef6fd92bc07d19d2e1a863d3de94f65c6e5a93e4299dc8c63c79ddbb471",
+   "status": "ok",
+   "tekens": 44019,
    "waarschuwingen": []
   },
   "32007R1071": {
@@ -727,13 +727,13 @@
    "waarschuwingen": []
   },
   "32008R0683": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: GENERAL (1×); omzetting geweigerd.",
-   "oorzaak": "element GENERAL",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "c4c01b817b090ed6d542e1a450380047a2d2c75347f9797081291304a38d11cc",
+   "status": "ok",
+   "tekens": 48416,
    "waarschuwingen": []
   },
   "32009D0584": {
@@ -917,8 +917,8 @@
    "waarschuwingen": []
   },
   "32011L0083": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: GR.TBL (1×); omzetting geweigerd.",
-   "oorzaak": "element GR.TBL",
+   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['van', 'van', 'van', 'van', 'van', 'van', 'niet', 'niet', 'niet', 'niet', 'niet', 'niet'], extra=niets).",
+   "oorzaak": "woordcontrole: tekst valt weg",
    "route": "wetgeving",
    "sectie": "belangrijk",
    "sha256": null,
@@ -999,8 +999,8 @@
    "waarschuwingen": []
   },
   "32012L0027": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: FORMULA.S (1×), GR.TBL (1×), NO.GR.SEQ (2×); omzetting geweigerd.",
-   "oorzaak": "element FORMULA.S, GR.TBL, NO.GR.SEQ",
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: FORMULA.S (1×), NO.GR.SEQ (2×); omzetting geweigerd. Een formule wordt bewust niet omgezet: een index, breuk of operator heeft geen tekstvorm die leesbaar blijft en door de woordcontrole te bewijzen is.",
+   "oorzaak": "element FORMULA.S, NO.GR.SEQ",
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
    "sha256": null,
@@ -1111,8 +1111,8 @@
    "waarschuwingen": []
   },
   "32013R0575": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: FORMULA (36×), FORMULA.S (72×), GR.TBL (1×); omzetting geweigerd.",
-   "oorzaak": "element FORMULA, FORMULA.S, GR.TBL",
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: FORMULA (36×), FORMULA.S (72×); omzetting geweigerd. Een formule wordt bewust niet omgezet: een index, breuk of operator heeft geen tekstvorm die leesbaar blijft en door de woordcontrole te bewijzen is.",
+   "oorzaak": "element FORMULA, FORMULA.S",
    "route": "wetgeving",
    "sectie": "belangrijk",
    "sha256": null,
@@ -1633,13 +1633,13 @@
    "waarschuwingen": []
   },
   "32018R0302": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: GENERAL (1×); omzetting geweigerd.",
-   "oorzaak": "element GENERAL",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "belangrijk",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "240dbaaea66b7c323f8f2450d1ff6fb16d23556744459dfb2b809f00f4959a86",
+   "status": "ok",
+   "tekens": 68594,
    "waarschuwingen": []
   },
   "32018R1123": {
@@ -1823,7 +1823,7 @@
    "waarschuwingen": []
   },
   "32019R0627": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: FORMULA (1×), NO.GR.SEQ (12×); omzetting geweigerd.",
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: FORMULA (1×), NO.GR.SEQ (12×); omzetting geweigerd. Een formule wordt bewust niet omgezet: een index, breuk of operator heeft geen tekstvorm die leesbaar blijft en door de woordcontrole te bewijzen is.",
    "oorzaak": "element FORMULA, NO.GR.SEQ",
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
@@ -2503,7 +2503,7 @@
    "waarschuwingen": []
   },
   "32024R0771": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: FORMULA (41×); omzetting geweigerd.",
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: FORMULA (41×); omzetting geweigerd. Een formule wordt bewust niet omgezet: een index, breuk of operator heeft geen tekstvorm die leesbaar blijft en door de woordcontrole te bewijzen is.",
    "oorzaak": "element FORMULA",
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
@@ -3634,6 +3634,6 @@
    ]
   }
  },
- "gemeten": "2026-09-23 16:03",
+ "gemeten": "2026-09-23 16:04",
  "taal": "NL"
 }

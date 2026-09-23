@@ -271,6 +271,28 @@ accountregistratie namens de gebruiker):
   `DIV.CONSID` 9 en `ADDR.S` 2 van de 347 documenten in de meetlat. Nu komen er 8 door, waaronder
   2023/1795 uit de eindtest; 2025/1330 weigert nog op `GR.ANNOTATION` en 2020/1675 op de
   inclusie-aanroep `<P><INCL.ELEMENT/>.</P>`.
+  Een **tabelgroep** (`GR.TBL`: artikel 224 CRR met `VOLATILITEITSAANPASSINGEN` boven vier
+  tabellen, de concordantietabel van bijlage II bij 2011/83) wordt een losse alinea met de
+  groepstitel, zonder opmaak zoals een tabeltitel, en daarna elke tabel via `tabel()`. Iets anders
+  dan een titel of tabel in de groep weigert. Een **algemeen document** (`GENERAL`) is een
+  verklaring die het manifest als `DOC.SUB.PUB TYPE="ASSOCIATION"` achter de handeling zet (Rome
+  II 32007R0864, geoblocking 32018R0302, Galileo 32008R0683), of het hele document (de
+  samenvatting van de AstraZeneca-beschikking, 32006D0857, met een `PROLOG`). `algemeen()`
+  schrijft de titelregels als die van een handeling en zet `PROLOG` en `CONTENTS` om via de
+  blokweg (`bijlage_inhoud(…, geciteerd=True)`), zonder eenheden: het profiel kent geen anker voor
+  een verklaring. De noten tellen opnieuw vanaf (1). Als hoofddocument draagt een GENERAL de
+  vindplaats. Een lid dat meteen met een opsomming begint, is `3.` plus drie harde spaties op een
+  eigen regel, de vorm waaraan het profiel een kaal lidnummer herkent. Dat blok gaat buiten
+  `Uitvoer.blok()` om, dat harde spaties achteraan wegknipt. Tot 23 september 2026 werd het `3.
+  3.` (artikel 6, lid 3 Rome II, het enige geval in de meetlat). Een aanwijzing onder een
+  genummerde bijlagekop (`<NP><NO.P>B.</NO.P><TXT>…</TXT><P>(dit formulier …)</P></NP>`) komt als
+  alinea onder de kopregel. Een **formule** (`FORMULA`, `FORMULA.S`) blijft bewust een weigering,
+  en de melding zegt dat. Van de 372 formules in de meetlat hebben er 307 een index. `PD_pp` en
+  `PDₚₚ` zijn voor de woordcontrole één woord, `<sub>` voegt woorden toe en `PD~pp~` is in
+  GitHub-Markdown doorgehaalde tekst. Operatoren zijn lege elementen die de woordcontrole niet
+  ziet: transparant werd `Risk − weighted exposure amount` stil `Risk weighted exposure amount`.
+  En de `OVER`-breuk van 2005/66 zegt niet waar de noemer eindigt. Zie `FORMULE_ELEMENTEN`; maak
+  die elementen niet transparant.
   De portal-HTML (`/legal-content/…/HTML/`) blokkeert bots (HTTP 202, lege body;
   inmiddels een AWS WAF-JS-challenge, dus ook met retries permanent 202 — de portal is in de praktijk
   dood voor een simpele `requests`-scraper). Gebruik het **Cellar-archief** via content negotiation,
@@ -1040,7 +1062,7 @@ regel), inclusief de vloeiende tabbalk-indicator.
   weggeschreven bestand nooit als geldige staat gelezen kan worden.
 
 ## Tests
-`.venv/bin/python -m pytest tests/ -q` — 447 karakteriseringstests die het gedrag
+`.venv/bin/python -m pytest tests/ -q` — 456 karakteriseringstests die het gedrag
 vastleggen in plaats van het te beschrijven: `detect_source`-precedentie, ELI→CELEX,
 de CLG-markupnormalisatie (lidnummers, lettermarkers, voetnootankers), de
 voetnootdefinities die met de preambule meereizen, de notitievorm die een intakepoort

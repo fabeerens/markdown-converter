@@ -40,7 +40,7 @@ verandert zit aan de achterkant.
 
 - **Tests zijn karakteriseringstests**: ze leggen het *bestaande* gedrag vast.
   Verandert er gedrag, dan verander je de test bewust en zeg je dat in de
-  commit. Draai `.venv/bin/python -m pytest tests/ -q` (nu 447 tests) vóór
+  commit. Draai `.venv/bin/python -m pytest tests/ -q` (nu 456 tests) vóór
   je klaar bent.
 - **Raak je een Formex-omzetter** (`formex_xml.py`, `formex_hof.py`,
   `xml_gedeeld.py` of de Formex-tak van `eurlex.py`), **draai dan de meetlat**:
