@@ -23,9 +23,11 @@ niet een mooiere (AGENTS.md, regel 3):
 
 Wat deze route weigert in plaats van raadt: een wortel die geen arrest of
 beschikking is (conclusies, adviezen en vergaderverslagen hebben een andere
-opbouw), een zip met meer dan één onderdeel of met een afbeelding, een element
-zonder eigen behandeling, een nootvorm die hier niet bekend is, en een
-genummerde lijst waarvan de nummers niet in de bron staan.
+opbouw), een zip met meer dan één onderdeel of met een bestand dat de uitspraak
+niet als afbeelding aanroept, een element zonder eigen behandeling, een nootvorm
+die hier niet bekend is, en een genummerde lijst waarvan de nummers niet in de
+bron staan. Een afbeelding die de uitspraak wél aanroept, wordt weggelaten met
+een melding, net als bij wetgeving.
 """
 
 from __future__ import annotations
@@ -101,8 +103,11 @@ def openen(data: bytes) -> tuple[str, ET.Element]:
 
     Anders dan bij wetgeving is er geen inhoudsopgave die de onderdelen noemt, dus
     de eis is strenger: een tweede onderdeel (bij oudere arresten het verslag ter
-    terechtzitting) of een afbeelding is een weigering, want dat zou tekst buiten
-    de omzetting laten.
+    terechtzitting) is een weigering, want dat zou tekst buiten de omzetting laten.
+    Een ander bestand mag er alleen naast staan als de uitspraak het zelf aanroept
+    als afbeelding (`INCL.ELEMENT TYPE="TIFF"`), en elke aanroep moet een bestand
+    in de zip zijn: 62012TJ0235 (Żubrówka) toont zo vier afbeeldingen, twee merken
+    en foto's van de fles. Tot 23 september 2026 weigerde elk bestand naast de XML.
     """
     try:
         zf = zipfile.ZipFile(io.BytesIO(data))
@@ -112,9 +117,6 @@ def openen(data: bytes) -> tuple[str, ET.Element]:
         onderdelen = [i for i in zf.infolist() if not i.is_dir()]
         xmls = [i for i in onderdelen if i.filename.lower().endswith(".xml")]
         overig = [i.filename for i in onderdelen if not i.filename.lower().endswith(".xml")]
-        if overig:
-            raise _fout("de zip bevat naast de XML ook " + ", ".join(sorted(overig))
-                        + "; een afbeelding of bijlage zou buiten de omzetting blijven")
         if len(xmls) != 1:
             raise _fout(f"de zip bevat {len(xmls)} XML-onderdelen; precies één is vereist "
                         "(bij oudere arresten hoort het verslag ter terechtzitting erbij)")
@@ -123,6 +125,16 @@ def openen(data: bytes) -> tuple[str, ET.Element]:
             root = ET.fromstring(zf.read(xmls[0]))
         except ET.ParseError as exc:
             raise _fout(f"{naam} is niet leesbaar ({exc})") from exc
+    aangeroepen = {(incl.get("FILEREF") or "").rsplit("/", 1)[-1] for incl in root.iter("INCL.ELEMENT")
+                   if (incl.get("TYPE") or "").upper() == "TIFF"}
+    los = [n for n in overig if n.rsplit("/", 1)[-1] not in aangeroepen]
+    if los:
+        raise _fout("de zip bevat naast de XML ook " + ", ".join(sorted(los))
+                    + "; een afbeelding of bijlage zou buiten de omzetting blijven")
+    ontbreekt = aangeroepen - {n.rsplit("/", 1)[-1] for n in overig}
+    if ontbreekt:
+        raise _fout("de uitspraak roept afbeelding(en) aan die niet in de zip staan: "
+                    + ", ".join(sorted(ontbreekt)))
     soort = _kort(root)
     if soort not in ONDERSTEUND:
         raise _fout(f"een document van de soort {soort} wordt niet ondersteund; "
@@ -176,6 +188,7 @@ class _Omzetter:
         self.lijstdiepte = 0
         self.opmaak = 0
         self.gegenereerd: Counter = Counter()
+        self.afbeeldingen_weggelaten: list[dict] = []
 
     # -- inline ---------------------------------------------------------
 
@@ -277,9 +290,13 @@ class _Omzetter:
         naam = _kort(el)
         if naam in NIET_UITGEVOERD:
             return []
+        if (naam == "P" and len(el) == 1 and _kort(el[0]) == "INCL.ELEMENT"
+                and not (el.text or "").strip() and not (el[0].tail or "").strip()):
+            return self.afbeelding(el[0])
         if naam in ("INCL.ELEMENT",):
-            raise _fout("het document bevat een afbeelding (INCL.ELEMENT); de keten heeft "
-                        "daar geen route voor en stil weglaten zou inhoud verliezen")
+            raise _fout("het document bevat een afbeelding (INCL.ELEMENT) die niet als eigen "
+                        "alinea staat; de keten heeft daar geen route voor en stil weglaten "
+                        "zou inhoud verliezen")
         handler = {
             "TITLE": self.titel,
             "GR.SEQ": self.reeks,
@@ -301,6 +318,26 @@ class _Omzetter:
                                             "SIGNATORY"):
             return self.gemengd(el)
         self.uit.markeer_onbekend(naam)
+        return []
+
+    def afbeelding(self, el) -> list[str]:
+        """Een afbeelding als eigen alinea: niet overnemen, wel vastleggen.
+
+        Dezelfde afspraak als bij wetgeving (`formex_xml.afbeelding`) en de
+        rechtspraakroute: een melding in de herkomst en een lijst
+        `afbeeldingen_weggelaten`, zodat het nooit stil gebeurt. In 62012TJ0235
+        staat elk beeld (het aangevraagde merk, het oudere merk, twee foto's van de
+        fles) als `<P><INCL.ELEMENT TYPE="TIFF"/></P>` achter de zin die het
+        aankondigt. Een afbeelding die haar tekst meedraagt (`IMG.CNT`) is bij het
+        Hof niet gemeten en blijft een weigering, net als een ander type.
+        """
+        if (el.get("TYPE") or "").upper() != "TIFF":
+            raise _fout(f"een inclusie van het type {el.get('TYPE')!r}; alleen een afbeelding "
+                        "(TIFF) is gemeten")
+        if len(el) or (el.text or "").strip():
+            raise _fout("een afbeelding met eigen inhoud (IMG.CNT) is bij het Hof niet gemeten")
+        self.afbeeldingen_weggelaten.append({"fileref": (el.get("FILEREF") or "").rsplit("/", 1)[-1],
+                                             "format": "TIFF"})
         return []
 
     def titel(self, el) -> list[str]:
@@ -710,6 +747,7 @@ def omzetten(data: bytes, verwacht: str | None = None) -> tuple[str, dict]:
         "secties": omzetter.sectietitels,
         "noten": len(omzetter.noten),
         "opmaak_weggelaten": omzetter.opmaak,
+        "afbeeldingen_weggelaten": omzetter.afbeeldingen_weggelaten,
         "bronbestand": naam,
     })
     return markdown, meta

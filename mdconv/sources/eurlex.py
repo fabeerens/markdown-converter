@@ -372,6 +372,12 @@ def _fetch_hof(ident: str, lang: str, *, requested_url: str):
     if meta["opmaak_weggelaten"]:
         waarschuwingen.append(
             f"{meta['opmaak_weggelaten']} keer vet of cursief niet overgenomen; de tekst blijft.")
+    weg = meta["afbeeldingen_weggelaten"]
+    if weg:
+        waarschuwingen.append(
+            f"{len(weg)} {'afbeelding' if len(weg) == 1 else 'afbeeldingen'} uit de Formex-bron "
+            "niet overgenomen (TIFF); de tekst eromheen staat er wel: "
+            + ", ".join(b["fileref"] for b in weg) + ".")
     herkomst = Herkomst(
         format="formex-hvj",
         celex=meta["celex"],
@@ -383,10 +389,11 @@ def _fetch_hof(ident: str, lang: str, *, requested_url: str):
         koppen_bron=len(meta["secties"]),
         koppen_markdown=len(meta["secties"]),
         waarschuwingen=tuple(waarschuwingen),
-        extra={k: meta[k] for k in ("zaaknummers", "auteur", "partijen", "overige_partijen",
-                                    "secties", "paginakop", "soort", "noten", "bronbestand",
-                                    "titelregels", "datum", "procestaal",
-                                    "dictum_inleiding")},
+        extra={**{k: meta[k] for k in ("zaaknummers", "auteur", "partijen", "overige_partijen",
+                                       "secties", "paginakop", "soort", "noten", "bronbestand",
+                                       "titelregels", "datum", "procestaal",
+                                       "dictum_inleiding")},
+               **({"afbeeldingen_weggelaten": weg} if weg else {})},
     )
     label = ident if ident.upper().startswith("ECLI:") else f"CELEX:{ident}"
     return markdown, f"EUR-Lex (Cellar Formex) • {label} • {lang}", herkomst

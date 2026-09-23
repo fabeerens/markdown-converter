@@ -190,6 +190,45 @@ def test_een_zip_met_meer_dan_een_onderdeel_of_een_afbeelding_wordt_geweigerd():
         formex_hof.omzetten(b"PK\x03\x04kapot")
 
 
+BEELD = "ECR_62026CJ0001_NL_01_01.tif"
+
+
+def _met_beeld(aanroep: str) -> str:
+    """62012TJ0235 (Żubrówka): het merk staat als TIFF in een eigen P achter de zin die het aankondigt."""
+    return ARREST.replace("<TXT>Het Hof overweegt als volgt.</TXT>",
+                          "<TXT>Het Hof overweegt als volgt.</TXT>" + aanroep)
+
+
+def test_een_afbeelding_die_de_uitspraak_aanroept_wordt_weggelaten_met_een_melding():
+    xml = _met_beeld(f'<P><INCL.ELEMENT FILEREF="{BEELD}" TYPE="TIFF"/></P>')
+    markdown, meta = formex_hof.omzetten(zipje(("ECR_62026CJ0001_NL_01.xml", xml), (BEELD, b"II*\x00")))
+    assert "\n3. Het Hof overweegt als volgt.\n\n4. Bedrag" in markdown
+    assert meta["afbeeldingen_weggelaten"] == [{"fileref": BEELD, "format": "TIFF"}]
+
+
+@pytest.mark.parametrize("aanroep, bestanden, reden", [
+    # Aangeroepen, maar niet in de zip.
+    (f'<P><INCL.ELEMENT FILEREF="{BEELD}" TYPE="TIFF"/></P>', (), "niet in de zip"),
+    # Midden in een zin: dan zou de alinea stil in tweeën vallen.
+    (f'<P>Zie <INCL.ELEMENT FILEREF="{BEELD}" TYPE="TIFF"/> hierboven.</P>', (BEELD,), "niet als eigen alinea"),
+    # Met eigen tekst: bij het Hof niet gemeten.
+    (f'<P><INCL.ELEMENT FILEREF="{BEELD}" TYPE="TIFF"><IMG.CNT><P>Formulier</P></IMG.CNT>'
+     "</INCL.ELEMENT></P>", (BEELD,), "IMG.CNT"),
+])
+def test_een_afbeelding_die_niet_als_losse_alinea_in_de_zip_staat_blijft_een_weigering(aanroep, bestanden, reden):
+    onderdelen = [("ECR_62026CJ0001_NL_01.xml", _met_beeld(aanroep))] + [(b, b"II*\x00") for b in bestanden]
+    with pytest.raises(ConversionError, match=reden):
+        formex_hof.omzetten(zipje(*onderdelen))
+
+
+def test_de_weggelaten_afbeelding_staat_in_de_herkomst(monkeypatch):
+    xml = _met_beeld(f'<P><INCL.ELEMENT FILEREF="{BEELD}" TYPE="TIFF"/></P>')
+    _fake(monkeypatch, {"resource/celex/": (200, zipje(("ECR_62026CJ0001_NL_01.xml", xml), (BEELD, b"II*\x00")))})
+    h = from_link("62026CJ0001").provenance
+    assert h.extra["afbeeldingen_weggelaten"] == [{"fileref": BEELD, "format": "TIFF"}]
+    assert any(w.startswith("1 afbeelding uit de Formex-bron niet overgenomen") for w in h.waarschuwingen)
+
+
 def test_een_andere_identiteit_dan_gevraagd_is_een_weigering():
     with pytest.raises(ConversionError, match="en niet 62099CJ0001"):
         formex_hof.omzetten(arrest_zip(), "62099CJ0001")
