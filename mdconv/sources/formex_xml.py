@@ -1704,11 +1704,17 @@ class FormexOmzetter:
                 self.u.blok(regel)
             if anker:
                 self.u.eenheid(anker, "onderdeel", regel)
+            # Eén teller voor het hele onderdeel: artikel 2, lid 2, onder h) van
+            # de consumentenkredietrichtlijn (32023L2225) heeft twee reeksen
+            # i)–iii) met een alinea ertussen, elk in een eigen P. Met een verse
+            # teller per P kregen beide `art-2-2-h-i`; de tweede reeks is `al2`,
+            # zoals een tweede opsomming in een lid (patronen.md).
+            teller = {"lijsten": 0}
             for sub in binnen:
                 if sub.tag in ("LIST", "DLIST"):
                     self.lijst(sub, anker, "")
                 else:
-                    self.inhoud(sub, anker or basis, {"lijsten": 0})
+                    self.inhoud(sub, anker or basis, teller)
 
     def dubbele_markering(self, anker: str, volgnummer: int, nr: str, basis: str) -> str:
         """Een tweede onderdeel met dezelfde gedrukte markering binnen één opsomming.

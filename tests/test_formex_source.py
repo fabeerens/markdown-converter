@@ -1241,6 +1241,22 @@ def test_the_repeated_marker_warning_reaches_the_provenance(monkeypatch):
                for m in document.provenance.waarschuwingen)
 
 
+def test_een_tweede_reeks_onder_hetzelfde_onderdeel_krijgt_al2():
+    """Artikel 2, lid 2, onder h) van de consumentenkredietrichtlijn (32023L2225): twee
+    reeksen i)–iii) met een alinea ertussen, elk in een eigen P onder het NP van h).
+    Met een verse teller per P kregen beide `art-2-2-h-i` en weigerde de structuurcontrole."""
+    reeks = lambda *tekst: (b'<P><LIST TYPE="roman">' + b"".join(
+        b"<ITEM><NP><NO.P>" + nr + b"</NO.P><TXT>" + t + b"</TXT></NP></ITEM>"
+        for nr, t in zip((b"i)", b"ii)"), tekst)) + b"</LIST></P>")
+    tweede_d = (reeks(b"de leverancier geeft uitstel;", b"zonder rente;")
+                + b"<P>Voor grote leveranciers geldt bovendien:</P>"
+                + reeks(b"een derde biedt geen krediet aan;", b"binnen 14 dagen."))
+    markdown, eenheden, _, _ = formex_xml.omzetten(met_dubbele_d(tweede_d=tweede_d))
+    ankers = [e.anker for e in eenheden if e.anker.startswith("art-1-1-d-")]
+    assert ankers == ["art-1-1-d-i", "art-1-1-d-ii", "art-1-1-d-al2-i", "art-1-1-d-al2-ii", "art-1-1-d-2"]
+    assert "Voor grote leveranciers geldt bovendien:\n\ni) een derde biedt geen krediet aan;" in markdown
+
+
 def test_a_repeated_marker_whose_ordinal_collides_with_a_nested_point_is_still_refused():
     """Het volgnummer is een anker als elk ander: draagt het eerste d) een geneste
     opsomming `1.`, `2.`, dan bestaat `art-1-1-d-2` al en blijft de zelfcontrole
