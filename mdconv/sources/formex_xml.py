@@ -39,7 +39,7 @@ import zipfile
 from collections import Counter
 
 from ..errors import ConversionError
-from .xml_gedeeld import Uitvoer, nummer_anker, tabel_markdown, ws
+from .xml_gedeeld import LATIJN, Uitvoer, nummer_anker, tabel_markdown, ws
 
 NBSP = " "
 ONGENUMMERD = {"DASH", "NDASH", "BULLET", "NONE", "DISC"}
@@ -65,6 +65,18 @@ STRUCTUUR_ELEMENTEN = {
 # niet in staat, is niet af te leiden en moet dan uit `NO.CELEX` komen.
 CELEX_LETTER = {"REG": "R", "DIR": "L", "DEC": "D"}
 BEKENDE_TEKSTELEMENTEN = METADATA | INLINE_TEKST | INLINE_TRANSPARANT | STRUCTUUR_ELEMENTEN
+# De kop van een bijlageonderdeel met een nummer: `A.`, `1.`, of een woord met een
+# nummer erachter. Bijlage VIII en XI van 2024/1689 schrijven `Afdeling A —` en
+# `Afdeling 1`; MiCA (2023/1114) `Deel A:` tot en met `Deel I:`, de
+# zorgvuldigheidsrichtlijn (2024/1760) `Deel I` en `Deel II`, de SCC's (2021/914)
+# `AFDELING II` met daarin `Bepaling 8`, en de ITS-richtlijn (2010/40)
+# `— Prioritair gebied I:`. Elk van die delen begint weer bij punt 1; zonder dat
+# niveau in het anker weigerde de zelfcontrole ze op dubbele ankers. Een
+# decimaal nummer blijft heel: de SCC's nummeren binnen bepaling 8 `8.1.` tot
+# en met `8.9.`, en als `8` kregen die negen onderdelen één anker.
+ONDERDEELKOP = re.compile(
+    r"[—–-]?\s*(?:(?:Afdeling|Deel|Onderdeel|Bepaling|Module|Titel|Hoofdstuk|Sectie|"
+    r"Prioritair\s+gebied)\s+)?([A-Z]|[IVXLC]+|\d+(?:\.\d+)*)(?:\.|\b)", re.I)
 
 
 def _xml_fout(boodschap: str, exc: Exception | None = None) -> ConversionError:
@@ -917,10 +929,14 @@ class FormexOmzetter:
     # ------------------------------------------------------------ bepalingen
 
     def divisie_anker(self, kop: str, pad: dict) -> tuple[str, str | None, str]:
-        m = re.match(r"(HOOFDSTUK|AFDELING|TITEL|DEEL|ONDERAFDELING)\s+(\S+)", kop, re.I)
+        # `HOOFDSTUK IX bis` (geconsolideerde SIS-verordening 02018R1862) is
+        # een ander hoofdstuk dan IX; alleen `IX` lezen gaf twee keer `hfd-9`.
+        m = re.match(r"(HOOFDSTUK|AFDELING|TITEL|DEEL|ONDERAFDELING)\s+(\S+)"
+                     r"(?:\s+(" + "|".join(LATIJN) + r")\b)?", kop, re.I)
         if not m:
             return "", None, ""
-        soort, nr = m.group(1).upper(), nummer_anker(m.group(2), romeins_omrekenen=True)
+        soort = m.group(1).upper()
+        nr = nummer_anker(m.group(2), romeins_omrekenen=True) + (m.group(3) or "").lower()
         if soort == "TITEL":
             return f"tit-{nr}", "tit", nr
         if soort == "HOOFDSTUK":
@@ -1048,24 +1064,35 @@ class FormexOmzetter:
             schrijf(f"{nr}{scheiding}{txt}".strip() if nr else txt)
             anker = f"{basis}-{nummer_anker(nr)}" if basis and nr else ""
             if anker:
+                # Een tweede reeks losse punten in hetzelfde blok draagt `al<k>`,
+                # de afspraak van het profiel (patronen.md: bijlage XI van de
+                # Schengengrenscode telt twee keer 1. tot en met 8.). Bijlage I.A
+                # van de SCC's nummert de gegevensexporteurs en daarna de
+                # -importeurs elk vanaf 1.; zonder onderscheid weigerde de
+                # zelfcontrole op dubbele ankers.
+                gezien = teller.setdefault("punten", set())
+                if anker in gezien:
+                    teller["reeks"] = teller.get("reeks", 1) + 1
+                    gezien.clear()
+                gezien.add(anker)
+                if teller.get("reeks", 1) > 1:
+                    anker = f"{basis}-al{teller['reeks']}-{nummer_anker(nr)}"
                 self.u.eenheid(anker, "punt", f"{nr} {txt}")
             for kind in el:
                 if kind.tag not in ("NO.P", "TXT"):
                     self.inhoud(kind, anker or basis, {"lijsten": 0})
         elif tag in ("LIST", "DLIST"):
-            if tag == "DLIST":
-                # Een DLIST draagt zijn nummer in de PREFIX (`16)`) en is dus
-                # altijd genummerd. Tot 22 september 2026 stond hier `tag ==
-                # "LIST" and ...`, waardoor een DLIST nooit een basis meekreeg
-                # en geen van de 26 definitiepunten van artikel 4 AVG een
-                # structuureenheid had. De `al2-`-vorm telt alleen LIST'en:
-                # die hoort bij een tweede opsomming in hetzelfde lid.
-                genummerd, extra = True, ""
-            else:
-                genummerd = el.get("TYPE", "").upper() not in ONGENUMMERD
-                if genummerd:
-                    teller["lijsten"] += 1
-                extra = f"al{teller['lijsten']}-" if genummerd and teller["lijsten"] > 1 else ""
+            # Een DLIST draagt zijn nummer in de PREFIX (`16)`) en is dus altijd
+            # genummerd. Tot 22 september 2026 stond hier `tag == "LIST" and ...`,
+            # waardoor een DLIST nooit een basis meekreeg en geen van de 26
+            # definitiepunten van artikel 4 AVG een structuureenheid had. Een
+            # DLIST telt mee als opsomming in het lid: artikel 28 bis, lid 2 van
+            # de geconsolideerde AVMD (02010L0013) heeft een LIST a)–b) en daarna
+            # een DLIST a)–c), en die tweede reeks is `al2-`, zoals een tweede LIST.
+            genummerd = tag == "DLIST" or el.get("TYPE", "").upper() not in ONGENUMMERD
+            if genummerd:
+                teller["lijsten"] += 1
+            extra = f"al{teller['lijsten']}-" if genummerd and teller["lijsten"] > 1 else ""
             if isinstance(prefix, list) and prefix[0]:
                 # Een lid dat meteen met een opsomming begint: het nummer krijgt
                 # een eigen regel, zoals het Publicatieblad het zet.
@@ -1130,7 +1157,7 @@ class FormexOmzetter:
         if inhoud is not None:
             self.bijlage_inhoud(inhoud, "", geciteerd=True)
 
-    def definitiepunt(self, item, basis: str) -> None:
+    def definitiepunt(self, item, basis: str, extra: str = "") -> None:
         """Eén `DLIST.ITEM`: `16) “hoofdvestiging” …` als eigen alinea.
 
         Draagt de `DEFINITION` zelf een opsomming of een tabel, dan blijft die
@@ -1144,7 +1171,7 @@ class FormexOmzetter:
         term = ws(self.inline(item.find("TERM"))) if item.find("TERM") is not None else ""
         prefix = ws(self.inline(item.find("PREFIX"))) if item.find("PREFIX") is not None else ""
         definitie = item.find("DEFINITION")
-        anker = f"{basis}-{nummer_anker(prefix)}" if basis and prefix else ""
+        anker = f"{basis}-{extra}{nummer_anker(prefix)}" if basis and prefix else ""
 
         def schrijf_kop(aanhef: str) -> None:
             regel = " ".join(x for x in (prefix, term, aanhef) if x)
@@ -1183,7 +1210,7 @@ class FormexOmzetter:
         """Elk onderdeel is een eigen alinea: `a) tekst`, niet een Markdown-lijst."""
         if el.tag == "DLIST":
             for item in el.findall("DLIST.ITEM"):
-                self.definitiepunt(item, basis)
+                self.definitiepunt(item, basis, extra)
             return
         genummerd = el.get("TYPE", "").upper() not in ONGENUMMERD
         gezien: Counter = Counter()
@@ -1336,7 +1363,12 @@ class FormexOmzetter:
         sti = (self.kop_tekst(titel.find("STI"), "ITALIC")
                if titel is not None and titel.find("STI") is not None else "")
         m = re.match(r"BIJLAGE\s+(\S+)", ti, re.I)
-        anker = f"annex-{nummer_anker(m.group(1), romeins_omrekenen=True)}" if m else f"annex-{self.bijlagen}"
+        # Een ongenummerde bijlage krijgt haar volgnummer met een `o` ervoor. Als
+        # `annex-<volgnummer>` botste ze met een genummerde: het SCC-besluit
+        # (2021/914) heeft een `BIJLAGE`, een `AANHANGSEL` en daarna `BIJLAGE I`
+        # en `II`, en weigerde op "dubbele structurele ankers: annex-1".
+        anker = (f"annex-{nummer_anker(m.group(1), romeins_omrekenen=True)}" if m
+                 else f"annex-o{self.bijlagen}")
         self.u.blok(f"## {ti.replace(' ', NBSP)}")
         if sti:
             self.u.blok(sti)
@@ -1349,6 +1381,7 @@ class FormexOmzetter:
     def bijlage_inhoud(self, el, anker: str, geciteerd: bool = False) -> None:
         """`geciteerd`: een ingesloten bijlage van een andere handeling — geen eenheden."""
         teller = {"lijsten": 0}
+        onderdelen = [k for k in el if k.tag == "GR.SEQ"]
         for kind in el:
             if kind.tag == "GR.SEQ":
                 titel = kind.find("TITLE")
@@ -1360,12 +1393,28 @@ class FormexOmzetter:
                     letter = ws(self.inline(np.find("NO.P")))
                     rest = ws(self.inline(np.find("TXT"))) if np.find("TXT") is not None else ""
                     ti = f"{letter}{NBSP * 3}{rest}".strip()
+                    kop = self.kop_tekst(np)
                 else:
                     ti = ws(self.inline(titel)) if titel is not None else ""
-                # Bijlage VIII en XI van 2024/1689 schrijven `Afdeling A —`
-                # en `Afdeling 1` in plaats van de oudere kopvorm `A.`.
-                m = re.match(r"(?:Afdeling\s+)?([A-Z]|\d+)(?:\.|\b)", ti, re.I)
-                sub = f"{anker}-{nummer_anker(m.group(1))}" if m and not geciteerd else anker
+                    # Het nummer staat in de eerste P: `Deel II` en het opschrift
+                    # `VERBODSBEPALINGEN` zijn aparte P's, en aan elkaar
+                    # (`Deel IIVERBODSBEPALINGEN`) is het nummer niet meer te lezen.
+                    # Zonder opmaak: `*Bepaling 8*` (cursief in de SCC's) leest anders
+                    # niet als nummer.
+                    eerste = titel.find(".//P") if titel is not None else None
+                    kop = self.kop_tekst(eerste) if eerste is not None else ti
+                m = ONDERDEELKOP.match(kop)
+                if geciteerd:
+                    sub = anker
+                elif m:
+                    sub = f"{anker}-{nummer_anker(m.group(1))}"
+                elif len(onderdelen) > 1:
+                    # Een ongenummerd onderdeel naast andere onderdelen krijgt zijn
+                    # plaats als anker. Liep het transparant door, dan kregen de
+                    # punten 1., 2. … van twee zulke onderdelen hetzelfde anker.
+                    sub = f"{anker}-s{onderdelen.index(kind) + 1}"
+                else:
+                    sub = anker
                 if ti:
                     self.u.blok(ti)
                     if m and not geciteerd:

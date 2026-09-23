@@ -188,6 +188,16 @@ accountregistratie namens de gebruiker):
   De **titel van een tabel** (`TBL/TITLE`) komt als losse alinea boven de tabel, zonder opmaak —
   de vorm die de raw van NIS 2 al had. Tot 23 september 2026 viel hij weg en weigerde de
   woordcontrole 12 van de 347 documenten in de meetlat op één woord: "CONCORDANTIETABEL".
+  De **ankers in een bijlage volgen de boom van de bron**. Ze zijn voor de zelfcontrole, niet
+  voor het profiel, en weigerden 13 van de 347 documenten op dubbele ankers doordat een niveau
+  ontbrak. Een onderdeel met een nummer in zijn kop (`A.`, `1.`, `8.1.`, `Deel A`, `AFDELING II`,
+  `Bepaling 8`, `— Prioritair gebied I`; zie `ONDERDEELKOP`) is een eigen niveau; een ongenummerd
+  onderdeel naast andere onderdelen krijgt zijn plaats (`s2`); een ongenummerde bijlage is
+  `annex-o<volgnummer>`, zodat ze niet botst met `BIJLAGE I` (SCC's). Een tweede reeks losse
+  punten in één blok draagt `al<k>`, net als in het profiel, en een DLIST telt mee als tweede
+  opsomming in een lid. `HOOFDSTUK IX bis` is `hfd-9bis`. Wat blijft weigeren: een echt dubbel
+  hoofdstuk, zoals de twee keer `HOOFDSTUK III` in de Nederlandse DORA (32022R2554), waar
+  hoofdstuk VII bedoeld is.
   De portal-HTML (`/legal-content/…/HTML/`) blokkeert bots (HTTP 202, lege body;
   inmiddels een AWS WAF-JS-challenge, dus ook met retries permanent 202 — de portal is in de praktijk
   dood voor een simpele `requests`-scraper). Gebruik het **Cellar-archief** via content negotiation,
@@ -957,7 +967,7 @@ regel), inclusief de vloeiende tabbalk-indicator.
   weggeschreven bestand nooit als geldige staat gelezen kan worden.
 
 ## Tests
-`.venv/bin/python -m pytest tests/ -q` — 402 karakteriseringstests die het gedrag
+`.venv/bin/python -m pytest tests/ -q` — 408 karakteriseringstests die het gedrag
 vastleggen in plaats van het te beschrijven: `detect_source`-precedentie, ELI→CELEX,
 de CLG-markupnormalisatie (lidnummers, lettermarkers, voetnootankers), de
 voetnootdefinities die met de preambule meereizen, de notitievorm die een intakepoort

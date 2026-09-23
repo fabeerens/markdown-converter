@@ -829,3 +829,81 @@ def test_a_repeated_marker_whose_ordinal_collides_with_a_nested_point_is_still_r
 
     with pytest.raises(ConversionError, match=r"structuurcontrole.*art-1-1-d-2.*nummert op één niveau"):
         formex_xml.omzetten(met_dubbele_d(tweede_d=genest))
+
+
+# ------------------------------------------------------------------ ankers in bijlagen
+# De ankers in `eenheden` zijn voor de zelfcontrole, niet voor het profiel. Ze
+# moeten de boom van de bron volgen: een deel dat weer bij punt 1 begint, is een
+# eigen niveau. Tot 23 september 2026 weigerde de zelfcontrole daardoor 13 van de
+# 347 documenten in de meetlat op dubbele ankers (MiCA, de SCC's, de
+# zorgvuldigheidsrichtlijn, de klokkenluidersrichtlijn, de Chips Act, ...).
+
+def _met_bijlagen(*bijlagen: bytes) -> bytes:
+    namen = [f"bijlage{i}.xml" for i in range(1, len(bijlagen) + 1)]
+    doc = DOC.replace(b"</FMX>", b"".join(
+        b'<REF.PHYS TYPE="DOC.XML" FILE="' + n.encode() + b'"/>' for n in namen) + b"</FMX>")
+    return formex_zip(doc=doc, extra=dict(zip(namen, bijlagen)))
+
+
+def _bijlage(titel: bytes, inhoud: bytes) -> bytes:
+    return b"<ANNEX><TITLE><TI><P>" + titel + b"</P></TI></TITLE><CONTENTS>" + inhoud + b"</CONTENTS></ANNEX>"
+
+
+def _deel(titel: bytes, *punten: bytes) -> bytes:
+    return (b"<GR.SEQ><TITLE><TI><P>" + titel + b"</P></TI></TITLE>" + b"".join(
+        b"<NP><NO.P>" + nr + b"</NO.P><TXT>Punt " + nr + b" van " + titel + b".</TXT></NP>"
+        for nr in punten) + b"</GR.SEQ>")
+
+
+def _ankers(data: bytes, soort: str) -> list[str]:
+    return [e.anker for e in formex_xml.omzetten(data)[1] if e.soort == soort]
+
+
+def test_annex_parts_that_restart_their_numbering_are_their_own_level():
+    """MiCA (2023/1114) bijlage I: een ongenummerde titel met daaronder `Deel A:` tot `Deel I:`, elk vanaf 1."""
+    inhoud = (b"<GR.SEQ><TITLE><TI><P>OPENBAAR TE MAKEN ELEMENTEN</P></TI></TITLE>"
+              + _deel(b"Deel A: Informatie over de aanbieder", b"1.", b"2.")
+              + _deel(b"Deel B: Informatie over de uitgever", b"1.", b"2.") + b"</GR.SEQ>")
+    assert _ankers(_met_bijlagen(_bijlage(b"BIJLAGE I", inhoud)), "punt") == [
+        "annex-1-a-1", "annex-1-a-2", "annex-1-b-1", "annex-1-b-2"]
+
+
+def test_unnumbered_sibling_parts_get_their_position_and_decimal_numbers_stay_whole():
+    """De SCC's (2021/914): cursief `Bepaling 8`, twee ongenummerde modules, en daarin `8.1.` en `8.2.`."""
+    module = lambda naam: (b"<GR.SEQ><TITLE><TI><P>" + naam + b"</P></TI></TITLE>"
+                           + _deel(b"8.1.Doelbinding", b"a)") + _deel(b"8.2.Transparantie", b"a)") + b"</GR.SEQ>")
+    inhoud = (b'<GR.SEQ><TITLE><TI><P><HT TYPE="ITALIC">Bepaling 8</HT></P></TI></TITLE>'
+              + module(b"MODULE EEN") + module(b"MODULE TWEE") + b"</GR.SEQ>")
+    assert _ankers(_met_bijlagen(_bijlage(b"BIJLAGE I", inhoud)), "bijlagedeel") == [
+        "annex-1-8", "annex-1-8-s1-8-1", "annex-1-8-s1-8-2", "annex-1-8-s2-8-1", "annex-1-8-s2-8-2"]
+
+
+def test_an_unnumbered_annex_does_not_take_the_anchor_of_annex_one():
+    """De SCC's: `BIJLAGE` (de bepalingen), dan een aanhangsel met `BIJLAGE I`."""
+    data = _met_bijlagen(_bijlage(b"BIJLAGE", _deel(b"A.", b"1.")), _bijlage(b"BIJLAGE I", _deel(b"A.", b"1.")))
+    assert _ankers(data, "bijlage") == ["annex-o1", "annex-1"]
+
+
+def test_a_second_series_of_points_in_one_part_gets_al2():
+    """SCC-bijlage I.A nummert de exporteurs en daarna de importeurs elk vanaf 1. (patronen.md: `al<k>`)."""
+    inhoud = _deel(b"A.", b"1.", b"2.", b"1.", b"2.")
+    assert _ankers(_met_bijlagen(_bijlage(b"BIJLAGE I", inhoud)), "punt") == [
+        "annex-1-a-1", "annex-1-a-2", "annex-1-a-al2-1", "annex-1-a-al2-2"]
+
+
+def test_a_definition_list_after_a_list_in_the_same_paragraph_is_the_second_series():
+    """Artikel 28 bis, lid 2 van de geconsolideerde AVMD: LIST a)–b), daarna een DLIST a)–c)."""
+    dlist = (b'<ALINEA><P>In dit lid wordt verstaan onder:</P><DLIST><DLIST.ITEM><PREFIX>a)</PREFIX>'
+             b'<TERM>moederonderneming</TERM><DEFINITION>een onderneming met zeggenschap;</DEFINITION>'
+             b'</DLIST.ITEM></DLIST></ALINEA></PARAG>')
+    act = ACT.replace(b"</ALINEA></PARAG>", b"</ALINEA>" + dlist, 1)
+    assert _ankers(formex_zip(act=act), "onderdeel") == ["art-1-1-a", "art-1-1-b", "art-1-1-al2-a"]
+
+
+def test_a_chapter_bis_is_another_chapter_than_the_one_before_it():
+    """02018R1862 (SIS) kent `HOOFDSTUK IX` en `HOOFDSTUK IX bis`; alleen `IX` lezen gaf twee keer hfd-9."""
+    tweede = (b'<DIVISION><TITLE><TI>HOOFDSTUK I bis</TI><STI>Nog meer bepalingen</STI></TITLE>'
+              b'<ARTICLE IDENTIFIER="2"><TI.ART>Artikel 2</TI.ART><ALINEA><P>Tweede artikel.</P></ALINEA>'
+              b'</ARTICLE></DIVISION></ENACTING.TERMS>')
+    act = ACT.replace(b"</ENACTING.TERMS>", tweede, 1)
+    assert _ankers(formex_zip(act=act), "divisie") == ["hfd-1", "hfd-1bis"]
