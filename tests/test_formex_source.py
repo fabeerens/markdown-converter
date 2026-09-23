@@ -1223,6 +1223,72 @@ def test_an_annex_that_quotes_a_block_of_another_act_renders_it_without_units():
     assert [e.soort for e in eenheden if e.anker.startswith("annex")] == ["bijlage"]
 
 
+# ------------------------------------------------------------------ nummer van een bijlageonderdeel
+# Een onderdeel zonder kop draagt zijn nummer in `GR.SEQ/NO.GR.SEQ`, met de tekst in
+# de P erna. Tot 23 september 2026 weigerde dat element 10 van de 347 documenten in
+# de meetlat, waaronder de MDR (2017/745, 294 keer) en de IVDR (2017/746).
+
+def _genummerd(nr: bytes, *inhoud: bytes) -> bytes:
+    return b"<GR.SEQ><NO.GR.SEQ>" + nr + b"</NO.GR.SEQ>" + b"".join(inhoud) + b"</GR.SEQ>"
+
+
+MDR_BIJLAGE_I = (
+    b"<GR.SEQ><TITLE><TI><P>HOOFDSTUK I</P></TI></TITLE>"
+    + _genummerd(b"1.", b"<P>De hulpmiddelen leveren de beoogde prestaties.</P>")
+    + _genummerd(b"2.", b"<P>De fabrikanten zetten een systeem op en dienen:</P>",
+                 b'<LIST TYPE="alpha"><ITEM><NP><NO.P>a)</NO.P><TXT>een plan vast te stellen;</TXT></NP></ITEM></LIST>')
+    + b"</GR.SEQ><GR.SEQ><TITLE><TI><P>HOOFDSTUK II</P></TI></TITLE>"
+    b"<GR.SEQ><TITLE><TI><NP><NO.P>10.</NO.P><TXT>Chemische eigenschappen</TXT></NP></TI></TITLE>"
+    + _genummerd(b"10.1.", b"<P>Hulpmiddelen worden zo ontworpen.</P>")
+    # Punt 6.4. van bijlage I bij de IPPC-richtlijn (2008/1): het nummer en meteen een opsomming.
+    + _genummerd(b"10.2.", b'<LIST TYPE="alpha"><ITEM><NP><NO.P>a)</NO.P><TXT>abattoirs;</TXT></NP></ITEM></LIST>')
+    + b"</GR.SEQ></GR.SEQ>"
+)
+
+
+def test_het_nummer_van_een_bijlageonderdeel_zonder_kop_staat_voor_zijn_tekst():
+    """Nummer plus drie harde spaties, zoals het nummer van een onderdeel met een kop (`10.` hieronder)."""
+    markdown, eenheden, _, _ = formex_xml.omzetten(_met_bijlagen(_bijlage(b"BIJLAGE I", MDR_BIJLAGE_I)))
+    regels = [r for r in markdown.splitlines() if r.strip()]
+
+    assert "1.   De hulpmiddelen leveren de beoogde prestaties." in regels
+    assert "2.   De fabrikanten zetten een systeem op en dienen:" in regels
+    assert "10.   Chemische eigenschappen" in regels
+    assert "10.1.   Hulpmiddelen worden zo ontworpen." in regels
+    # Begint het onderdeel meteen met een opsomming, dan staat het nummer op een eigen regel met
+    # de drie harde spaties, net als een lid dat alleen een lijst is (patronen.md).
+    assert "\n\n10.2.\u00a0\u00a0\u00a0\n\na) abattoirs;\n" in markdown
+    assert [e.anker for e in eenheden if e.soort == "bijlagedeel"] == [
+        "annex-1-i", "annex-1-i-1", "annex-1-i-2", "annex-1-ii", "annex-1-ii-10",
+        "annex-1-ii-10-10-1", "annex-1-ii-10-10-2"]
+    assert [e.anker for e in eenheden if e.soort == "onderdeel" and e.anker.startswith("annex")] == [
+        "annex-1-i-2-a", "annex-1-ii-10-10-2-a"]
+
+
+def test_een_genummerd_onderdeel_in_een_citaat_houdt_zijn_nummer_zonder_eenheden():
+    citaat = b'<P>Bijlage II wordt vervangen door:</P><QUOT.S LEVEL="1">' + _genummerd(
+        b"1.", b"<P>Geciteerd onderdeel.</P>") + b"</QUOT.S>"
+    markdown, eenheden, _, _ = formex_xml.omzetten(_met_bijlagen(_bijlage(b"BIJLAGE", citaat)))
+    assert "1.   Geciteerd onderdeel." in markdown
+    assert [e.soort for e in eenheden if e.anker.startswith("annex")] == ["bijlage"]
+
+
+@pytest.mark.parametrize("onderdeel, reden", [
+    # `(1)` leest in het profiel als overweging of noot; die vorm is niet gemeten.
+    (_genummerd(b"(1)", b"<P>Tekst.</P>"), "niet de gemeten vorm"),
+    (b"<GR.SEQ><TITLE><TI><P>Kop</P></TI></TITLE><NO.GR.SEQ>1.</NO.GR.SEQ><P>Tekst.</P></GR.SEQ>",
+     "niet de gemeten vorm"),
+    (_genummerd(b"1.", b'<TBL COLS="1"><CORPUS><ROW><CELL COL="1">Cel</CELL></ROW></CORPUS></TBL>'),
+     "staat vóór een TBL"),
+    (_genummerd(b"1.", b"<P><TBL COLS=\"1\"><CORPUS><ROW><CELL COL=\"1\">Cel</CELL></ROW></CORPUS></TBL>"
+                b"Tekst.</P>"), "niet vóór zijn tekst"),
+    (_genummerd(b"1."), "geen tekst"),
+])
+def test_een_onderdeelnummer_in_een_niet_gemeten_vorm_wordt_geweigerd(onderdeel, reden):
+    with pytest.raises(ConversionError, match=reden):
+        formex_xml.omzetten(_met_bijlagen(_bijlage(b"BIJLAGE I", onderdeel)))
+
+
 # ------------------------------------------------------------------ afbeeldingen (TIFF)
 
 def _met_afbeelding(act: bytes, *, bestand: bool = True, soort: bytes = b"TIFF") -> bytes:

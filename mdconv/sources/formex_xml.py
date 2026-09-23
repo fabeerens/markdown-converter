@@ -66,6 +66,9 @@ STRUCTUUR_ELEMENTEN = {
     "NOTE", "CONTENTS", "GR.SEQ", "TI", "STI", "TI.ART", "STI.ART", "PREFIX",
     "TERM", "DEFINITION", "PREAMBLE.INIT", "PREAMBLE.FINAL", "GR.CONSID.INIT",
     "VISA", "SIGNATORY", "SIGNATURE", "COM",
+    # Het nummer van een bijlageonderdeel zonder kop; alleen `bijlage_inhoud`
+    # schrijft het, overal elders blijft het een weigering.
+    "NO.GR.SEQ",
     # Een afbeelding (TIFF-inclusie) kan haar tekst meedragen: het formulier van
     # Brussel I bis staat als P's in IMG.CNT. Wat daarbinnen staat, moet zelf
     # bekend zijn; een FORMULA blijft dus een weigering.
@@ -124,6 +127,12 @@ AFBEELDINGSTYPE = "TIFF"
 ONDERDEELKOP = re.compile(
     r"[—–-]?\s*(?:(?:Afdeling|Deel|Onderdeel|Bepaling|Module|Titel|Hoofdstuk|Sectie|"
     r"Prioritair\s+gebied)\s+)?([A-Z]|[IVXLC]+|\d+(?:\.\d+)*)(?:\.|\b)", re.I)
+# Het nummer van een bijlageonderdeel zonder kop (`GR.SEQ/NO.GR.SEQ`), in de vormen
+# die de meetlat kent: 902 keer in 12 documenten (23 september 2026), `1.` (136),
+# `1.1.` (567), `1.1.1.` (180), `2)` (17, rijbewijsrichtlijn 2025/2205) en `d)` (2,
+# 32012L0027). Een andere vorm is niet gemeten: `(1)` zou in het profiel als
+# overweging of noot lezen.
+ONDERDEELNUMMER = re.compile(r"\d{1,3}(?:\.\d{1,3})*\.|\d{1,3}\)|[a-z]\)")
 
 
 def _xml_fout(boodschap: str, exc: Exception | None = None) -> ConversionError:
@@ -1869,19 +1878,50 @@ class FormexOmzetter:
             self.bijlage_inhoud(inhoud, anker)
         self.notenblok()
 
-    def bijlage_inhoud(self, el, anker: str, geciteerd: bool = False) -> None:
-        """`geciteerd`: een ingesloten bijlage van een andere handeling — geen eenheden."""
+    def bijlage_inhoud(self, el, anker: str, geciteerd: bool = False, nummer: str = "") -> None:
+        """`geciteerd`: een ingesloten bijlage van een andere handeling — geen eenheden.
+
+        `nummer`: het nummer van dit onderdeel (`NO.GR.SEQ`) met zijn scheiding; het
+        komt vóór de eerste tekst, zoals het nummer van een lid.
+        """
         teller = {"lijsten": 0}
+        voorvoegsel = [nummer]
         onderdelen = [k for k in el if k.tag == "GR.SEQ"]
         for kind in el:
+            if voorvoegsel[0] and kind.tag not in ("P", "LIST"):
+                # Gemeten volgt op NO.GR.SEQ 901 keer een P en één keer een LIST
+                # (punt 6.4. van bijlage I bij 32008L0001). Voor een tabel of een
+                # onderdeel is niet bewezen waar het nummer hoort.
+                raise _xml_fout(f"het nummer {nummer.strip()} van een bijlageonderdeel (NO.GR.SEQ) "
+                                f"staat vóór een {kind.tag}; alleen een alinea of opsomming is gemeten")
             if kind.tag == "GR.SEQ":
                 titel = kind.find("TITLE")
+                nr = kind.find("NO.GR.SEQ")
                 # De kop van een bijlageonderdeel staat als NP: het letterteken
                 # in NO.P, de tekst in TXT. Zonder de scheiding ertussen leest
                 # `A.“Algemeen”` niet als onderdeel (RE_ANNEX_PART in het profiel).
                 np = titel.find(".//NP") if titel is not None else None
                 onder_de_kop = []
-                if np is not None and np.find("NO.P") is not None:
+                if nr is not None:
+                    # Een onderdeel zonder kop draagt zijn nummer in NO.GR.SEQ, met
+                    # de tekst in de P erna: `1.1.` en `Stookinstallaties …` (bijlage
+                    # I bij de IPPC-richtlijn 2008/1), 294 keer in de MDR. Tot 23
+                    # september 2026 weigerden 12 van de 347 documenten (mede) daarop.
+                    # Het Publicatieblad drukt het als het nummer van een onderdeel
+                    # met een kop, en zo komt het in raw: nummer plus drie harde
+                    # spaties plus de tekst, zoals `10.` (kop) en `10.1.` (NO.GR.SEQ)
+                    # in bijlage I van de MDR. Met een gewone spatie is `2) …`
+                    # (2025/2205) een Markdown-lijst. Het nummer is ook het ankersegment,
+                    # zoals bij een onderdeel met een kop `3. Inhoud …`: in bijlage VI
+                    # van 2025/2205 zijn 1. en 2. NO.GR.SEQ en 3. en 4. een kop, en
+                    # samen één reeks.
+                    kop = ws(self.inline(nr))
+                    if titel is not None or kind[0] is not nr or not ONDERDEELNUMMER.fullmatch(kop):
+                        raise _xml_fout(
+                            f"een bijlageonderdeel met nummer {kop!r} (NO.GR.SEQ) heeft niet de gemeten "
+                            "vorm: het nummer vooraan, geen kop ernaast, en `1.`, `1.1.`, `2)` of `d)`")
+                    ti = ""
+                elif np is not None and np.find("NO.P") is not None:
                     letter = ws(self.inline(np.find("NO.P")))
                     rest = ws(self.inline(np.find("TXT"))) if np.find("TXT") is not None else ""
                     ti = f"{letter}{NBSP * 3}{rest}".strip()
@@ -1920,8 +1960,8 @@ class FormexOmzetter:
                 for aanwijzing in onder_de_kop:
                     self.inhoud(aanwijzing, basis="", teller={"lijsten": 0})
                 wrapper = ET.Element("x")
-                wrapper.extend([c for c in kind if c.tag != "TITLE"])
-                self.bijlage_inhoud(wrapper, sub, geciteerd)
+                wrapper.extend([c for c in kind if c.tag != "TITLE" and c is not nr])
+                self.bijlage_inhoud(wrapper, sub, geciteerd, f"{kop}{NBSP * 3}" if nr is not None else "")
             elif kind.tag == "QUOT.S":
                 # Een bijlage die (een deel van) een bijlage van een andere
                 # handeling vervangt, citeert die als blok: een tabel, een
@@ -1939,8 +1979,22 @@ class FormexOmzetter:
                 self.artikel(kind, ouder=anker)
             elif kind.tag in METADATA:
                 continue
+            elif voorvoegsel[0]:
+                begin = len(self.u.blokken)
+                self.inhoud(kind, basis=anker, teller=teller, prefix=voorvoegsel)
+                if voorvoegsel[0] or not self.u.blokken[begin:] or \
+                        not self.u.blokken[begin].startswith(nummer.rstrip()):
+                    # Een P die alleen een inclusie draagt, of een alinea die
+                    # met een tabel begint, schrijft het wachtende nummer niet
+                    # (of pas later); dan staat het niet vóór zijn tekst.
+                    raise _xml_fout(f"het nummer {nummer.strip()} van een bijlageonderdeel (NO.GR.SEQ) "
+                                    "staat in de Markdown niet vóór zijn tekst")
+                if anker and not geciteerd:
+                    self.u.eenheid(anker, "bijlagedeel", self.u.blokken[begin])
             else:
                 self.inhoud(kind, basis=anker, teller=teller)
+        if voorvoegsel[0]:
+            raise _xml_fout(f"een bijlageonderdeel heeft een nummer ({nummer.strip()}, NO.GR.SEQ) maar geen tekst")
 
 
 def _geen_opsomming(regel: str) -> str:
