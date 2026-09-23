@@ -236,6 +236,25 @@ def test_articles_inside_a_divisie_of_a_bijlage_get_headings_and_anchors():
     assert "annex-2-art-1-a" in ankers
 
 
+def test_html_fallback_labels_a_resolved_url_without_a_version_date(monkeypatch):
+    html = """<html><head><meta name="dcterms:title" content="Testwet"></head><body>
+<div id="regeling"><h1>Testwet</h1><div class="wetgeving"><p>""" + (
+        "Juridische tekst. " * 10
+    ) + "</p></div></div></body></html>"
+
+    def get(url, **kwargs):
+        if url.endswith("manifest.xml"):
+            return SimpleNamespace(status_code=404, content=b"", url=url)
+        return SimpleNamespace(status_code=200, text=html, url="https://wetten.overheid.nl/BWBR0000001")
+
+    monkeypatch.setattr(wetten.net, "documents", lambda: SimpleNamespace(get=get))
+    monkeypatch.setattr(wetten.net, "decoded_text", lambda r: r.text)
+
+    document = from_link("BWBR0000001")
+
+    assert "BWBR0000001" in document.source
+
+
 def test_unavailable_xml_falls_back_to_html_with_warning(monkeypatch):
     html = """<html><head><meta name="dcterms:title" content="Testwet"></head><body>
 <div id="regeling"><h1>Testwet</h1><div class="wetgeving"><p>""" + (

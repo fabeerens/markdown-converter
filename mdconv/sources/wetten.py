@@ -115,7 +115,7 @@ def _fetch_html(query: str) -> tuple[str, str, Herkomst]:
     # string gebouwd, en dan noemt de bronvermelding de versie niet.
     opgeloste_url = getattr(r, "url", "") or url
     versie = _versie_uit_url(opgeloste_url, bwb)
-    getoond_pad = f"{bwb}/{versie}" if versie else path
+    getoond_pad = f"{bwb}/{versie}" if versie else bwb
 
     original_container = soup.select_one("div.wetgeving") or soup.select_one("#regeling")
     if original_container is not None and anchor:
