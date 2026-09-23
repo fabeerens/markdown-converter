@@ -73,6 +73,8 @@ STRUCTUUR_ELEMENTEN = {
     # Een annotatie is een noot die geen voetnoot is: een NB, een opmerking,
     # een technische noot (`annotatie()`).
     "GR.ANNOTATION", "ANNOTATION",
+    # Een groep tabelrijen met haar titel (`tabel()`, `rijgroeptitel()`).
+    "BLK", "TI.BLK",
 }
 ANNOTATIES = ("GR.ANNOTATION", "ANNOTATION")
 # De letter van een CELEX-nummer volgens het soort handeling (`LEG.VAL`). Wat hier
@@ -323,6 +325,12 @@ def _bronwoorden(onderdelen: list[tuple[str, ET.Element]]) -> Counter:
                 raise _xml_fout("een tabelcel heeft een niet-numerieke span", exc)
             if herhalingen > 0:
                 teller.update(_woorden(_plat_bron(cel)) * herhalingen)
+        # De titel van een groep tabelrijen overspant COL.START tot en met
+        # COL.END, precies zoals een cel met COLSPAN (`rijgroeptitel`).
+        for kop in root.iter("TI.BLK"):
+            start, eind = kop.get("COL.START") or "", kop.get("COL.END") or ""
+            if start.isdigit() and eind.isdigit() and int(eind) > int(start):
+                teller.update(_woorden(_plat_bron(kop)) * (int(eind) - int(start)))
     return teller
 
 
@@ -1577,7 +1585,12 @@ class FormexOmzetter:
         gr = el.find("GR.NOTES")
         definities = list(gr.findall("NOTE")) if gr is not None else []
         rijen, koprijen = [], 0
-        for row in el.iter("ROW"):
+        for row in el.iter():
+            if row.tag == "TI.BLK":
+                rijen.append([self.rijgroeptitel(row)])
+                continue
+            if row.tag != "ROW":
+                continue
             cellen = []
             for cel in row.findall("CELL"):
                 kol = int(cel.get("COL")) - 1 if cel.get("COL") else None
@@ -1610,6 +1623,25 @@ class FormexOmzetter:
                 self.nootnummer += 1
                 nummer = self.nootlabels[sleutel] = self.nootnummer
             self.noten.append((nummer, ws(self.inline(noot))))
+
+    def rijgroeptitel(self, ti) -> dict:
+        """De titel van een groep tabelrijen (`BLK/TI.BLK`), als cel over zijn kolommen.
+
+        De PRODCOM-lijst (32010R0860) deelt haar tabel in 1.727 geneste groepen in
+        (`NACE 07.10: Winning van ijzererts`, daaronder `CPA 07.10.10: IJzererts`),
+        elk met een titel over `COL.START` tot en met `COL.END`. De HTML-route
+        maakt daar een rij met één cel en `colspan` van. Hier is het een rij met
+        één samengevoegde cel, die dus net als elke andere samengevoegde cel op
+        elke bezette plek staat en in de brontelling herhaald wordt. De rijen van
+        de groep volgen in documentvolgorde; een BLK zonder titel (32019R0089)
+        is alleen een groepering. Overspant de titel niet de hele breedte, dan
+        weigert het raster op ontbrekende cellen.
+        """
+        start, eind = ti.get("COL.START") or "", ti.get("COL.END") or ""
+        if not (start.isdigit() and eind.isdigit() and 0 < int(start) <= int(eind)):
+            raise _xml_fout("de titel van een groep tabelrijen (TI.BLK) noemt geen geldige kolommen")
+        return {"tekst": self.cel_tekst(ti), "kol": int(start) - 1,
+                "colspan": int(eind) - int(start) + 1, "rowspan": 1}
 
     # ------------------------------------------------------------ bijlagen
 

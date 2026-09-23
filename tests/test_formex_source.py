@@ -1241,6 +1241,42 @@ def test_an_asterisk_as_printed_marker_gets_a_hard_space_so_the_line_is_no_markd
     assert "\n* " not in markdown
 
 
+def _rijgroepen(start: bytes = b"1", eind: bytes = b"2") -> bytes:
+    """De vorm van de PRODCOM-lijst (32010R0860): geneste BLK's met een TI.BLK over alle kolommen."""
+    return (b'<TBL COLS="2"><CORPUS><ROW TYPE="HEADER"><CELL COL="1" TYPE="HEADER">PRODCOM</CELL>'
+            b'<CELL COL="2" TYPE="HEADER">Beschrijving</CELL></ROW><BLK><TI.BLK COL.START="' + start
+            + b'" COL.END="' + eind + b'"><HT TYPE="BOLD">NACE 07.10: Winning van ijzererts</HT></TI.BLK>'
+            b'<BLK><TI.BLK COL.START="1" COL.END="2"><NP><NO.P><HT TYPE="BOLD">CPA 07.10.10:</HT></NO.P><TXT>'
+            b'<HT TYPE="BOLD">IJzererts</HT></TXT></NP></TI.BLK><ROW><CELL COL="1">07.10.10.00</CELL>'
+            b'<CELL COL="2">IJzererts en concentraten</CELL></ROW></BLK></BLK><BLK><ROW><CELL COL="1">08.11</CELL>'
+            b'<CELL COL="2">Marmer</CELL></ROW></BLK></CORPUS></TBL>')
+
+
+def test_the_title_of_a_group_of_table_rows_is_a_row_with_one_spanning_cell():
+    """32010R0860: 1.727 rijgroepen met een titel (BLK/TI.BLK); dat weigerde als onbekend element.
+
+    De titel is een cel over COL.START tot en met COL.END, dus staat hij, zoals elke
+    samengevoegde cel, op elke bezette plek; de brontelling herhaalt hem even vaak.
+    Een BLK zonder titel (32019R0089) groepeert alleen.
+    """
+    markdown, _, _, extra = formex_xml.omzetten(_met_bijlagen(_bijlage(b"BIJLAGE", _rijgroepen())))
+    assert ("| PRODCOM | Beschrijving |\n"
+            "| **NACE 07.10: Winning van ijzererts** | **NACE 07.10: Winning van ijzererts** |\n"
+            "| **CPA 07.10.10:** **IJzererts** | **CPA 07.10.10:** **IJzererts** |\n"
+            "| 07.10.10.00 | IJzererts en concentraten |\n"
+            "| 08.11 | Marmer |\n") in markdown
+    assert extra["herhaalde_cellen"] == 2
+
+
+@pytest.mark.parametrize("start, eind, reden", [
+    (b"2", b"2", "ontbrekende cellen"),
+    (b"", b"2", "TI.BLK"),
+])
+def test_a_row_group_title_that_does_not_name_or_fill_its_columns_is_refused(start, eind, reden):
+    with pytest.raises(ConversionError, match=reden):
+        formex_xml.omzetten(_met_bijlagen(_bijlage(b"BIJLAGE", _rijgroepen(start, eind))))
+
+
 def test_an_annotation_at_the_start_of_a_paragraph_of_an_article_is_still_refused():
     """Niet gemeten: geen annotatie in de meetlat staat in een lid. Het lidnummer eraan vastplakken
     zou de noot tot lidtekst maken, en het nummer los laten staan is een vorm die niemand heeft gezien."""
