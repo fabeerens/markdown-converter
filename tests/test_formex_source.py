@@ -1191,6 +1191,39 @@ def test_the_text_an_image_carries_is_written_as_paragraphs():
     assert extra["metadata"]["afbeeldingen_weggelaten"][0]["tekst_overgenomen"] is True
 
 
+def _brief(slot: bytes) -> bytes:
+    """Een bijlage die een brief is, met een handtekening als TIFF, naar het model van 2023/1795."""
+    bijlage = (b'<ANNEX><BIB.INSTANCE><INCLUSIONS><INCL.ELEMENT FILEREF="L_test.beeld.tif" TYPE="TIFF"/>'
+               b'</INCLUSIONS></BIB.INSTANCE><TITLE><TI><P>BIJLAGE II</P></TI></TITLE><CONTENTS>'
+               b'<P>Wij kijken ernaar uit.</P>' + slot + b'</CONTENTS></ANNEX>')
+    doc = DOC.replace(b"</FMX>", b'<REF.PHYS TYPE="DOC.XML" FILE="bijlage.xml"/></FMX>')
+    return formex_zip(doc=doc, extra={"bijlage.xml": bijlage, "L_test.beeld.tif": b"II*\x00"})
+
+
+SLOTFORMULE = (b'<FINAL><SIGNATURE><SIGNATORY><P>Hoogachtend,</P>'
+               b'<P><INCL.ELEMENT CONTENT="SIGNATURE" FILEREF="L_test.beeld.tif" TYPE="TIFF"/></P>'
+               b'<P>Gina M. <HT TYPE="UC">Raimondo</HT></P></SIGNATORY></SIGNATURE></FINAL>')
+
+
+def test_de_slotformule_van_een_brief_in_een_bijlage_wordt_alineas_zonder_de_handtekening():
+    """Zes bijlagen van het Data Privacy Framework (2023/1795) sluiten af met een FINAL; dat weigerde."""
+    markdown, _, _, extra = formex_xml.omzetten(_brief(SLOTFORMULE))
+    assert "\n\nWij kijken ernaar uit.\n\nHoogachtend,\n\nGina M. RAIMONDO" in markdown
+    assert extra["metadata"]["afbeeldingen_weggelaten"] == [
+        {"fileref": "L_test.beeld.tif", "format": "TIFF", "tekst_overgenomen": False}]
+
+
+@pytest.mark.parametrize("oud, nieuw, context", [
+    # Plaats en datum onder de ondertekening staan alleen in de FINAL van de handeling.
+    (b"<SIGNATORY>", b'<PL.DATE><P>Brussel, <DATE ISO="20230710">10 juli 2023</DATE></P></PL.DATE><SIGNATORY>',
+     "inhoud:PL.DATE"),
+    (b"<FINAL>", b"<FINAL>Losse tekst", "inhoud:FINAL"),
+])
+def test_een_slotformule_in_een_bijlage_die_niet_gemeten_is_weigert(oud, nieuw, context):
+    with pytest.raises(ConversionError, match=context):
+        formex_xml.omzetten(_brief(SLOTFORMULE.replace(oud, nieuw, 1)))
+
+
 @pytest.mark.parametrize("bestand, soort, reden", [
     (False, b"TIFF", "ontbrekende afbeeldingen"),
     (True, b"EPS", "onbekende type 'EPS'"),

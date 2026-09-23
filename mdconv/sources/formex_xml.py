@@ -1331,6 +1331,17 @@ class FormexOmzetter:
                 self.u.markeer_onbekend("inhoud:ADDR.S")
             for kind in el:
                 self.inhoud(kind, basis, teller, prefix, lid_anker, geankerd)
+        elif tag in ("FINAL", "SIGNATURE", "SIGNATORY"):
+            # De slotformule van een brief in een bijlage: `Hoogachtend,`, de
+            # handtekening (een TIFF, die `afbeelding()` weglaat en vastlegt) en
+            # de naam, elk een eigen alinea. Zes bijlagen van het Data Privacy
+            # Framework (2023/1795) zijn brieven; het is het enige document in de
+            # meetlat met een FINAL in een bijlage. De FINAL van de handeling
+            # zelf loopt via `handeling()`, met het notenblok erna.
+            if ws(el.text or "") or any(ws(kind.tail or "") for kind in el):
+                self.u.markeer_onbekend(f"inhoud:{tag}")
+            for kind in el:
+                self.inhoud(kind, basis, teller)
         elif tag == "INCL.ELEMENT":
             # Leeg, dus `onbekend()` zou hem stil laten vallen.
             if not self.afbeelding(el, blok=True):
