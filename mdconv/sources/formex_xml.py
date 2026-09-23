@@ -402,6 +402,7 @@ class FormexOmzetter:
         self.gebruikte_inclusies: set[str] = set()
         self.afbeeldingen: set[str] = set()         # gedeclareerde TIFF-inclusies
         self.afbeeldingen_weggelaten: list[dict] = []
+        self.citaatdiepte = 0                       # >0 binnen een QUOT.S die inline loopt
 
     def onbekend(self, context: str, el) -> None:
         """Weiger onbekende inhoud; een leeg technisch element mag verdwijnen."""
@@ -502,6 +503,34 @@ class FormexOmzetter:
             # handeling. De eigen planner mag daar geen onderdelen van maken,
             # maar de woorden moeten wel in documentvolgorde blijven staan.
             return " " + self.inline(el) + " "
+        if tag == "QUOT.S":
+            self.citaatdiepte += 1
+            try:
+                return self.inline(el)
+            finally:
+                self.citaatdiepte -= 1
+        if self.citaatdiepte and tag in ("DIVISION", "GR.SEQ", "DLIST"):
+            # Een wijzigingshandeling citeert ook een hele afdeling met haar
+            # artikelen (eIDAS 2, 32024R1183: zes keer, van AFDELING 1 met de
+            # artikelen 5 bis tot en met 5 septies tot HOOFDSTUK IV BIS), een
+            # definitielijst (de interoperabiliteitsverordening 32019R0817: zes
+            # keer) of een bijlageonderdeel (32023L2673, 32025R0038). Net als een
+            # geciteerd artikel (32026R1744) loopt dat inline door: een `##`-kop
+            # of een eigen alinea per punt las de kennisbank als structuur van
+            # déze handeling. Buiten een citaat blijft het een weigering, want
+            # daar zou een eenheid van de handeling zelf stil in een alinea opgaan.
+            return " " + self.inline(el) + " "
+        if self.citaatdiepte and tag == "TITLE":
+            # De kop van zo'n geciteerde afdeling. Opmaak in een kop is
+            # typografie (zie `kop_tekst`); in CRD VI (32024L1619) stond anders
+            # `*AFDELING I* ***Algemene bepalingen***` midden in de alinea.
+            return " " + self.kop_tekst(el) + " "
+        if self.citaatdiepte and tag == "DLIST.ITEM":
+            # PREFIX, TERM en DEFINITION staan in de bron zonder witruimte tegen
+            # elkaar (`j)„levende verzwakte vaccins”vaccins die …`, 32012L0005);
+            # `definitiepunt()` zet er buiten een citaat ook een spatie tussen.
+            delen = [el.text or ""] + [self.inline_el(kind) + (kind.tail or "") for kind in el]
+            return " " + " ".join(ws(deel) for deel in delen if ws(deel)) + " "
         if tag in INLINE_TEKST or tag in INLINE_TRANSPARANT:
             return self.inline(el)
         if tag == "INCL.ELEMENT" and self.afbeelding(el):

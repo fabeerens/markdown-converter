@@ -578,6 +578,57 @@ def test_articles_quoted_inside_an_amendment_run_inline_and_do_not_count_as_own_
     assert not [e for e in eenheden if e.soort == "lid"]
 
 
+def test_een_geciteerde_afdeling_met_artikelen_loopt_inline_zonder_kop_of_eenheden():
+    """eIDAS 2 (32024R1183) voegt zes hele afdelingen in, van AFDELING 1 (artikel 5 bis tot en
+    met 5 septies) tot HOOFDSTUK IV BIS; dat weigerde als `inline:DIVISION`. Een `##`-kop of een
+    eigen alinea per lid zou de kennisbank lezen als structuur van déze handeling."""
+    citaat = (b'<P><QUOT.S LEVEL="1"><DIVISION><TITLE><TI><P><HT TYPE="ITALIC">'
+              b'<QUOT.START CODE="201C" ID="Q1" REF.END="E1"/>AFDELING 1</HT></P></TI>'
+              b'<STI><P><HT TYPE="BOLD">EUROPESE PORTEMONNEE</HT></P></STI></TITLE>'
+              b'<ARTICLE IDENTIFIER="005A"><TI.ART>Artikel 5 bis</TI.ART><STI.ART><P>Portemonnees</P></STI.ART>'
+              b'<PARAG IDENTIFIER="005A.001"><NO.PARAG>1.</NO.PARAG><ALINEA>De lidstaten verstrekken er een.'
+              b'</ALINEA></PARAG><PARAG IDENTIFIER="005A.002"><NO.PARAG>2.</NO.PARAG><ALINEA>Zij doen dat gratis.'
+              b'<QUOT.END CODE="201D" ID="E1" REF.START="Q1"/></ALINEA></PARAG></ARTICLE></DIVISION></QUOT.S></P>')
+    data = formex_zip(act=_wijzigingshandeling(inclusies=b"", aanroep=citaat))
+
+    markdown, eenheden, onbekend, _ = formex_xml.omzetten(data)
+
+    assert onbekend == {}
+    assert ("\n“AFDELING 1 EUROPESE PORTEMONNEE Artikel 5 bis Portemonnees 1. De lidstaten "
+            "verstrekken er een. 2. Zij doen dat gratis.”\n") in markdown
+    assert not [regel for regel in markdown.splitlines() if regel.startswith("## ")]
+    assert sum(regel.startswith("### ") for regel in markdown.splitlines()) == 1
+    assert [e.anker for e in eenheden if e.soort in ("divisie", "artikel", "lid")] == ["art-1"]
+
+
+def test_een_geciteerde_definitielijst_loopt_inline_met_nummer_term_en_definitie_los():
+    """De interoperabiliteitsverordening (32019R0817) voegt zo drie definities aan artikel 4 van
+    een andere verordening toe; PREFIX, TERM en DEFINITION staan in de bron tegen elkaar aan."""
+    citaat = (b'<P><QUOT.S LEVEL="1"><DLIST SEPARATOR=":"><DLIST.ITEM><PREFIX>'
+              b'<QUOT.START CODE="201C" ID="Q1" REF.END="E1"/>12)</PREFIX><TERM>VIS-gegevens</TERM>'
+              b'<DEFINITION>alle gegevens in het VIS;</DEFINITION></DLIST.ITEM><DLIST.ITEM><PREFIX>13)</PREFIX>'
+              b'<TERM>identiteitsgegevens</TERM><DEFINITION>de gegevens van artikel 9.'
+              b'<QUOT.END CODE="201D" ID="E1" REF.START="Q1"/></DEFINITION></DLIST.ITEM></DLIST></QUOT.S></P>')
+    data = formex_zip(act=_wijzigingshandeling(inclusies=b"", aanroep=citaat))
+
+    markdown, eenheden, onbekend, _ = formex_xml.omzetten(data)
+
+    assert onbekend == {}
+    assert ("\n“12) VIS-gegevens alle gegevens in het VIS; 13) identiteitsgegevens "
+            "de gegevens van artikel 9.”\n") in markdown
+    assert not [e for e in eenheden if e.soort == "onderdeel" and e.anker.endswith(("-12", "-13"))]
+
+
+def test_een_afdeling_inline_buiten_een_citaat_blijft_een_weigering():
+    """Buiten een citaat is een DIVISION een eenheid van de handeling zelf; die mag niet stil
+    in een alinea opgaan."""
+    act = ACT.replace(b"<P>Deze verordening stelt regels vast.</P>",
+                      b"<P>Deze verordening stelt regels vast. <DIVISION><TITLE><TI>HOOFDSTUK II</TI>"
+                      b"</TITLE></DIVISION></P>")
+    with pytest.raises(ConversionError, match=r"inline:DIVISION"):
+        formex_xml.omzetten(formex_zip(act=act))
+
+
 def test_unknown_text_element_is_refused_instead_of_counted():
     act = ACT.replace(b"</FINAL>", b"<MYSTERY>onbehandelde tekst</MYSTERY></FINAL>")
     with pytest.raises(ConversionError, match="MYSTERY"):
