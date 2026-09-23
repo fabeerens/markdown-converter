@@ -925,6 +925,20 @@ def test_a_general_document_on_its_own_carries_the_citation_and_its_notes():
     assert onbekend == {}
 
 
+def test_a_paragraph_that_starts_with_a_list_writes_its_number_once_with_hard_spaces():
+    """Artikel 6, lid 3 van Rome II (32007R0864): een lid dat meteen met a) begint werd `3.   3.`.
+
+    Het nummer staat op een eigen regel met de drie harde spaties waaraan het profiel een
+    kaal lidnummer herkent; het lidanker hoort bij die regel, de onderdelen eronder."""
+    act = ACT.replace(b"<ALINEA><P>Deze verordening stelt regels vast.</P>", b"<ALINEA>", 1)
+    markdown, eenheden, onbekend, _ = formex_xml.omzetten(formex_zip(act=act))
+    assert "\n\n1.\u00a0\u00a0\u00a0\n\na) eerste onderdeel;\n\nb) tweede onderdeel.\n\n" in markdown
+    assert "1.\u00a0\u00a0\u00a01." not in markdown
+    assert [(e.anker, e.tekst) for e in eenheden if e.anker.startswith("art-1-1")] == [
+        ("art-1-1", "1."), ("art-1-1-a", "a) eerste onderdeel;"), ("art-1-1-b", "b) tweede onderdeel.")]
+    assert onbekend == {}
+
+
 def test_a_general_document_with_an_unmeasured_part_is_refused():
     onbekend_deel = VERKLARING.replace(b"</CONTENTS>", b"</CONTENTS><FINAL><P>Gedaan te Brussel.</P></FINAL>")
     with pytest.raises(ConversionError, match="algemeen:FINAL"):

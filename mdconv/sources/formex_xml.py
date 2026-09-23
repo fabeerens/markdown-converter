@@ -1320,8 +1320,19 @@ class FormexOmzetter:
             extra = f"al{teller['lijsten']}-" if genummerd and teller["lijsten"] > 1 else ""
             if isinstance(prefix, list) and prefix[0]:
                 # Een lid dat meteen met een opsomming begint: het nummer krijgt
-                # een eigen regel, zoals het Publicatieblad het zet.
-                schrijf(prefix[0].rstrip())
+                # een eigen regel, zoals het Publicatieblad het zet, mét de drie
+                # harde spaties: alleen daaraan herkent het profiel een kaal
+                # lidnummer (patronen.md, "Een lid dat alleen een lijst is").
+                # Hier stond `schrijf(prefix[0].rstrip())`, en `schrijf()` zet het
+                # voorvoegsel er zelf nog eens voor: artikel 6, lid 3 van Rome II
+                # (32007R0864, het enige geval in de meetlat) werd `3.   3.`. Het
+                # blok gaat buiten `blok()` om, want dat haalt witruimte achteraan
+                # weg, harde spaties inbegrepen.
+                kaal, prefix[0] = prefix[0], ""
+                self.u.blokken.append(kaal)
+                if lid_anker and geankerd is not None and not geankerd[0]:
+                    self.u.eenheid(lid_anker, "lid", kaal)
+                    geankerd[0] = True
             self.lijst(el, basis if genummerd else "", extra)
         elif tag == "TBL":
             self.tabel(el)
