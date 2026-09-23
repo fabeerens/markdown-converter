@@ -370,6 +370,12 @@ accountregistratie namens de gebruiker):
   en `meld_aaneen()` zetten elk zo'n woord (`'2016betreffende'`) als waarschuwing in de herkomst,
   zoals bij de dubbele `d)` in de AVG. Staat er in de bron wél een spatie, dan staat die in
   `.tail` en telt ze gewoon mee.
+  **Een nootverwijzing die de tekst van haar noot herhaalt** (`NOTE NOTE.REF=…` mét inhoud: MiFIR
+  600/2014 artikel 53, punt 3, de geconsolideerde MiFIR, 2011/83) krijgt geen tweede definitie: de
+  druk zet de noot één keer, met twee verwijzingen, en zo doet de omzetter het al. Op besluit van
+  de gebruiker (23 september 2026) telt `_plat_bron` die herhaling niet mee, en `noot()` weigert
+  als ze woord voor woord afwijkt van de noot waarnaar ze verwijst, of als die noot op dat punt nog
+  niet bekend is (`nootinhoud`).
   De portal-HTML (`/legal-content/…/HTML/`) blokkeert bots (HTTP 202, lege body;
   inmiddels een AWS WAF-JS-challenge, dus ook met retries permanent 202 — de portal is in de praktijk
   dood voor een simpele `requests`-scraper). Gebruik het **Cellar-archief** via content negotiation,
@@ -1140,7 +1146,7 @@ regel), inclusief de vloeiende tabbalk-indicator.
   weggeschreven bestand nooit als geldige staat gelezen kan worden.
 
 ## Tests
-`.venv/bin/python -m pytest tests/ -q` — 500 karakteriseringstests die het gedrag
+`.venv/bin/python -m pytest tests/ -q` — 502 karakteriseringstests die het gedrag
 vastleggen in plaats van het te beschrijven: `detect_source`-precedentie, ELI→CELEX,
 de CLG-markupnormalisatie (lidnummers, lettermarkers, voetnootankers), de
 voetnootdefinities die met de preambule meereizen, de notitievorm die een intakepoort

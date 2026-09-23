@@ -1,5 +1,5 @@
 {
- "commit": "5b191e7+wijzigingen",
+ "commit": "f053d7e+wijzigingen",
  "documenten": {
   "02002L0058-20091219": {
    "melding": null,
@@ -62,14 +62,18 @@
    "waarschuwingen": []
   },
   "02014R0600-20251123": {
-   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['verordening', 'verordening', 'eu', 'eu', 'nr', 'nr', '600', '2014', '2014', '2014', 'van', 'van'], extra=niets).",
-   "oorzaak": "woordcontrole: tekst valt weg",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "geconsolideerd",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
-   "waarschuwingen": []
+   "sha256": "04ada8b33885c6166af2fafcaaf2a92bc3902fcbbd6b2af4b18a441b75d218ae",
+   "status": "ok",
+   "tekens": 419498,
+   "waarschuwingen": [
+    "Overwegingen en aanhef zijn overgenomen uit de oorspronkelijke handeling (CELEX:32014R0600); de geconsolideerde tekst op EUR-Lex bevat deze niet.",
+    "Geen CLG.MDFO in de tekst noemt 32021R0023, 32025R1156; van deze wijzigende handeling(en) is `shown` niet vastgesteld.",
+    "CLG.MDFO in de tekst noemt 32014R0600R(03), 32019R2033R(02), 32019R2175R(01), 32019R2175R(03), dat niet als wijziging in GR.MOD.ACT staat; amendments kan onvolledig zijn."
+   ]
   },
   "02014R0910-20241018": {
    "melding": null,
@@ -931,13 +935,13 @@
    "waarschuwingen": []
   },
   "32011L0083": {
-   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['van', 'van', 'van', 'van', 'van', 'van', 'niet', 'niet', 'niet', 'niet', 'niet', 'niet'], extra=niets).",
-   "oorzaak": "woordcontrole: tekst valt weg",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "belangrijk",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "f495cd0b2fd76b44aa1a2ddead1adae8e7664fe2cf8bb6e121d38e92ef250abd",
+   "status": "ok",
+   "tekens": 116020,
    "waarschuwingen": []
   },
   "32011L0099": {
@@ -1227,13 +1231,13 @@
    "waarschuwingen": []
   },
   "32014R0600": {
-   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['verordening', 'verordening', 'eu', 'eu', 'nr', 'nr', '600', '2014', '2014', '2014', 'van', 'van'], extra=niets).",
-   "oorzaak": "woordcontrole: tekst valt weg",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "belangrijk",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "f833598de8c7eb80d5e1f35f6d04fd2f64651b49f71c502f3a1faea058efe010",
+   "status": "ok",
+   "tekens": 274644,
    "waarschuwingen": []
   },
   "32014R0910": {
@@ -3667,6 +3671,6 @@
    ]
   }
  },
- "gemeten": "2026-09-23 16:16",
+ "gemeten": "2026-09-23 16:17",
  "taal": "NL"
 }

@@ -2000,3 +2000,27 @@ def test_a_number_the_source_writes_against_a_word_in_a_table_cell_is_reported_t
     markdown, _, _, extra = formex_xml.omzetten(formex_zip(act=act))
     assert "| Som van MA4 + 8,9Z-MA4 |" in markdown
     assert any("('9Z')" in w for w in extra["metadata"]["waarschuwingen"])
+
+
+_NOOT = (b'<NOTE NOTE.ID="E0032" NUMBERING="STAR" TYPE="FOOTNOTE"><P>Verordening (EU) nr. 600/2014 van '
+         b'<DATE ISO="20140515">15 mei 2014</DATE> betreffende markten.</P></NOTE>')
+
+
+def _met_nootverwijzing(herhaling: bytes) -> bytes:
+    act = ACT.replace(b"eerste onderdeel;", b"eerste onderdeel" + _NOOT + b";").replace(
+        b"tweede onderdeel.", b'tweede onderdeel<NOTE NOTE.REF="E0032" NUMBERING="STAR" TYPE="FOOTNOTE">'
+        + herhaling + b"</NOTE>.")
+    return formex_zip(act=act)
+
+
+def test_a_note_reference_that_repeats_its_note_gets_no_second_definition():
+    """MiFIR artikel 53, punt 3: NOTE.REF herhaalt de noottekst; de PDF drukt de noot één keer, met twee (*)."""
+    herhaling = _NOOT.split(b">", 1)[1].rsplit(b"</NOTE>", 1)[0]
+    markdown, _, _, _ = formex_xml.omzetten(_met_nootverwijzing(herhaling))
+    assert "a) eerste onderdeel (1);" in markdown and "b) tweede onderdeel (1)." in markdown
+    assert markdown.count("Verordening (EU) nr. 600/2014 van 15 mei 2014 betreffende markten.") == 1
+
+
+def test_a_note_reference_that_carries_other_text_is_refused():
+    with pytest.raises(ConversionError, match="niet gelijk is aan de noot waarnaar ze verwijst"):
+        formex_xml.omzetten(_met_nootverwijzing(b"<P>Een andere tekst.</P>"))

@@ -322,6 +322,13 @@ def _plat_bron(el) -> str:
         return ""
     uit = el.text or ""
     for kind in el:
+        if kind.tag == "NOTE" and kind.get("NOTE.REF") is not None:
+            # Een verwijzing naar een eerdere noot draagt in de bron soms die
+            # noottekst nog eens (MiFIR 600/2014, artikel 53, punt 3), maar de
+            # druk zet de noot één keer, met twee verwijzingen, en zo doet de
+            # omzetter het ook. `noot()` weigert als de herhaling afwijkt.
+            uit += " " + (kind.tail or "")
+            continue
         if kind.tag == "QUOT.START":
             stuk = "“"
         elif kind.tag == "QUOT.END":
@@ -467,6 +474,7 @@ class FormexOmzetter:
         self.noten: list[tuple[int, str]] = []      # wachtende definities van de huidige reeks
         self.nootnummer = 0
         self.nootlabels: dict[str, int] = {}
+        self.nootinhoud: dict[str, list[str]] = {}  # nootsleutel -> woorden van de definitie
         self.aaneen: dict[int, str] = {}            # id(element) -> aaneengeschreven woord
         self.herhaalde_cellen = 0
         self.bijlagen = 0
@@ -676,6 +684,17 @@ class FormexOmzetter:
                 self.nootlabels[sleutel] = nummer
         if el.get("NOTE.REF") is None and len(el):
             self.noten.append((nummer, ws(self.inline(el))))
+            if sleutel:
+                self.nootinhoud[sleutel] = _woorden(_plat_bron(el))
+        elif el.get("NOTE.REF") is not None and ws(" ".join(el.itertext())):
+            # Een verwijzing die de tekst van haar noot herhaalt (zie `_plat_bron`):
+            # geen tweede definitie, maar alleen als de herhaling woord voor woord
+            # de noot is waarnaar ze verwijst. Een andere tekst, of een noot die
+            # hier nog niet bekend is, is niet te bewijzen en weigert.
+            if self.nootinhoud.get(sleutel) != _woorden(_plat_bron(el)):
+                raise _xml_fout(
+                    f"een nootverwijzing (NOTE.REF {el.get('NOTE.REF')}) draagt tekst die niet gelijk "
+                    "is aan de noot waarnaar ze verwijst")
         return f"{NBSP}({nummer})"
 
     def notenblok(self) -> None:
