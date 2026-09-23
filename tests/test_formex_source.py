@@ -1304,6 +1304,49 @@ def test_een_onderdeelnummer_in_een_niet_gemeten_vorm_wordt_geweigerd(onderdeel,
         formex_xml.omzetten(_met_bijlagen(_bijlage(b"BIJLAGE I", onderdeel)))
 
 
+def _kopdeel(nr: bytes, kop: bytes, *inhoud: bytes) -> bytes:
+    return (b"<GR.SEQ><TITLE><TI><NP><NO.P>" + nr + b"</NO.P><TXT>" + kop + b"</TXT></NP></TI></TITLE>"
+            + b"".join(inhoud) + b"</GR.SEQ>")
+
+
+def test_onderdelen_die_na_onderdelen_opnieuw_bij_1_beginnen_zijn_een_tweede_reeks():
+    """Bijlage I bij 2008/1: twee inleidende punten 1. en 2. (NO.GR.SEQ), dan de categorieën 1. en 2."""
+    inhoud = (_genummerd(b"1.", b"<P>Geen onderzoeksinstallaties.</P>")
+              + _genummerd(b"2.", b"<P>Drempelwaarden gelden per installatie.</P>")
+              + _kopdeel(b"1.", b"Energie-industrie", _genummerd(b"1.1.", b"<P>Stookinstallaties.</P>"))
+              + _kopdeel(b"2.", b"Productie van metalen", _genummerd(b"2.1.", b"<P>Roostinstallaties.</P>")))
+    assert _ankers(_met_bijlagen(_bijlage(b"BIJLAGE I", inhoud)), "bijlagedeel") == [
+        "annex-1-1", "annex-1-2", "annex-1-al2-1", "annex-1-al2-1-1-1", "annex-1-al2-2", "annex-1-al2-2-2-1"]
+
+
+def test_onderdelen_die_na_losse_punten_opnieuw_bij_1_beginnen_zijn_een_tweede_reeks():
+    """Bijlage III bij 2023/1230: losse punten 1. en 2. (NP), dan de delen 1. en 2."""
+    inhoud = (b"<NP><NO.P>1.</NO.P><TXT>De fabrikant beoordeelt de risico's.</TXT></NP>"
+              b"<NP><NO.P>2.</NO.P><TXT>De verplichtingen gelden alleen bij gevaar.</TXT></NP>"
+              + _kopdeel(b"1.", b"ESSENTI\xc3\x8bLE EISEN") + _kopdeel(b"2.", b"AANVULLENDE EISEN"))
+    data = _met_bijlagen(_bijlage(b"BIJLAGE III", inhoud))
+    assert _ankers(data, "punt") == ["annex-3-1", "annex-3-2"]
+    assert _ankers(data, "bijlagedeel") == ["annex-3-al2-1", "annex-3-al2-2"]
+
+
+def test_letteronderdelen_na_een_letteropsomming_zijn_een_tweede_reeks():
+    """Bijlage V bij 2025/2205: de opsomming a) en b), dan `Titel A` en `Titel B`."""
+    inhoud = (b'<P>De lidstaten nemen maatregelen met het oog op:</P><LIST TYPE="alpha">'
+              b"<ITEM><NP><NO.P>a)</NO.P><TXT>het toezicht op de opleiding;</TXT></NP></ITEM>"
+              b"<ITEM><NP><NO.P>b)</NO.P><TXT>de organisatie van examens.</TXT></NP></ITEM></LIST>"
+              + _deel(b"Titel A", b"1.") + _deel(b"Titel B", b"1."))
+    data = _met_bijlagen(_bijlage(b"BIJLAGE V", inhoud))
+    assert _ankers(data, "onderdeel") == ["art-1-1-a", "art-1-1-b", "annex-5-a", "annex-5-b"]
+    assert _ankers(data, "bijlagedeel") == ["annex-5-al2-a", "annex-5-al2-b"]
+
+
+def test_een_dubbel_onderdeelnummer_midden_in_een_reeks_blijft_een_weigering():
+    """Alleen een reeks die opnieuw begint (1, a, i) is een tweede reeks; `2.` na `2.` is een bronfout."""
+    inhoud = _kopdeel(b"1.", b"Een") + _kopdeel(b"2.", b"Twee") + _kopdeel(b"2.", b"Nog eens twee")
+    with pytest.raises(ConversionError, match="dubbele structurele ankers: annex-1-2"):
+        formex_xml.omzetten(_met_bijlagen(_bijlage(b"BIJLAGE I", inhoud)))
+
+
 # ------------------------------------------------------------------ afbeeldingen (TIFF)
 
 def _met_afbeelding(act: bytes, *, bestand: bool = True, soort: bytes = b"TIFF") -> bytes:

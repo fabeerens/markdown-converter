@@ -1886,6 +1886,7 @@ class FormexOmzetter:
         """
         teller = {"lijsten": 0}
         voorvoegsel = [nummer]
+        eerste_eenheid = len(self.u.eenheden)
         onderdelen = [k for k in el if k.tag == "GR.SEQ"]
         for kind in el:
             if voorvoegsel[0] and kind.tag not in ("P", "LIST"):
@@ -1952,7 +1953,27 @@ class FormexOmzetter:
                 if geciteerd:
                     sub = anker
                 elif m:
-                    sub = f"{anker}-{nummer_anker(m.group(1))}"
+                    segment = nummer_anker(m.group(1))
+                    sub = f"{anker}-{segment}"
+                    # Een tweede reeks in hetzelfde blok draagt `al<k>`, dezelfde
+                    # afspraak en dezelfde teller als bij losse punten (NP-tak van
+                    # `inhoud`): punten, onderdelen en de opsomming ertussen zijn één
+                    # nummering. Bijlage I bij 2008/1 telt eerst twee inleidende
+                    # punten 1. en 2. en dan de categorieën 1. tot en met 6.; bijlage
+                    # III bij 2023/1230 de punten 1. tot en met 5. en dan de delen 1.
+                    # en 2.; bijlage V bij 2025/2205 de opsomming a) en b) en dan
+                    # `Titel A` en `Titel B`. Zonder onderscheid weigerde de
+                    # zelfcontrole op dubbele ankers. Alleen een reeks die opnieuw
+                    # begint (1, a, i) is een tweede reeks; een dubbel nummer midden in
+                    # een reeks is een bronfout en blijft een weigering.
+                    reeks = teller.get("reeks", 1)
+                    huidig = f"{anker}-al{reeks}-{segment}" if reeks > 1 else sub
+                    if segment in ("1", "a", "i") and huidig in {e.anker for e in self.u.eenheden[eerste_eenheid:]}:
+                        reeks = teller["reeks"] = reeks + 1
+                        teller.setdefault("punten", set()).clear()
+                    teller.setdefault("punten", set()).add(sub)
+                    if reeks > 1:
+                        sub = f"{anker}-al{reeks}-{segment}"
                 elif len(onderdelen) > 1:
                     # Een ongenummerd onderdeel naast andere onderdelen krijgt zijn
                     # plaats als anker. Liep het transparant door, dan kregen de
