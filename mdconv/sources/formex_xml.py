@@ -79,6 +79,10 @@ STRUCTUUR_ELEMENTEN = {
     # niveaus diep in het adequaatheidsbesluit voor het VK (2021/1772). Alleen
     # `overwegingengroep()` behandelt haar; elders blijft ze een weigering.
     "DIV.CONSID",
+    # Een adresblok: P's, één per regel van het adres. Als blok (de brieven in de
+    # bijlagen van 2023/1795) en in een tabelcel (de scheepsrecyclinginrichtingen
+    # van 2020/1675); midden in een zin blijft het een weigering.
+    "ADDR.S",
 }
 ANNOTATIES = ("GR.ANNOTATION", "ANNOTATION")
 # De letter van een CELEX-nummer volgens het soort handeling (`LEG.VAL`). Wat hier
@@ -1317,6 +1321,16 @@ class FormexOmzetter:
                 # nummer eraan vastplakken zou de noot tot lidtekst maken.
                 raise _xml_fout("een annotatie aan het begin van een lid is niet gemeten")
             self.annotatie(el)
+        elif tag == "ADDR.S":
+            # Een adresblok is geen eenheid maar een reeks regels: elke P een eigen
+            # alinea, zoals het Publicatieblad hem onder elkaar zet. De bijlagen
+            # van het Data Privacy Framework (2023/1795) zijn brieven, en zes
+            # daarvan hebben zo'n blok onder de datum; dat weigerde het besluit.
+            # Tekst los tussen de P's is niet gemeten en zou hier wegvallen.
+            if ws(el.text or "") or any(ws(kind.tail or "") for kind in el):
+                self.u.markeer_onbekend("inhoud:ADDR.S")
+            for kind in el:
+                self.inhoud(kind, basis, teller, prefix, lid_anker, geankerd)
         elif tag == "INCL.ELEMENT":
             # Leeg, dus `onbekend()` zou hem stil laten vallen.
             if not self.afbeelding(el, blok=True):
@@ -1611,7 +1625,7 @@ class FormexOmzetter:
                 nr = ws(self.inline(kind.find("NO.P"))) if kind.find("NO.P") is not None else ""
                 txt = ws(self.inline(kind.find("TXT"))) if kind.find("TXT") is not None else ""
                 delen.append(f"{nr} {txt}".strip())
-            elif kind.tag in ("P", "ALINEA", "GR.SEQ", "TITLE", "TI") + ANNOTATIES:
+            elif kind.tag in ("P", "ALINEA", "ADDR.S", "GR.SEQ", "TITLE", "TI") + ANNOTATIES:
                 # Een cel met onderdelen: de lijst van goedgekeurde werkzame
                 # stoffen zet de specifieke bepalingen als `DEEL A` en `DEEL B`
                 # (GR.SEQ met TITLE/TI/P) in één cel (32011R0704, en geciteerd
@@ -1619,6 +1633,9 @@ class FormexOmzetter:
                 # net als een lijst in een cel wordt het tekst, kop voorop. Een
                 # annotatie in een cel (`Noot:` in 32026L0706, negen in
                 # 32013L0052) is een blok in die cel, net als een alinea.
+                # Een adresblok in een cel (44 keer in 2020/1675, de Europese lijst
+                # van scheepsrecyclinginrichtingen) is een blok als een P: zijn
+                # regels staan door een spatie gescheiden, niet aan elkaar.
                 sluit()
                 delen.append(self.cel_tekst(kind))
             else:

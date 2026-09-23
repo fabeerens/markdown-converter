@@ -849,6 +849,37 @@ def test_quotation_marks_and_emphasis_inside_a_table_cell_do_not_get_spaces():
     assert "“ smart" not in markdown
 
 
+def test_een_adresblok_in_een_bijlage_wordt_een_alinea_per_regel():
+    """De brieven in de bijlagen van het Data Privacy Framework (2023/1795): het adres onder de datum."""
+    brief = (b'<P><DATE ISO="20230706">6 juli 2023</DATE></P><ADDR.S><P>De heer Didier Reynders</P>'
+             b'<P>Wetstraat 200</P><P>1049 Brussel</P></ADDR.S><P>Geachte commissaris Reynders,</P>')
+    markdown, eenheden, _, _ = formex_xml.omzetten(_met_bijlagen(_bijlage(b"BIJLAGE II", brief)))
+    assert ("\n\n6 juli 2023\n\nDe heer Didier Reynders\n\nWetstraat 200\n\n1049 Brussel\n\n"
+            "Geachte commissaris Reynders,\n") in markdown
+    assert [e.soort for e in eenheden if e.anker.startswith("annex")] == ["bijlage"]
+
+
+def test_een_adresblok_in_een_tabelcel_staat_met_spaties_tussen_zijn_regels():
+    """De Europese lijst van scheepsrecyclinginrichtingen (2020/1675): 44 cellen met een ADDR.S."""
+    act = ACT.replace(
+        b"</ARTICLE>",
+        b'<ALINEA><TBL COLS="2"><CORPUS><ROW TYPE="HEADER"><CELL COL="1">Inrichting</CELL>'
+        b'<CELL COL="2">Methode</CELL></ROW><ROW><CELL COL="1"><P>NV Galloo Recycling Gent</P><ADDR.S>'
+        b'<P>Scheepzatestraat 9</P><P>9000 Gent</P></ADDR.S><P>Tel. +32 92512521</P></CELL>'
+        b'<CELL COL="2">Langszij</CELL></ROW></CORPUS></TBL></ALINEA></ARTICLE>', 1)
+    markdown = formex_xml.omzetten(formex_zip(act=act))[0]
+    assert "| NV Galloo Recycling Gent Scheepzatestraat 9 9000 Gent Tel. +32 92512521 | Langszij |" in markdown
+
+
+@pytest.mark.parametrize("adres, context", [
+    (b"<P>Het adres is <ADDR.S><P>Wetstraat 200</P></ADDR.S> te Brussel.</P>", "inline:ADDR.S"),
+    (b"<ADDR.S>Wetstraat 200<P>1049 Brussel</P></ADDR.S>", "inhoud:ADDR.S"),
+])
+def test_een_adresblok_midden_in_een_zin_of_met_losse_tekst_weigert(adres, context):
+    with pytest.raises(ConversionError, match=context):
+        formex_xml.omzetten(_met_bijlagen(_bijlage(b"BIJLAGE II", adres)))
+
+
 # De vorm van artikel 4 AVG en artikel 3 LED: een definitielijst waarvan een
 # deel van de punten zelf een opsomming draagt. Tot 22 september 2026 ging
 # DEFINITION altijd door inline(), zodat `16) “term” a) … b) …` één alinea werd.
