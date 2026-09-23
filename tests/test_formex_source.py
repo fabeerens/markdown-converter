@@ -1881,3 +1881,22 @@ def test_a_consolidated_text_declares_its_images_in_cons_doc():
         {"fileref": "L_test.beeld.tif", "format": "TIFF", "tekst_overgenomen": False}]
     with pytest.raises(ConversionError, match="noemt haar niet"):
         formex_xml.omzetten(formex_zip(act=zonder, extra=beeld))
+
+
+def test_wat_een_punt_in_een_tabelcel_na_zijn_tekst_draagt_blijft_in_de_cel():
+    """Bijlage I van de batterijverordening (32023R1542) zet `CAS-nr.` en `EG-nr.` als P's
+    onder `1. Kwik`, en de normentabel van 32021D1402 hangt een lijst i)–xxviii) onder punt a)
+    van een cel. Alleen NO.P en TXT lezen liet die tekst stil vallen; de woordcontrole
+    weigerde beide documenten ("tekst valt weg")."""
+    act = ACT.replace(
+        b"</ARTICLE>",
+        b'<ALINEA><TBL COLS="2" NO.SEQ="0001"><CORPUS><ROW TYPE="HEADER"><CELL COL="1">Stof</CELL>'
+        b'<CELL COL="2">Beperking</CELL></ROW><ROW><CELL COL="1"><NP><NO.P>1.</NO.P><TXT>Kwik</TXT>'
+        b'<P>CAS-nr. 7439-97-6</P><P>EG-nr. 231-106-7 en de verbindingen daarvan</P></NP></CELL>'
+        b'<CELL COL="2"><LIST TYPE="alpha"><ITEM><NP><NO.P>a)</NO.P><TXT>de volgende normen:</TXT>'
+        b'<P><LIST TYPE="roman"><ITEM><NP><NO.P>i)</NO.P><TXT>EN 55032:2015</TXT></NP></ITEM>'
+        b'<ITEM><NP><NO.P>ii)</NO.P><TXT>EN 60068-2-5:2018</TXT></NP></ITEM></LIST></P></NP></ITEM>'
+        b'</LIST></CELL></ROW></CORPUS></TBL></ALINEA></ARTICLE>', 1)
+    markdown = formex_xml.omzetten(formex_zip(act=act))[0]
+    assert ("| 1. Kwik CAS-nr. 7439-97-6 EG-nr. 231-106-7 en de verbindingen daarvan "
+            "| a) de volgende normen: i) EN 55032:2015 ii) EN 60068-2-5:2018 |") in markdown

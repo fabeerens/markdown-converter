@@ -1740,6 +1740,21 @@ class FormexOmzetter:
             if tekst:
                 delen.append(tekst)
 
+        def punt(np) -> str:
+            """Nummer, tekst en wat het punt daarna nog draagt, in bronvolgorde.
+
+            Een NP in een cel draagt na zijn TXT soms nog alinea's of een geneste
+            opsomming: bijlage I van de batterijverordening (32023R1542) zet
+            `CAS-nr. …` en `EG-nr. …` als P's onder `1. Kwik`, en de normentabel
+            van 32021D1402 hangt een lijst i)–xxviii) onder punt a). Alleen NO.P en
+            TXT lezen liet die tekst stil vallen (6 en 25 bladalinea's).
+            """
+            nr = ws(self.inline(np.find("NO.P"))) if np.find("NO.P") is not None else ""
+            txt = ws(self.inline(np.find("TXT"))) if np.find("TXT") is not None else ""
+            rest = ET.Element("x")
+            rest.extend(c for c in np if c.tag not in ("NO.P", "TXT"))
+            return ws(f"{nr} {txt} {self.cel_tekst(rest)}")
+
         for kind in cel:
             if kind.tag == "LIST":
                 sluit()
@@ -1747,16 +1762,12 @@ class FormexOmzetter:
                 for item in kind.findall("ITEM"):
                     np = item.find("NP")
                     if np is not None:
-                        nr = ws(self.inline(np.find("NO.P"))) if np.find("NO.P") is not None else ""
-                        txt = ws(self.inline(np.find("TXT"))) if np.find("TXT") is not None else ""
-                        delen.append(f"{nr} {txt}".strip())
+                        delen.append(punt(np))
                     else:
                         delen.append(("" if genummerd else "- ") + ws(self.inline(item)))
             elif kind.tag == "NP":
                 sluit()
-                nr = ws(self.inline(kind.find("NO.P"))) if kind.find("NO.P") is not None else ""
-                txt = ws(self.inline(kind.find("TXT"))) if kind.find("TXT") is not None else ""
-                delen.append(f"{nr} {txt}".strip())
+                delen.append(punt(kind))
             elif kind.tag in ("P", "ALINEA", "ADDR.S", "GR.SEQ", "TITLE", "TI") + ANNOTATIES:
                 # Een cel met onderdelen: de lijst van goedgekeurde werkzame
                 # stoffen zet de specifieke bepalingen als `DEEL A` en `DEEL B`
