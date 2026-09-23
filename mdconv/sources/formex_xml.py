@@ -229,7 +229,12 @@ def _onderdelen(data: bytes) -> tuple[ET.Element, list[tuple[str, ET.Element]], 
         inclusie_namen: list[str] = []
         afbeeldingen: set[str] = set()
         for _, root in uit:
-            for incl in root.iterfind("BIB.INSTANCE/INCLUSIONS/INCL.ELEMENT"):
+            # Een geconsolideerde tekst draagt haar BIB.INSTANCE een niveau dieper,
+            # in CONS.DOC: daar noemt 02012R1215-20150226 zijn zeven certificaten
+            # (TIFF), en 02013R0575-20270101 er 167. Wie alleen onder de wortel
+            # zocht, weigerde met "de handeling noemt haar niet", terwijl ze dat wel doet.
+            for incl in [*root.iterfind("BIB.INSTANCE/INCLUSIONS/INCL.ELEMENT"),
+                         *root.iterfind("CONS.DOC/BIB.INSTANCE/INCLUSIONS/INCL.ELEMENT")]:
                 soort = (incl.get("TYPE") or "").upper()
                 if soort not in ("FORMEX.DOC", AFBEELDINGSTYPE):
                     raise _xml_fout(f"een inclusie heeft het onbekende type {incl.get('TYPE')!r}")

@@ -1863,3 +1863,21 @@ def test_a_note_under_a_numbered_annex_heading_is_written_below_it():
     assert ("\nB.\u00a0\u00a0\u00a0Modelformulier voor herroeping\n\n(dit formulier alleen invullen als u wilt "
             "herroepen)\n\n1.\u00a0\u00a0\u00a0Aan de handelaar.\n") in markdown
     assert [e.anker for e in eenheden if e.anker.startswith("annex")] == ["annex-1", "annex-1-b", "annex-1-b-1"]
+
+
+def test_a_consolidated_text_declares_its_images_in_cons_doc():
+    """02012R1215-20150226: de geconsolideerde tekst noemt haar TIFF's in
+    CONS.DOC/BIB.INSTANCE/INCLUSIONS, een niveau dieper dan een handeling. Wie alleen onder
+    de wortel keek, weigerde met "de handeling noemt haar niet"."""
+    aanroep = b'<NO.P><INCL.ELEMENT FILEREF="L_test.beeld.tif" TYPE="TIFF"/></NO.P>'
+    zonder = _cons_act().replace(b"<NO.P>b)</NO.P>", aanroep)
+    met = zonder.replace(b"<LG.DOC>NL</LG.DOC></BIB.INSTANCE>", b'<LG.DOC>NL</LG.DOC><INCLUSIONS>'
+                         b'<INCL.ELEMENT FILEREF="L_test.beeld.tif" TYPE="TIFF"/></INCLUSIONS></BIB.INSTANCE>', 1)
+    beeld = {"L_test.beeld.tif": b"II*\x00"}
+
+    _, _, _, extra = formex_xml.omzetten(formex_zip(act=met, extra=beeld))
+
+    assert extra["metadata"]["afbeeldingen_weggelaten"] == [
+        {"fileref": "L_test.beeld.tif", "format": "TIFF", "tekst_overgenomen": False}]
+    with pytest.raises(ConversionError, match="noemt haar niet"):
+        formex_xml.omzetten(formex_zip(act=zonder, extra=beeld))
