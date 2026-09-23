@@ -609,12 +609,13 @@ def _geciteerde_bijlage(nummer: bytes, *inhoud: bytes) -> bytes:
             + nummer + b"</P></TI></TITLE><CONTENTS>" + b"".join(inhoud) + b"</CONTENTS></ANNEX>")
 
 
-def _vervangende_bijlage(citaat: bytes, **inclusies: bytes) -> bytes:
+def _vervangende_bijlage(citaat: bytes, *, in_quot: bool = True, **inclusies: bytes) -> bytes:
     """Een bijlage `BIJLAGE` die in een QUOT.S de inclusies aanroept; de sleutels zijn `i1`, `i2`, …"""
     declaratie = b"".join(_incl(f"{naam}.xml".encode()) for naam in inclusies)
+    if in_quot:
+        citaat = b'<QUOT.S LEVEL="1">' + citaat + b"</QUOT.S>"
     bijlage = (b"<ANNEX><BIB.INSTANCE><INCLUSIONS>" + declaratie + b"</INCLUSIONS></BIB.INSTANCE>"
-               b'<TITLE><TI><P>BIJLAGE</P></TI></TITLE><CONTENTS><QUOT.S LEVEL="1">' + citaat
-               + b"</QUOT.S></CONTENTS></ANNEX>")
+               b"<TITLE><TI><P>BIJLAGE</P></TI></TITLE><CONTENTS>" + citaat + b"</CONTENTS></ANNEX>")
     doc = DOC.replace(b"</FMX>", b'<REF.PHYS TYPE="DOC.XML" FILE="bijlage1.xml"/></FMX>')
     return formex_zip(doc=doc, extra={"bijlage1.xml": bijlage,
                                       **{f"{naam}.xml": xml for naam, xml in inclusies.items()}})
@@ -693,6 +694,26 @@ def test_the_notes_of_two_inclusions_with_the_same_note_id_stay_two_notes():
     assert "Lijst I (1)\n\nNogmaals (1)\n" in markdown
     assert "Lijst II (2)\n\nNogmaals (2)”" in markdown
     assert "\n(1)  Noot van I.\n\n(2)  Noot van II.\n" in markdown
+
+
+def test_an_inclusion_that_is_the_only_content_of_a_quote_in_an_annex_is_written_there():
+    """32013D0287: `Bijlage I bij … wordt vervangen door:` en dan `<QUOT.S><INCL.ELEMENT/></QUOT.S>`
+    als kind van CONTENTS; de tekens staan in de inclusie zelf. Dat weigerde als los blok."""
+    ingesloten = _geciteerde_bijlage(b"I", b"<P>" + _QS.replace(b"201E", b"201C") + b"Padie.</P>",
+                                     b"<P>Rijst." + _QE + b"</P>")
+    data = _vervangende_bijlage(_incl(b"i1.xml"), i1=ingesloten)
+
+    markdown, eenheden, _, _ = formex_xml.omzetten(data)
+
+    assert "## BIJLAGE\n\nBIJLAGE I\n\n“Padie.\n\nRijst.”\n" in markdown
+    assert [e.soort for e in eenheden if e.anker.startswith("annex")] == ["bijlage"]
+
+
+def test_an_inclusion_as_a_loose_block_outside_a_quote_is_still_refused():
+    data = _vervangende_bijlage(_incl(b"i1.xml"), in_quot=False,
+                                i1=_geciteerde_bijlage(b"I", b"<P>Tekst.</P>"))
+    with pytest.raises(ConversionError, match="los blok"):
+        formex_xml.omzetten(data)
 
 
 @pytest.mark.parametrize("citaat, reden", [

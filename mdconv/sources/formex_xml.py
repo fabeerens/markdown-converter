@@ -2111,6 +2111,13 @@ class FormexOmzetter:
             elif kind.tag == "TOC":
                 # `LIJST VAN BIJLAGEN` in 2005/66: de inhoudsopgave staat in CONTENTS.
                 self.inhoudsopgave(kind)
+            elif (kind.tag == "INCL.ELEMENT" and geciteerd
+                  and (kind.get("TYPE") or "").upper() == "FORMEX.DOC"):
+                # Een QUOT.S van een bijlage die alleen een inclusie draagt, zonder P
+                # en zonder aanhalingstekens: `<CONTENTS><QUOT.S><INCL.ELEMENT/>`
+                # (32013D0287, 32016R2390). Buiten een citaat blijft een losse
+                # inclusie een weigering in `inhoud()`.
+                self.geciteerde_inclusies([kind], None, None, "")
             elif kind.tag in METADATA:
                 continue
             elif voorvoegsel[0]:
