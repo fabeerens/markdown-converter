@@ -723,6 +723,15 @@ def _partijen(root: ET.Element) -> tuple[list[str], list[str]]:
     van:`) is geen partij maar een scheiding: alles wat erna komt zijn de overige
     partijen, de intervenienten. Dat is opmaak en volgorde in de bron en geen
     ontleding van proza; de tekst van de scheiding zelf wordt niet gelezen.
+
+    Een nieuwe `PLAINTIFS`-, `DEFENDANTS`- of `APPELANT`-groep begint weer bij de
+    hoofdpartijen: de scheiding geldt alleen binnen de eigen groep, en na
+    `INTERVENERS` volgen de overige partijen tot de volgende hoofdgroep. In een
+    hogere voorziening (C-413/23 P, ECLI:EU:C:2025:645) staat een interveniënt
+    tussen rekwirant en verweerder (`PLAINTIFS, INTERVENERS, AGAINST, DEFENDANTS,
+    INTERVENERS`); zonder de terugzet belandde de GAR, de verweerder, bij de
+    overige partijen. Op de 8 Formex-zips van 23 september 2026 verandert alleen
+    die uitspraak.
     """
     hoofd: list[str] = []
     overig: list[str] = []
@@ -733,6 +742,8 @@ def _partijen(root: ET.Element) -> tuple[list[str], list[str]]:
     for groep in partijen:
         if _kort(groep) not in ("PLAINTIFS", "DEFENDANTS", "INTERVENERS", "APPELANT"):
             continue
+        if _kort(groep) != "INTERVENERS":
+            doel = hoofd
         for p in groep.iter("P"):
             namen = [_norm("".join(ht.itertext())).rstrip(" ,;") for ht in p.iter("HT")
                      if (ht.get("TYPE") or "").upper() == "BOLD"]

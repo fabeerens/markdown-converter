@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import re
 import zipfile
 
 import pytest
@@ -137,6 +138,28 @@ def test_de_metadata_komt_uit_de_bron_zelf():
     assert meta["secties"] == ["Arrest", "Beantwoording van de vragen", "Kosten"]
     # Het paginakop gaat naar de herkomst en niet stil verloren.
     assert meta["paginakop"] == ["Arrest van 1. 1. 2026 – Zaak C-1/26", "Voorbeeld"]
+
+
+def test_partijrol_bij_meerdere_partijgroepen():
+    # De vorm van C-413/23 P (ECLI:EU:C:2025:645): in hogere voorziening staat een
+    # interveniënt tussen rekwirant en verweerder. De verweerder is een hoofdpartij;
+    # tot 23 september 2026 kwam hij bij de overige partijen terecht.
+    partijen = (
+        '<PARTIES><PLAINTIFS><P><HT TYPE="BOLD">Alfa</HT>, vertegenwoordigd door X,</P>'
+        "<PARTY.STATUS>rekwirant,</PARTY.STATUS></PLAINTIFS>"
+        '<INTERVENERS><P>ondersteund door:</P><P><HT TYPE="BOLD">Beta</HT>,</P>'
+        "<PARTY.STATUS>interveniënt in hogere voorziening,</PARTY.STATUS></INTERVENERS>"
+        "<AGAINST>andere partij in de procedure:</AGAINST>"
+        '<DEFENDANTS><P><HT TYPE="BOLD">Gamma</HT>,</P><P>in tegenwoordigheid van:</P>'
+        '<P><HT TYPE="BOLD">Delta</HT>,</P></DEFENDANTS>'
+        '<INTERVENERS><P>ondersteund door:</P><P><HT TYPE="BOLD">Epsilon</HT>,</P>'
+        "</INTERVENERS></PARTIES>"
+    )
+    xml = re.sub(r"<PARTIES>.*?</PARTIES>", partijen, ARREST, flags=re.S)
+    _, meta = formex_hof.omzetten(arrest_zip(xml))
+    assert meta["partijen"] == ["Alfa", "Gamma"]
+    # De scheiding binnen DEFENDANTS werkt nog zoals bij Schrems II: Delta is overig.
+    assert meta["overige_partijen"] == ["Beta", "Delta", "Epsilon"]
 
 
 @pytest.mark.parametrize("wijziging, verwachte_reden", [
