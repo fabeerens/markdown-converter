@@ -590,6 +590,104 @@ def test_an_inclusion_with_text_beside_it_is_still_refused():
         formex_xml.omzetten(data)
 
 
+# Een wijzigingsbesluit vervangt een bijlage van een andere handeling door een
+# inclusie, en zet de aanhalingstekens dan niet in de inclusie maar in de P die haar
+# aanroept (32018D0187, 32020D1402, 32022L1648, 32026D0816). Tot 23 september 2026
+# kende de omzetter alleen de kale vorm van 32026R1744 en weigerde hij deze als
+# "een inclusie staat midden in een zin".
+
+_QS = b'<QUOT.START CODE="201E" ID="QS0001" REF.END="QE0001"/>'
+_QE = b'<QUOT.END CODE="201D" ID="QE0001" REF.START="QS0001"/>'
+
+
+def _incl(naam: bytes) -> bytes:
+    return b'<INCL.ELEMENT TYPE="FORMEX.DOC" FILEREF="' + naam + b'"/>'
+
+
+def _geciteerde_bijlage(nummer: bytes, *inhoud: bytes) -> bytes:
+    return (b"<ANNEX><BIB.INSTANCE><NO.SEQ>0001.0001</NO.SEQ></BIB.INSTANCE><TITLE><TI><P>BIJLAGE "
+            + nummer + b"</P></TI></TITLE><CONTENTS>" + b"".join(inhoud) + b"</CONTENTS></ANNEX>")
+
+
+def _vervangende_bijlage(citaat: bytes, **inclusies: bytes) -> bytes:
+    """Een bijlage `BIJLAGE` die in een QUOT.S de inclusies aanroept; de sleutels zijn `i1`, `i2`, …"""
+    declaratie = b"".join(_incl(f"{naam}.xml".encode()) for naam in inclusies)
+    bijlage = (b"<ANNEX><BIB.INSTANCE><INCLUSIONS>" + declaratie + b"</INCLUSIONS></BIB.INSTANCE>"
+               b'<TITLE><TI><P>BIJLAGE</P></TI></TITLE><CONTENTS><QUOT.S LEVEL="1">' + citaat
+               + b"</QUOT.S></CONTENTS></ANNEX>")
+    doc = DOC.replace(b"</FMX>", b'<REF.PHYS TYPE="DOC.XML" FILE="bijlage1.xml"/></FMX>')
+    return formex_zip(doc=doc, extra={"bijlage1.xml": bijlage,
+                                      **{f"{naam}.xml": xml for naam, xml in inclusies.items()}})
+
+
+def test_the_quotation_marks_around_an_inclusion_come_from_their_code_and_keep_the_full_stop():
+    """32020D1402: `<P><QUOT.START CODE="201C"/><INCL.ELEMENT/><QUOT.END CODE="201D"/>.</P>`."""
+    data = _vervangende_bijlage(
+        b"<P>" + _QS.replace(b"201E", b"201C") + _incl(b"i1.xml") + _QE + b".</P>",
+        i1=_geciteerde_bijlage(b"II", b"<P>Eerste regel.</P>", b"<P>Laatste regel.</P>"))
+
+    markdown, eenheden, onbekend, _ = formex_xml.omzetten(data)
+
+    assert onbekend == {}
+    assert "\n\n“BIJLAGE II\n\nEerste regel.\n\nLaatste regel.”.\n" in markdown
+    assert "## BIJLAGE II" not in markdown                  # geen eigen bijlagekop
+    assert [e.soort for e in eenheden if e.anker.startswith("annex")] == ["bijlage"]
+
+
+def test_a_closing_mark_after_a_table_is_its_own_paragraph():
+    """32018D0187: de geciteerde bijlage II eindigt op een tabel; `| … |”` is geen tabel meer."""
+    tabel = (b'<TBL COLS="2"><CORPUS><ROW><CELL COL="1">ES</CELL><CELL COL="2">Spanje</CELL></ROW>'
+             b"</CORPUS></TBL>")
+    data = _vervangende_bijlage(b"<P>" + _QS + _incl(b"i1.xml") + _QE + b"</P>",
+                                i1=_geciteerde_bijlage(b"II", tabel))
+
+    markdown = formex_xml.omzetten(data)[0]
+
+    assert "\n„BIJLAGE II\n" in markdown
+    assert "| ES | Spanje |\n\n”\n" in markdown
+
+
+@pytest.mark.parametrize("citaat", [
+    # 32018L0100: twee inclusies tussen één paar tekens.
+    b"<P>" + _QS + _incl(b"i1.xml") + _incl(b"i2.xml") + _QE + b"</P>",
+    # 32019L0114: het paar over twee P's verdeeld, met een punt erachter.
+    b"<P>" + _QS + _incl(b"i1.xml") + b"</P><P>" + _incl(b"i2.xml") + _QE + b".</P>",
+])
+def test_two_inclusions_inside_one_pair_of_marks_are_each_written_once_in_order(citaat):
+    data = _vervangende_bijlage(citaat, i1=_geciteerde_bijlage(b"I", b"<P>Tekst van I.</P>"),
+                                i2=_geciteerde_bijlage(b"II", b"<P>Tekst van II.</P>"))
+
+    markdown = formex_xml.omzetten(data)[0]
+
+    assert "„BIJLAGE I\n\nTekst van I.\n\nBIJLAGE II\n\nTekst van II.”" in markdown
+    assert markdown.count("Tekst van I.") == markdown.count("Tekst van II.") == 1
+
+
+def test_a_bare_inclusion_under_an_amendment_point_is_quoted_text_without_structure():
+    """32013R0390, artikel 26, punt 5: `Bijlage IV wordt vervangen door:` en dan
+    `<P><INCL.ELEMENT/></P>`, zonder QUOT.S en zonder aanhalingstekens eromheen."""
+    aanroep = b"<P>" + _incl(b"L_test.003601.fmx.xml") + b"</P>"
+    data = formex_zip(act=_wijzigingshandeling(aanroep=aanroep),
+                      extra={"L_test.003601.fmx.xml": INGESLOTEN_BIJLAGE})
+
+    markdown, eenheden, onbekend, _ = formex_xml.omzetten(data)
+
+    assert onbekend == {}
+    assert markdown.index("43) de volgende bijlage") < markdown.index("“Bijlage XIV") < markdown.index("AIP 0102")
+    assert not [e for e in eenheden if e.soort in ("bijlage", "bijlagedeel")]
+
+
+@pytest.mark.parametrize("citaat, reden", [
+    (b"<P>" + _QS.replace(b"201E", b"ZZZZ") + _incl(b"i1.xml") + _QE + b"</P>", "onbekende code 'ZZZZ'"),
+    (b"<P>" + _QS + _incl(b"i1.xml") + _QE + b" en verder.</P>", "midden in een zin"),
+    (b"<P>" + _incl(b"i1.xml") + _QS + b"</P>", "midden in een zin"),
+])
+def test_an_inclusion_with_an_unknown_mark_or_words_beside_it_is_refused(citaat, reden):
+    data = _vervangende_bijlage(citaat, i1=_geciteerde_bijlage(b"I", b"<P>Tekst.</P>"))
+    with pytest.raises(ConversionError, match=reden):
+        formex_xml.omzetten(data)
+
+
 def test_eli_link_in_a_note_keeps_its_visible_text_and_no_markup():
     """02024R1689-20260727: het Publicatieblad zet sinds 2026 `<LINK URI=…>` achter elke
     REF.DOC.OJ in een noot; de zichtbare tekst is de URI zelf."""

@@ -117,6 +117,10 @@ FORMULE_ELEMENTEN = {"FORMULA", "FORMULA.S"}
 # Het enige afbeeldingstype dat in de meetlat voorkomt (257 inclusies in 14
 # documenten, 23 september 2026). Een ander type blijft een weigering.
 AFBEELDINGSTYPE = "TIFF"
+# De aanhalingstekens om een geciteerde inclusie, naar hun `CODE` (het Unicode-
+# codepunt). Gemeten om de inclusies in de meetlat: 201E en 201C openen, 201D
+# sluit. Een andere code is een weigering: een verkeerd teken is een andere tekst.
+AANHALING = {"201E": "„", "201C": "“", "201D": "”"}
 # De kop van een bijlageonderdeel met een nummer: `A.`, `1.`, of een woord met een
 # nummer erachter. Bijlage VIII en XI van 2024/1689 schrijven `Afdeling A —` en
 # `Afdeling 1`; MiCA (2023/1114) `Deel A:` tot en met `Deel I:`, de
@@ -615,10 +619,10 @@ class FormexOmzetter:
             return ""
         if tag == "INCL.ELEMENT":
             # Leeg, dus `onbekend()` zou hem stil laten vallen — en daarmee een
-            # hele bijlage. Alleen de kale vorm als eigen alinea is gemeten.
+            # hele bijlage. Alleen een inclusie als eigen alinea is gemeten.
             raise _xml_fout(
                 "een inclusie (INCL.ELEMENT) staat midden in een zin; alleen een "
-                "inclusie als eigen alinea binnen QUOT.S is gemeten"
+                "inclusie als eigen alinea, met hooguit haar aanhalingstekens, is gemeten"
             )
         self.onbekend("inline", el)
         return ""
@@ -1297,7 +1301,7 @@ class FormexOmzetter:
         elif tag == "P":
             inclusie = self._inclusie_in(el)
             if inclusie is not None:
-                self.geciteerde_inclusie(inclusie)
+                self.geciteerde_inclusies(*inclusie)
             elif (el.find("LIST") is not None or el.find("TBL") is not None or el.find("DLIST") is not None
                   or any(c.tag in ANNOTATIES for c in el)):
                 # Een P die een annotatie draagt, is in de bron een omhulsel: 57 van
@@ -1410,24 +1414,69 @@ class FormexOmzetter:
             self.onbekend("inhoud", el)
 
     @staticmethod
-    def _inclusie_in(p) -> ET.Element | None:
-        """Het `INCL.ELEMENT` van een `P` die niets anders is dan `QUOT.S` eromheen.
+    def _inclusie_in(p) -> tuple[list, ET.Element | None, ET.Element | None, str] | None:
+        """De inclusies van een `P` die uit niets anders bestaat, met hun aanhalingstekens.
 
-        Alleen die kale vorm (`<P><QUOT.S><INCL.ELEMENT/></QUOT.S></P>`, punt 43
-        van 32026R1744) is gemeten. Een inclusie met tekst ernaast valt door naar
-        de gewone inline-weg en wordt daar geweigerd.
+        Geeft `(inclusies, QUOT.START of None, QUOT.END of None, staart)`. Gemeten
+        vormen: `<P><QUOT.S><INCL.ELEMENT/></QUOT.S></P>` (punt 43 van 32026R1744);
+        `<P><INCL.ELEMENT/></P>` onder `Bijlage IV wordt vervangen door:`
+        (32013R0390); en binnen een `QUOT.S` van een bijlage de aanhalingstekens in
+        dezelfde `P`: `<QUOT.START/><INCL.ELEMENT/><QUOT.END/>` (32018D0187,
+        32022L1648, 32026D0816), met een punt erachter (32020D1402), met twee
+        inclusies tussen één paar tekens (32018L0100), of met het paar over twee
+        `P`'s verdeeld (32019L0114). Staat er tekst naast, dan valt de `P` door
+        naar de gewone inline-weg en wordt ze daar geweigerd; alleen een staart
+        zonder woorden achter `QUOT.END` hoort bij het citaat.
         """
-        if ws(p.text or "") or len(p) != 1:
+        if ws(p.text or ""):
             return None
-        quot = p[0]
-        if quot.tag != "QUOT.S" or ws(quot.tail or "") or ws(quot.text or "") or len(quot) != 1:
+        kinderen = list(p)
+        if len(kinderen) == 1 and kinderen[0].tag == "QUOT.S":
+            if ws(kinderen[0].tail or "") or ws(kinderen[0].text or ""):
+                return None
+            kinderen = list(kinderen[0])
+        begin = kinderen.pop(0) if kinderen and kinderen[0].tag == "QUOT.START" else None
+        einde = kinderen.pop() if kinderen and kinderen[-1].tag == "QUOT.END" else None
+        if not kinderen or any(k.tag != "INCL.ELEMENT" or ws(k.tail or "")
+                               or (k.get("TYPE") or "").upper() != "FORMEX.DOC" for k in kinderen):
             return None
-        incl = quot[0]
-        if incl.tag != "INCL.ELEMENT" or ws(incl.tail or ""):
+        if begin is not None and ws(begin.tail or ""):
             return None
-        if (incl.get("TYPE") or "").upper() != "FORMEX.DOC":
+        staart = ws(einde.tail or "") if einde is not None else ""
+        if re.search(r"\w", staart):
             return None
-        return incl
+        return kinderen, begin, einde, staart
+
+    def geciteerde_inclusies(self, inclusies: list, begin, einde, staart: str) -> None:
+        """Eén of meer geciteerde bijlagen, met de aanhalingstekens eromheen.
+
+        Het openingsteken komt vóór het eerste blok, het sluitteken (met de punt
+        erachter) achter het laatste, zoals ook `“Bijlage XIV` en `….”.` uit
+        32026R1744 komen, waar de tekens in de inclusie zelf staan. Een tabel is
+        geen tabel meer met een teken aan haar eerste of laatste regel; is dat
+        blok een tabel, dan staat het teken als eigen alinea (32018D0187).
+        """
+        tekens = []
+        for teken in (begin, einde):
+            code = (teken.get("CODE") or "").upper() if teken is not None else None
+            if code is not None and code not in AANHALING:
+                raise _xml_fout(f"een inclusie staat tussen aanhalingstekens met de onbekende code {code!r}")
+            tekens.append(AANHALING[code] if code is not None else "")
+        voor, na = tekens[0], tekens[1] + staart
+        blokken = self.u.blokken
+        eerste = len(blokken)
+        for incl in inclusies:
+            self.geciteerde_inclusie(incl)
+        if voor:
+            if eerste < len(blokken) and not blokken[eerste].startswith("|"):
+                blokken[eerste] = voor + blokken[eerste]
+            else:
+                blokken.insert(eerste, voor)
+        if na:
+            if eerste < len(blokken) and not blokken[-1].startswith("|"):
+                blokken[-1] += na
+            else:
+                self.u.blok(na)
 
     def afbeelding(self, incl, blok: bool = False) -> bool:
         """Een TIFF-inclusie: niet overnemen, wel vastleggen. False als het geen afbeelding is.
