@@ -127,7 +127,14 @@ class BwbOmzetter:
                 ws(self.inline(k.find("titel"))) if k.find("titel") is not None else "")
 
     def kopregel(self, label: str, nr: str, titel: str) -> str:
+        # Zonder label en nummer is de kop alleen de titel. De Wet bescherming
+        # persoonsgegevens BES (BWBR0028067) heeft een hoofdstuk met enkel
+        # `<titel>Slotbepalingen</titel>`; dat werd `## . Slotbepalingen`, en de
+        # kennisbank struikelde over een kop die met een leesteken begint
+        # (WP-04, 23 september 2026).
         eerste = " ".join(x for x in (label, nr) if x)
+        if not eerste:
+            return titel
         return f"{eerste}. {titel}" if titel else eerste
 
     def container_anker(self, tag: str, nr: str, pad: dict) -> str:

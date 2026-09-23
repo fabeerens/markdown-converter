@@ -87,6 +87,24 @@ def test_a_goed_article_gets_no_not_yet_in_force_marker():
     assert "Nog niet in werking" not in wetten.bwb_xml.omzetten(toestand())[0]
 
 
+def test_container_heading_without_label_and_number_is_only_its_title():
+    """Een kop met alleen een `<titel>` is die titel, zonder leesteken ervoor.
+
+    De Wet bescherming persoonsgegevens BES (BWBR0028067) heeft een hoofdstuk met
+    enkel `<kop><titel>Slotbepalingen</titel></kop>`; `kopregel()` schreef daar
+    `## . Slotbepalingen`, en de kennisbank struikelde over een kop die met een
+    leesteken begint (kb WP-04, 23 september 2026)."""
+    xml = toestand().replace(
+        b"<artikel ",
+        b'<hoofdstuk status="goed" inwerking="2020-01-01"><kop><titel>Slotbepalingen</titel></kop><artikel ', 1
+    ).replace(b"</artikel>", b"</artikel></hoofdstuk>", 1)
+    markdown = wetten.bwb_xml.omzetten(xml)[0]
+    assert "\n## Slotbepalingen\n" in markdown
+    assert ". Slotbepalingen" not in markdown
+    # De gewone vorm blijft zoals ze was: label, nummer, punt, titel.
+    assert "Artikel 1. Reikwijdte" in markdown
+
+
 def test_not_yet_effective_status_on_anything_but_an_article_is_refused():
     """Alleen bij een artikel weet de omzetter hoe hij dit toont; elders is het een weigering."""
     xml = toestand().replace(b"<artikel ", b'<hoofdstuk status="nogniet" inwerking="2020-01-01"><kop><label>Hoofdstuk</label><nr>1</nr><titel>Eerste</titel></kop><artikel ', 1).replace(
