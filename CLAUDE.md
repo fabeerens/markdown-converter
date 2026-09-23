@@ -156,6 +156,19 @@ accountregistratie namens de gebruiker):
   `inline()` en kreeg een `DLIST` nooit een basis mee, waardoor artikel 4 AVG en artikel 3 LED
   één samengevoegde alinea per punt gaven, geen van de 26 definitiepunten een eenheid had, en
   het bronbewijs van de kennisbank de regel niet terugvond.
+  Een **wijzigingshandeling** citeert soms hele artikelen binnen `QUOT.S` (zeven in `32026R1744`,
+  de Digitale omnibus AI): `ARTICLE`/`TI.ART`/`STI.ART` lopen daar inline door zoals geciteerde
+  leden al deden, en de structuurcontrole telt alleen artikelen búiten een citaat. Diezelfde
+  handeling draagt een geciteerde bijlage als **inclusie**: een zipbestand dat niet het manifest
+  (`REF.PHYS`) maar de handeling zelf aanwijst (`BIB.INSTANCE/INCLUSIONS/INCL.ELEMENT
+  TYPE="FORMEX.DOC"`) en dat de tekst aanroept als `<P><QUOT.S><INCL.ELEMENT FILEREF=…/></QUOT.S></P>`.
+  `_onderdelen` geeft inclusies apart terug; `geciteerde_inclusie()` schrijft ze als blok op die plek
+  (titel als alinea, inhoud via `bijlage_inhoud(…, geciteerd=True)`): zonder `##`-kop en zonder
+  eenheden, want het is tekst van een andere handeling. Wel brontekst: de woord- en bladalineacontrole
+  tellen haar mee, de structuurtellingen niet. Een inclusie die de tekst nergens aanroept, een
+  aanroep zonder bestand, of een `INCL.ELEMENT` midden in een zin is een weigering. `LINK` is de
+  ELI-verwijzing die het Publicatieblad sinds 2026 achter elke `REF.DOC.OJ` in een noot zet; de
+  zichtbare tekst is de URI, het attribuut wordt niet geschreven.
   De portal-HTML (`/legal-content/…/HTML/`) blokkeert bots (HTTP 202, lege body;
   inmiddels een AWS WAF-JS-challenge, dus ook met retries permanent 202 — de portal is in de praktijk
   dood voor een simpele `requests`-scraper). Gebruik het **Cellar-archief** via content negotiation,

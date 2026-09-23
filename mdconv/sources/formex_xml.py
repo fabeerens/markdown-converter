@@ -47,7 +47,10 @@ METADATA = {"BIB.INSTANCE", "BIB.DOC", "BIB.DATA", "PUBLICATION.REF", "NO.DOC", 
             "INFO.PROD", "FAM.COMP", "GR.MOD.ACT", "DOCUMENT.REF", "PAGE.FIRST", "PAGE.LAST",
             "PAGE.SEQ", "PAGE.TOTAL", "LG.DOC", "NO.SEQ", "VOLUME.REF"}
 INLINE_TEKST = {"DATE", "REF.DOC.OJ", "FT", "HT", "QUOT.S", "IE", "PERIOD", "REF.DOC", "ACRONYM",
-                "ADDR", "PL.DATE", "NO.CELEX", "UNIT", "EXPONENT", "INF", "SUP", "TERM", "DEFINITION"}
+                "ADDR", "PL.DATE", "NO.CELEX", "UNIT", "EXPONENT", "INF", "SUP", "TERM", "DEFINITION",
+                # De ELI-verwijzing die het Publicatieblad sinds 2026 achter elke
+                # REF.DOC.OJ in een noot zet; de zichtbare tekst is de URI zelf.
+                "LINK"}
 INLINE_TRANSPARANT = {"TI", "STI", "NP", "NO.P", "NO.PARAG", "TXT", "ITEM", "PREFIX"}
 STRUCTUUR_ELEMENTEN = {
     "ACT", "CONS.ACT", "CONS.DOC", "ANNEX", "CONS.ANNEX", "TITLE", "PREAMBLE",
@@ -76,11 +79,19 @@ def _is_documentmanifest(naam: str) -> bool:
     return klein.endswith(".doc.xml") or klein.endswith(".doc.fmx.xml")
 
 
-def _onderdelen(data: bytes) -> tuple[ET.Element, list[tuple[str, ET.Element]]]:
+def _onderdelen(data: bytes) -> tuple[ET.Element, list[tuple[str, ET.Element]], dict[str, ET.Element]]:
     """Lees één manifestatie, uitsluitend in de volgorde van het documentmanifest.
 
-    De omgekeerde controle is bewust: een extra XML-onderdeel dat niet in de
-    inhoudsopgave staat mag niet stil buiten de omzetting blijven.
+    Geeft `(manifest, onderdelen, inclusies)`. De omgekeerde controle is bewust:
+    een extra XML-onderdeel dat niet in de inhoudsopgave staat mag niet stil
+    buiten de omzetting blijven.
+
+    Een **inclusie** wijst niet het manifest aan maar een onderdeel zelf
+    (`BIB.INSTANCE/INCLUSIONS/INCL.ELEMENT TYPE="FORMEX.DOC"`): een geciteerde
+    bijlage die een wijzigingshandeling in een andere handeling invoegt (de
+    Digitale omnibus `32026R1744` voegt zo bijlage XIV aan de AI-verordening toe).
+    Zij is geen documentonderdeel — haar plek is waar de tekst haar aanroept,
+    binnen een `QUOT.S` — maar wel brontekst, en dus geen buitenstaander.
     """
     try:
         zf = zipfile.ZipFile(io.BytesIO(data))
@@ -129,18 +140,43 @@ def _onderdelen(data: bytes) -> tuple[ET.Element, list[tuple[str, ET.Element]]]:
         werkelijk = set(korte_namen) - set(doc_namen) - aanwezige_tocs
         genoemd = set(kort)
         ontbreekt = genoemd - werkelijk
-        extra = werkelijk - genoemd
         if ontbreekt:
             raise _xml_fout(f"het documentmanifest noemt ontbrekende onderdelen: {', '.join(sorted(ontbreekt))}")
-        if extra:
-            raise _xml_fout(f"de zip bevat onderdelen buiten het documentmanifest: {', '.join(sorted(extra))}")
         uit = []
         for naam in kort:
             try:
                 uit.append((naam, ET.fromstring(zf.read(per_naam[naam]))))
             except (ET.ParseError, KeyError) as exc:
                 raise _xml_fout(f"onderdeel {naam} is niet leesbaar ({exc})", exc)
-        return doc, uit
+        inclusie_namen: list[str] = []
+        for _, root in uit:
+            for incl in root.iterfind("BIB.INSTANCE/INCLUSIONS/INCL.ELEMENT"):
+                if (incl.get("TYPE") or "").upper() != "FORMEX.DOC":
+                    raise _xml_fout(f"een inclusie heeft het onbekende type {incl.get('TYPE')!r}")
+                naam = (incl.get("FILEREF") or "").rsplit("/", 1)[-1]
+                if not naam:
+                    raise _xml_fout("een inclusie (INCL.ELEMENT) noemt geen bestand")
+                inclusie_namen.append(naam)
+        dubbel_genoemd = set(inclusie_namen) & genoemd
+        if dubbel_genoemd:
+            raise _xml_fout(
+                f"een inclusie is tegelijk een documentonderdeel: {', '.join(sorted(dubbel_genoemd))}"
+            )
+        ontbrekende_inclusies = set(inclusie_namen) - werkelijk
+        if ontbrekende_inclusies:
+            raise _xml_fout(
+                f"de handeling noemt ontbrekende inclusies: {', '.join(sorted(ontbrekende_inclusies))}"
+            )
+        extra = werkelijk - genoemd - set(inclusie_namen)
+        if extra:
+            raise _xml_fout(f"de zip bevat onderdelen buiten het documentmanifest: {', '.join(sorted(extra))}")
+        inclusies: dict[str, ET.Element] = {}
+        for naam in dict.fromkeys(inclusie_namen):
+            try:
+                inclusies[naam] = ET.fromstring(zf.read(per_naam[naam]))
+            except (ET.ParseError, KeyError) as exc:
+                raise _xml_fout(f"inclusie {naam} is niet leesbaar ({exc})", exc)
+        return doc, uit, inclusies
 
 
 class _PiVerzamelaar(ET.TreeBuilder):
@@ -296,7 +332,7 @@ def basis_preambule(basis: bytes, base_celex: str | None) -> tuple[ET.Element | 
     handeling zelf (`BIB.INSTANCE/NO.DOC`, jaar en volgnummer), niet uit de URL
     waarmee ze is opgehaald.
     """
-    _, delen = _onderdelen(basis)
+    _, delen, _ = _onderdelen(basis)
     handelingen = [root for _, root in delen if root.tag == "ACT"]
     if len(handelingen) != 1:
         raise _xml_fout(f"de basishandeling bevat {len(handelingen)} handelingen (ACT); precies één is vereist")
@@ -330,6 +366,8 @@ class FormexOmzetter:
         self.markeringen: Counter = Counter()      # CELEX -> passages met een CLG.MDFO
         self.basis: ET.Element | None = None       # PREAMBLE van de basishandeling
         self.zonder: frozenset = frozenset()       # opmaaksoorten die nu niet geschreven worden
+        self.inclusies: dict[str, ET.Element] = {}  # geciteerde bijlagen, op bestandsnaam
+        self.gebruikte_inclusies: set[str] = set()
 
     def onbekend(self, context: str, el) -> None:
         """Weiger onbekende inhoud; een leeg technisch element mag verdwijnen."""
@@ -417,10 +455,13 @@ class FormexOmzetter:
             # Een NP binnen een geciteerde wijziging (QUOT.S) loopt hier inline
             # door; zonder scheiding stond `“67)Verordening` aaneen.
             return self.inline(el) + " "
-        if tag in ("P", "ALINEA", "PARAG"):
+        if tag in ("P", "ALINEA", "PARAG", "ARTICLE", "TI.ART", "STI.ART"):
             # De AI-verordening bevat vier ALINEA's en negen PARAG's binnen
             # QUOT.S; daar zijn het inline bladregels, net als P in oudere
             # handelingen. NO.PARAG blijft binnen dit citaat gewone tekst.
+            # Een wijzigingshandeling citeert ook hele artikelen (zeven in
+            # 32026R1744): kop, opschrift en leden lopen dan net zo inline
+            # door, want een citaat krijgt geen eigen structuur of ankers.
             return " " + self.inline(el) + " "
         if tag in ("LIST", "ITEM"):
             # Een opsomming binnen QUOT.S citeert de structuur van een andere
@@ -429,6 +470,13 @@ class FormexOmzetter:
             return " " + self.inline(el) + " "
         if tag in INLINE_TEKST or tag in INLINE_TRANSPARANT:
             return self.inline(el)
+        if tag == "INCL.ELEMENT":
+            # Leeg, dus `onbekend()` zou hem stil laten vallen — en daarmee een
+            # hele bijlage. Alleen de kale vorm als eigen alinea is gemeten.
+            raise _xml_fout(
+                "een inclusie (INCL.ELEMENT) staat midden in een zin; alleen een "
+                "inclusie als eigen alinea binnen QUOT.S is gemeten"
+            )
         self.onbekend("inline", el)
         return ""
 
@@ -474,8 +522,10 @@ class FormexOmzetter:
     # ------------------------------------------------------------ documenten
 
     def omzetten(self, data: bytes, basis: bytes | None = None) -> Uitvoer:
-        doc, onderdelen = _onderdelen(data)
-        self.controleer_elementen(onderdelen)
+        doc, onderdelen, inclusies = _onderdelen(data)
+        self.inclusies = inclusies
+        inclusiedelen = [(f"inclusie:{naam}", root) for naam, root in inclusies.items()]
+        self.controleer_elementen(onderdelen + inclusiedelen)
         self.markeringen = _wijzigingsmarkeringen(data)
         if basis is not None:
             self.basis = self.kies_basis(onderdelen, basis)
@@ -489,11 +539,16 @@ class FormexOmzetter:
                 self.bijlage(root)
             else:
                 self.onbekend("document", root)
+        ongebruikt = set(inclusies) - self.gebruikte_inclusies
+        if ongebruikt:
+            # De woordcontrole zou dit ook vangen, maar dan als raadsel; hier
+            # staat de reden: de tekst roept de inclusie nergens aan.
+            raise _xml_fout(f"inclusie(s) nergens in de tekst aangeroepen: {', '.join(sorted(ongebruikt))}")
         if self.basis is not None:
             # De ingevoegde considerans is brontekst als elke andere: dezelfde
             # controles op verlies, verdubbeling en verweving gelden ook voor haar.
             onderdelen = onderdelen + [("basishandeling:PREAMBLE", self.basis)]
-        self.zelfcontrole(onderdelen)
+        self.zelfcontrole(onderdelen, inclusiedelen)
         return self.u
 
     def kies_basis(self, onderdelen: list[tuple[str, ET.Element]], basis: bytes) -> ET.Element:
@@ -511,8 +566,16 @@ class FormexOmzetter:
         self.controleer_elementen([("basishandeling", preambule)])
         return preambule
 
-    def zelfcontrole(self, onderdelen: list[tuple[str, ET.Element]]) -> None:
-        """Bewijs binnen deze route dat tekst en structurele eenheden aankomen."""
+    def zelfcontrole(self, onderdelen: list[tuple[str, ET.Element]],
+                     inclusies: list[tuple[str, ET.Element]] | None = None) -> None:
+        """Bewijs binnen deze route dat tekst en structurele eenheden aankomen.
+
+        Een inclusie (geciteerde bijlage) is brontekst en telt mee voor woorden en
+        bladalinea's, maar niet voor de structuur: haar `ANNEX` is niet een
+        bijlage van deze handeling, net zoals een `ARTICLE` binnen `QUOT.S` niet
+        een artikel van deze handeling is.
+        """
+        tekstdelen = onderdelen + list(inclusies or [])
         markdown = self.u.markdown()
         controle_markdown = markdown
         if self.metadata.get("format") == "clg":
@@ -520,7 +583,7 @@ class FormexOmzetter:
             # herkomst, geen tekstnode uit de manifestatie.
             controle_markdown = controle_markdown.split("\n\n", 1)[-1]
 
-        verwacht = _bronwoorden(onderdelen)
+        verwacht = _bronwoorden(tekstdelen)
         gekregen = Counter(_woorden(controle_markdown))
         if verwacht != gekregen:
             ontbreekt = list((verwacht - gekregen).elements())[:12]
@@ -531,7 +594,7 @@ class FormexOmzetter:
             )
 
         alle_woorden = " " + " ".join(_woorden(controle_markdown)) + " "
-        for naam, woorden in _bladalineas(onderdelen):
+        for naam, woorden in _bladalineas(tekstdelen):
             if f" {' '.join(woorden)} " not in alle_woorden:
                 voorbeeld = " ".join(woorden[:14])
                 raise ConversionError(
@@ -540,7 +603,15 @@ class FormexOmzetter:
                 )
 
         telling = Counter(e.soort for e in self.u.eenheden)
-        artikelen = sum(1 for _, root in onderdelen for _ in root.iter("ARTICLE"))
+
+        def eigen_artikelen(el, in_citaat: bool = False) -> int:
+            """Tel alleen artikelen van de handeling, niet de zeven geciteerde uit 32026R1744."""
+            citaat = in_citaat or el.tag == "QUOT.S"
+            eigen = int(el.tag == "ARTICLE" and not citaat)
+            return eigen + sum(eigen_artikelen(kind, citaat) for kind in el)
+
+        artikelen = sum(eigen_artikelen(root) for _, root in onderdelen)
+
         def structurele_leden(el, in_citaat: bool = False) -> int:
             """Tel alleen leden van de handeling, niet negen geciteerde uit 2024/1689."""
             citaat = in_citaat or el.tag == "QUOT.S"
@@ -954,7 +1025,10 @@ class FormexOmzetter:
                     tekst += self.inline_el(kind) + (kind.tail or "")
             schrijf(ws(tekst))
         elif tag == "P":
-            if el.find("LIST") is not None or el.find("TBL") is not None or el.find("DLIST") is not None:
+            inclusie = self._inclusie_in(el)
+            if inclusie is not None:
+                self.geciteerde_inclusie(inclusie)
+            elif el.find("LIST") is not None or el.find("TBL") is not None or el.find("DLIST") is not None:
                 kopie = ET.Element("ALINEA")
                 kopie.text = el.text
                 kopie.extend(list(el))
@@ -999,6 +1073,58 @@ class FormexOmzetter:
             return
         else:
             self.onbekend("inhoud", el)
+
+    @staticmethod
+    def _inclusie_in(p) -> ET.Element | None:
+        """Het `INCL.ELEMENT` van een `P` die niets anders is dan `QUOT.S` eromheen.
+
+        Alleen die kale vorm (`<P><QUOT.S><INCL.ELEMENT/></QUOT.S></P>`, punt 43
+        van 32026R1744) is gemeten. Een inclusie met tekst ernaast valt door naar
+        de gewone inline-weg en wordt daar geweigerd.
+        """
+        if ws(p.text or "") or len(p) != 1:
+            return None
+        quot = p[0]
+        if quot.tag != "QUOT.S" or ws(quot.tail or "") or ws(quot.text or "") or len(quot) != 1:
+            return None
+        incl = quot[0]
+        if incl.tag != "INCL.ELEMENT" or ws(incl.tail or ""):
+            return None
+        if (incl.get("TYPE") or "").upper() != "FORMEX.DOC":
+            return None
+        return incl
+
+    def geciteerde_inclusie(self, incl) -> None:
+        """Een geciteerde bijlage, als blok op de plek waar de tekst haar aanroept.
+
+        Inline kan niet: de bijlage draagt `GR.SEQ` en tabellen, en een tabel
+        bestaat alleen als blok. Structuur krijgt ze niet — geen `##`-kop, geen
+        eenheid — want het is tekst van een ándere handeling; de kennisbank haalt
+        die uit de geconsolideerde versie. De nootreeks loopt gewoon door: dit is
+        geen eigen bijlage.
+        """
+        naam = (incl.get("FILEREF") or "").rsplit("/", 1)[-1]
+        root = self.inclusies.get(naam)
+        if root is None:
+            raise _xml_fout(f"de tekst roept inclusie {naam or '?'} aan, maar de handeling noemt haar niet")
+        if naam in self.gebruikte_inclusies:
+            raise _xml_fout(f"inclusie {naam} wordt meer dan één keer aangeroepen")
+        self.gebruikte_inclusies.add(naam)
+        if root.tag != "ANNEX":
+            raise _xml_fout(f"inclusie {naam} is geen bijlage (ANNEX) maar {root.tag}")
+        titel = root.find("TITLE")
+        if titel is not None:
+            if titel.find("TI") is not None:
+                ti = self.kop_tekst(titel.find("TI"))
+                if ti:
+                    self.u.blok(ti)
+            if titel.find("STI") is not None:
+                sti = self.kop_tekst(titel.find("STI"), "ITALIC")
+                if sti:
+                    self.u.blok(sti)
+        inhoud = root.find("CONTENTS")
+        if inhoud is not None:
+            self.bijlage_inhoud(inhoud, "", geciteerd=True)
 
     def definitiepunt(self, item, basis: str) -> None:
         """Eén `DLIST.ITEM`: `16) “hoofdvestiging” …` als eigen alinea.
@@ -1177,7 +1303,8 @@ class FormexOmzetter:
             self.bijlage_inhoud(inhoud, anker)
         self.notenblok()
 
-    def bijlage_inhoud(self, el, anker: str) -> None:
+    def bijlage_inhoud(self, el, anker: str, geciteerd: bool = False) -> None:
+        """`geciteerd`: een ingesloten bijlage van een andere handeling — geen eenheden."""
         teller = {"lijsten": 0}
         for kind in el:
             if kind.tag == "GR.SEQ":
@@ -1195,14 +1322,14 @@ class FormexOmzetter:
                 # Bijlage VIII en XI van 2024/1689 schrijven `Afdeling A —`
                 # en `Afdeling 1` in plaats van de oudere kopvorm `A.`.
                 m = re.match(r"(?:Afdeling\s+)?([A-Z]|\d+)(?:\.|\b)", ti, re.I)
-                sub = f"{anker}-{nummer_anker(m.group(1))}" if m else anker
+                sub = f"{anker}-{nummer_anker(m.group(1))}" if m and not geciteerd else anker
                 if ti:
                     self.u.blok(ti)
-                    if m:
+                    if m and not geciteerd:
                         self.u.eenheid(sub, "bijlagedeel", ti)
                 wrapper = ET.Element("x")
                 wrapper.extend([c for c in kind if c.tag != "TITLE"])
-                self.bijlage_inhoud(wrapper, sub)
+                self.bijlage_inhoud(wrapper, sub, geciteerd)
             elif kind.tag in METADATA:
                 continue
             else:

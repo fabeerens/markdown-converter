@@ -481,6 +481,103 @@ def test_manifest_and_zip_must_name_exactly_the_same_parts():
         formex_xml.omzetten(formex_zip(extra={"stil-vergeten.xml": b"<ANNEX/>"}))
 
 
+INGESLOTEN_BIJLAGE = b"""<ANNEX NNC="YES">
+<BIB.INSTANCE><NO.SEQ>0001.0001</NO.SEQ></BIB.INSTANCE>
+<TITLE><TI><P><QUOT.START CODE="201C" ID="QS0001" REF.END="QE0001"/>Bijlage XIV</P></TI></TITLE>
+<CONTENTS><P>De lijst met codes van AI-systemen.</P>
+<GR.SEQ LEVEL="1"><TITLE><TI><NP><NO.P>1.</NO.P><TXT><HT TYPE="NORMAL">Inleiding</HT></TXT></NP></TI></TITLE>
+<P><TBL COLS="2" NO.SEQ="0001"><CORPUS><ROW TYPE="HEADER"><CELL COL="1" TYPE="HEADER">Code</CELL>
+<CELL COL="2" TYPE="HEADER"><IE/></CELL></ROW><ROW><CELL COL="1">AIP 0102</CELL>
+<CELL COL="2">Machines en veiligheidscomponenten.</CELL></ROW></CORPUS></TBL></P></GR.SEQ>
+<P>Slotzin van de bijlage.<QUOT.END CODE="201D" ID="QE0001" REF.START="QS0001"/>.</P>
+</CONTENTS></ANNEX>"""
+
+
+def _wijzigingshandeling(*, inclusies: bytes = b'<INCLUSIONS><INCL.ELEMENT FILEREF="L_test.003601.fmx.xml" TYPE="FORMEX.DOC"/></INCLUSIONS>',
+                         aanroep: bytes = b'<P><QUOT.S LEVEL="1"><INCL.ELEMENT FILEREF="L_test.003601.fmx.xml" TYPE="FORMEX.DOC"/></QUOT.S></P>') -> bytes:
+    """Een wijzigingshandeling die een bijlage in een andere handeling invoegt (32026R1744, punt 43)."""
+    return (b"""<ACT NNC="YES">
+<BIB.INSTANCE><PAGE.FIRST>1</PAGE.FIRST>""" + inclusies + b"""</BIB.INSTANCE>
+<TITLE><P><HT TYPE="UC">Verordening (EU) 2026/1744</HT></P></TITLE>
+<PREAMBLE><GR.CONSID><CONSID><NP><NO.P>(1)</NO.P><TXT>Vereenvoudiging is nodig.</TXT></NP></CONSID></GR.CONSID></PREAMBLE>
+<ENACTING.TERMS><ARTICLE IDENTIFIER="001"><TI.ART>Artikel 1</TI.ART><STI.ART><P>Wijzigingen</P></STI.ART>
+<ALINEA>Verordening (EU) 2024/1689 wordt als volgt gewijzigd:<LIST TYPE="ARAB"><ITEM><NP><NO.P>43)</NO.P>
+<TXT>de volgende bijlage wordt toegevoegd:</TXT>""" + aanroep + b"""</NP></ITEM></LIST></ALINEA>
+</ARTICLE></ENACTING.TERMS><FINAL><P>Gedaan te Brussel.</P></FINAL></ACT>""")
+
+
+def test_an_annex_the_act_includes_is_rendered_as_a_quoted_block_where_the_text_calls_it():
+    """32026R1744 (Digitale omnibus AI) draagt bijlage XIV als los zipbestand dat niet het
+    manifest maar de handeling zelf aanwijst (BIB.INSTANCE/INCLUSIONS); punt 43 roept het aan
+    binnen een QUOT.S. Het is tekst van een andere handeling: wel brontekst, geen structuur."""
+    data = formex_zip(act=_wijzigingshandeling(), extra={"L_test.003601.fmx.xml": INGESLOTEN_BIJLAGE})
+
+    markdown, eenheden, onbekend, _ = formex_xml.omzetten(data)
+
+    assert onbekend == {}
+    assert markdown.index("43) de volgende bijlage") < markdown.index("\u201cBijlage XIV") < markdown.index("AIP 0102")
+    assert "Slotzin van de bijlage.\u201d." in markdown
+    assert "## " not in markdown.split("\u201cBijlage XIV", 1)[1]        # geen eigen bijlagekop
+    assert not [e for e in eenheden if e.soort in ("bijlage", "bijlagedeel")]
+    assert [e.anker for e in eenheden if e.soort == "artikel"] == ["art-1"]
+    assert sum(regel.startswith("### ") for regel in markdown.splitlines()) == 1
+
+
+def test_an_included_file_the_text_never_calls_is_refused():
+    data = formex_zip(act=_wijzigingshandeling(aanroep=b"<P>Zie bijlage.</P>"),
+                      extra={"L_test.003601.fmx.xml": INGESLOTEN_BIJLAGE})
+    with pytest.raises(ConversionError, match="nergens in de tekst aangeroepen"):
+        formex_xml.omzetten(data)
+
+
+def test_an_inclusion_missing_from_the_zip_is_refused():
+    with pytest.raises(ConversionError, match="ontbrekende inclusies"):
+        formex_xml.omzetten(formex_zip(act=_wijzigingshandeling()))
+
+
+def test_an_inclusion_with_text_beside_it_is_still_refused():
+    """Alleen de kale vorm `<P><QUOT.S><INCL.ELEMENT/></QUOT.S></P>` is gemeten."""
+    aanroep = b'<P>Tekst ervoor <QUOT.S LEVEL="1"><INCL.ELEMENT FILEREF="L_test.003601.fmx.xml" TYPE="FORMEX.DOC"/></QUOT.S></P>'
+    data = formex_zip(act=_wijzigingshandeling(aanroep=aanroep),
+                      extra={"L_test.003601.fmx.xml": INGESLOTEN_BIJLAGE})
+    with pytest.raises(ConversionError, match="INCL.ELEMENT"):
+        formex_xml.omzetten(data)
+
+
+def test_eli_link_in_a_note_keeps_its_visible_text_and_no_markup():
+    """02024R1689-20260727: het Publicatieblad zet sinds 2026 `<LINK URI=…>` achter elke
+    REF.DOC.OJ in een noot; de zichtbare tekst is de URI zelf."""
+    act = ACT.replace(
+        b"<P>Deze verordening stelt regels vast.</P>",
+        b'<P>Deze verordening stelt regels vast.<NOTE NOTE.ID="E0001" NUMBERING="ARAB"><P>PB L 316 van '
+        b'14.11.2012, blz. 12, ELI: <LINK URI="http://data.europa.eu/eli/reg/2012/1025/oj">'
+        b"http://data.europa.eu/eli/reg/2012/1025/oj</LINK>.</P></NOTE></P>",
+    )
+
+    markdown, _, onbekend, _ = formex_xml.omzetten(formex_zip(act=act))
+
+    assert onbekend == {}
+    assert "ELI: http://data.europa.eu/eli/reg/2012/1025/oj." in markdown
+    assert "URI=" not in markdown and "](http" not in markdown
+
+
+def test_articles_quoted_inside_an_amendment_run_inline_and_do_not_count_as_own_articles():
+    """32026R1744 citeert zeven hele artikelen binnen QUOT.S; kop, opschrift en leden lopen
+    inline door zoals geciteerde leden al deden, en de structuurcontrole telt ze niet mee."""
+    citaat = (b'<P><QUOT.S LEVEL="1"><ARTICLE IDENTIFIER="004"><TI.ART>Artikel 4</TI.ART>'
+              b"<STI.ART><P>AI-geletterdheid</P></STI.ART><PARAG><NO.PARAG>1.</NO.PARAG>"
+              b"<ALINEA>Aanbieders nemen maatregelen.</ALINEA></PARAG></ARTICLE></QUOT.S></P>")
+    data = formex_zip(act=_wijzigingshandeling(inclusies=b"", aanroep=citaat))
+
+    markdown, eenheden, onbekend, _ = formex_xml.omzetten(data)
+
+    assert onbekend == {}
+    assert "Artikel 4 AI-geletterdheid 1. Aanbieders nemen maatregelen." in markdown
+    assert sum(regel.startswith("### ") for regel in markdown.splitlines()) == 1
+    assert [e.anker for e in eenheden if e.soort == "artikel"] == ["art-1"]
+    assert not [e for e in eenheden if e.soort == "lid"]
+
+
 def test_unknown_text_element_is_refused_instead_of_counted():
     act = ACT.replace(b"</FINAL>", b"<MYSTERY>onbehandelde tekst</MYSTERY></FINAL>")
     with pytest.raises(ConversionError, match="MYSTERY"):
