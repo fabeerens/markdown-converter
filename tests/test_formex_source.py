@@ -464,6 +464,52 @@ def test_inserted_recitals_are_covered_by_the_text_preservation_check(monkeypatc
         formex_xml.omzetten(formex_zip(act=_cons_act()), formex_zip(act=_basis_act()))
 
 
+# De considerans van het Data Privacy Framework (2023/1795) en van het
+# adequaatheidsbesluit voor het VK (2021/1772): overwegingen in geneste groepen
+# (`DIV.CONSID`) met een genummerde kop in vet of cursief, en in 2017/2116 een
+# kop zonder nummer. De overwegingen nummeren over de groepen heen door.
+OVERWEGINGEN_IN_GROEPEN = (
+    b'<GR.CONSID><GR.CONSID.INIT>Overwegende hetgeen volgt:</GR.CONSID.INIT>'
+    b'<DIV.CONSID><TITLE><TI><NP><NO.P>1.</NO.P><TXT><HT TYPE="BOLD">INLEIDING</HT></TXT></NP></TI></TITLE>'
+    b'<CONSID><NP><NO.P>(1)</NO.P><TXT>Eerste overweging.</TXT></NP></CONSID></DIV.CONSID>'
+    b'<DIV.CONSID><TITLE><TI><NP><NO.P>2.</NO.P><TXT><HT TYPE="BOLD">BEOORDELING</HT></TXT></NP></TI></TITLE>'
+    b'<DIV.CONSID><TITLE><TI><NP><NO.P>2.1</NO.P><TXT><HT TYPE="ITALIC">Toepassingsgebied</HT></TXT></NP></TI>'
+    b'</TITLE><CONSID><NP><NO.P>(2)</NO.P><TXT>Tweede overweging.</TXT></NP></CONSID></DIV.CONSID>'
+    b'<DIV.CONSID><TITLE><TI><P>Referentiestelsel</P></TI></TITLE>'
+    b'<CONSID><NP><NO.P>(3)</NO.P><TXT>Derde overweging.</TXT></NP></CONSID></DIV.CONSID>'
+    b'</DIV.CONSID></GR.CONSID>'
+)
+
+
+def met_overwegingen_in_groepen(groepen: bytes = OVERWEGINGEN_IN_GROEPEN) -> bytes:
+    voor, rest = ACT.split(b"<GR.CONSID>", 1)
+    return formex_zip(act=voor + groepen + rest.split(b"</GR.CONSID>", 1)[1])
+
+
+def test_overwegingen_in_een_groep_blijven_overwegingen_en_hun_kop_wordt_een_alinea():
+    """Tot 23 september 2026 weigerde `DIV.CONSID` 9 van de 347 documenten in de meetlat."""
+    markdown, eenheden, _, _ = formex_xml.omzetten(met_overwegingen_in_groepen())
+    assert ("Overwegende hetgeen volgt:\n\n1.   INLEIDING\n\n(1) Eerste overweging.\n\n"
+            "2.   BEOORDELING\n\n2.1   Toepassingsgebied\n\n(2) Tweede overweging."
+            "\n\nReferentiestelsel\n\n(3) Derde overweging.\n") in markdown
+    assert "**" not in markdown and "*Toepassingsgebied*" not in markdown
+    assert [e.anker for e in eenheden if e.soort == "overweging"] == ["rec-1", "rec-2", "rec-3"]
+    assert {e.soort for e in eenheden} == {"overweging", "divisie", "artikel", "lid", "onderdeel"}
+
+
+@pytest.mark.parametrize("oud, nieuw, context", [
+    # Een alinea direct in een groep: niet gemeten, dus niet geraden waar ze hoort.
+    (b"</DIV.CONSID></GR.CONSID>", b"<P>Losse alinea.</P></DIV.CONSID></GR.CONSID>", "overwegingen:P"),
+    # Een opschrift onder de kop: geen van de 330 koppen in de meetlat heeft er een.
+    (b"<TI><P>Referentiestelsel</P></TI>", b"<TI><P>Referentiestelsel</P></TI><STI>Opschrift</STI>",
+     "overwegingenkop:STI"),
+])
+def test_wat_in_een_groep_overwegingen_niet_gemeten_is_weigert(oud, nieuw, context):
+    groepen = OVERWEGINGEN_IN_GROEPEN.replace(oud, nieuw, 1)
+    with pytest.raises(ConversionError, match=context):
+        formex_xml.omzetten(met_overwegingen_in_groepen(groepen))
+
+
 def test_emphasis_inside_a_word_does_not_split_the_word():
     """`cyberbeveiliging<HT TYPE="BOLD">s</HT>certificering` is één woord in de bron."""
     act = ACT.replace(

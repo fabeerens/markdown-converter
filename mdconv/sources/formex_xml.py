@@ -75,6 +75,10 @@ STRUCTUUR_ELEMENTEN = {
     "GR.ANNOTATION", "ANNOTATION",
     # Een groep tabelrijen met haar titel (`tabel()`, `rijgroeptitel()`).
     "BLK", "TI.BLK",
+    # Een groep overwegingen onder een kop (`1. INLEIDING`), genest tot zes
+    # niveaus diep in het adequaatheidsbesluit voor het VK (2021/1772). Alleen
+    # `overwegingengroep()` behandelt haar; elders blijft ze een weigering.
+    "DIV.CONSID",
 }
 ANNOTATIES = ("GR.ANNOTATION", "ANNOTATION")
 # De letter van een CELEX-nummer volgens het soort handeling (`LEG.VAL`). Wat hier
@@ -986,10 +990,67 @@ class FormexOmzetter:
                 self.preambule(kind)
             elif kind.tag == "CONSID":
                 self.overweging(kind)
+            elif kind.tag == "DIV.CONSID":
+                self.overwegingengroep(kind)
             elif kind.tag in METADATA:
                 continue
             else:
                 self.u.blok(ws(self.inline(kind)))
+
+    def overwegingengroep(self, el) -> None:
+        """Een groep overwegingen onder een kop (`DIV.CONSID`), in documentvolgorde.
+
+        Adequaatheids-, staatssteun- en antidumpingbesluiten delen hun considerans
+        in: `1. INLEIDING`, `2.1. Toepassingsgebied`, tot zes niveaus diep in het
+        besluit voor het VK (2021/1772). De overwegingen lopen daar gewoon door,
+        (1) tot en met (292), en blijven dus overwegingen: `(n)` plus één spatie,
+        met hun `rec-`-eenheid. Tot 23 september 2026 weigerde de omzetter elk
+        document met zo'n groep, 9 van de 347 in de meetlat, waaronder het Data
+        Privacy Framework (2023/1795) uit de eindtest.
+
+        De kop is een gewone alinea, geen `##`: in de considerans plant het
+        profiel alleen overwegingen (`plan_recitals`), en `plan_body` kent daar
+        alleen deel-, titel-, hoofdstuk- en afdelingskoppen. Een andere kop zou
+        er een kopniveau zonder anker zijn. Wat hier niet als kop, overweging of
+        groep gemeten is, weigert.
+        """
+        for kind in el:
+            if kind.tag == "TITLE":
+                self.overwegingenkop(kind)
+            elif kind.tag == "CONSID":
+                self.overweging(kind)
+            elif kind.tag == "DIV.CONSID":
+                self.overwegingengroep(kind)
+            elif kind.tag in METADATA:
+                continue
+            else:
+                self.onbekend("overwegingen", kind)
+
+    def overwegingenkop(self, titel) -> None:
+        """De kop van een groep overwegingen: `1.` plus drie harde spaties, dan de tekst.
+
+        Dezelfde vorm als de kop van een bijlageonderdeel (`A.   “Algemeen”`):
+        het nummer uit `NO.P`, drie harde spaties, de tekst uit `TXT`. Met een
+        gewone spatie leest Markdown `1. INLEIDING` als lijstitem. Vet en cursief
+        (156 en 82 van de 330 koppen in de meetlat) zijn typografie, net als in
+        een hoofdstukkop. Vijf koppen hebben geen nummer maar een `P`
+        (`Referentiestelsel` in 2017/2116); die komen er kaal in.
+        """
+        for ti in titel:
+            if ti.tag != "TI":
+                self.onbekend("overwegingenkop", ti)
+                continue
+            # Eén doorloop door `kop_tekst`, zodat de tekst in bronvolgorde staat
+            # en niets wegvalt; alleen de scheiding achter het nummer wordt de
+            # vorm van het Publicatieblad. Het nummer wordt gelezen zonder
+            # `inline()`, want een tweede doorloop zou een noot twee keer tellen.
+            regel = self.kop_tekst(ti)
+            np = ti.find("NP")
+            nr = ws("".join(np.find("NO.P").itertext())) if np is not None and np.find("NO.P") is not None else ""
+            if nr and regel.startswith(f"{nr} "):
+                regel = f"{nr}{NBSP * 3}{regel[len(nr) + 1:]}"
+            if regel:
+                self.u.blok(regel)
 
     def preambule_van_basis(self) -> None:
         """De considerans van de basishandeling, in de vorm die de HTML-route ook schrijft.
