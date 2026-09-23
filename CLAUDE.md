@@ -318,6 +318,26 @@ accountregistratie namens de gebruiker):
   regel gelijk. `ITEM.REF`, een TOC naast CONTENTS of iets anders in een TOC.ITEM blijft een
   weigering. Gemeten gevolg: wetgeving 167 → 174 van 266, onder meer de MDR, de IVDR en de
   machineverordening.
+  Een **inclusie** wordt niet altijd kaal aangeroepen zoals in 32026R1744
+  (`<P><QUOT.S><INCL.ELEMENT/></QUOT.S></P>`). Gemeten in de meetlat: `<P><INCL.ELEMENT/></P>`
+  zonder QUOT.S onder `Bijlage IV wordt vervangen door:` (32013R0390),
+  `<QUOT.S><INCL.ELEMENT/></QUOT.S>` als kind van CONTENTS (32013D0287), en de aanhalingstekens in
+  de aanroepende P: `<P><QUOT.START/><INCL.ELEMENT/><QUOT.END/>.</P>` (32018D0187, 32020D1402),
+  ook met twee inclusies tussen één paar tekens (32018L0100) of met het paar over twee P's
+  verdeeld (32019L0114). `_inclusie_in` herkent die vormen; `geciteerde_inclusies` schrijft elke
+  inclusie precies één keer als blok op haar plek, zet het openingsteken vóór het eerste blok en
+  het sluitteken met de staart (`”.`) achter het laatste, en neemt het teken uit `CODE`
+  (`AANHALING`: 201E „, 201C “, 201D ”; een andere code weigert). Is dat blok een tabel, dan staat
+  het teken als eigen alinea. Tekst naast de inclusie, of een staart met woorden, blijft 'midden
+  in een zin'. Een `NOTE.ID` is uniek per bestand, niet per zip: binnen een inclusie krijgt de
+  nootsleutel de bestandsnaam als voorvoegsel (`nootruimte`), anders kregen de vier `E0001`'s van
+  32019L0114 allemaal `(1)`. Een geconsolideerde tekst noemt haar afbeeldingen in
+  `CONS.DOC/BIB.INSTANCE/INCLUSIONS`, niet onder de wortel (Brussel I bis 02012R1215-20150226:
+  zeven certificaten; CRR 02013R0575-20270101: 167). Bij het Hof mag een zip naast de XML alleen
+  bestanden bevatten die de uitspraak als `<P><INCL.ELEMENT TYPE="TIFF"/></P>` aanroept
+  (62012TJ0235, Żubrówka); die worden weggelaten met een waarschuwing en
+  `afbeeldingen_weggelaten`, net als bij wetgeving. Een bestand dat niet wordt aangeroepen, een
+  aanroep zonder bestand, een afbeelding midden in een zin of met IMG.CNT blijft een weigering.
   De portal-HTML (`/legal-content/…/HTML/`) blokkeert bots (HTTP 202, lege body;
   inmiddels een AWS WAF-JS-challenge, dus ook met retries permanent 202 — de portal is in de praktijk
   dood voor een simpele `requests`-scraper). Gebruik het **Cellar-archief** via content negotiation,
@@ -486,7 +506,8 @@ accountregistratie namens de gebruiker):
   `JURISDICTION/INTRO` als alinea's, de procestaalnoot als `[^procestaal]` met een definitie. De
   zelfcontrole is dezelfde als bij `hudoc_docx`. Weigeringen: `CONCLUSION`, `OPINION`,
   `JUDGMENT.NP`, `CASE`, `REPORT.HEARING`, `SUMMARY.*`, een zip met meer dan één XML of met een
-  afbeelding, een onbekende aanhalingscode en `DLIST`. Gemeten op 143 Cellar-zips: 73 arresten of
+  bestand dat de uitspraak niet als afbeelding aanroept (een aangeroepen TIFF wordt weggelaten
+  met een melding), een onbekende aanhalingscode en `DLIST`. Gemeten op 143 Cellar-zips: 73 arresten of
   beschikkingen in één XML, 71 omgezet.
 - **Rechtspraak.nl**: `https://data.rechtspraak.nl/uitspraken/content?id={ECLI}` geeft schone XML
   (`<uitspraak>` met `section`/`title`/`parablock`/`para`), en die XML **is** het bronbewijs:
@@ -1087,7 +1108,7 @@ regel), inclusief de vloeiende tabbalk-indicator.
   weggeschreven bestand nooit als geldige staat gelezen kan worden.
 
 ## Tests
-`.venv/bin/python -m pytest tests/ -q` — 475 karakteriseringstests die het gedrag
+`.venv/bin/python -m pytest tests/ -q` — 492 karakteriseringstests die het gedrag
 vastleggen in plaats van het te beschrijven: `detect_source`-precedentie, ELI→CELEX,
 de CLG-markupnormalisatie (lidnummers, lettermarkers, voetnootankers), de
 voetnootdefinities die met de preambule meereizen, de notitievorm die een intakepoort

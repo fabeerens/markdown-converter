@@ -1,5 +1,5 @@
 {
- "commit": "d9c52da",
+ "commit": "984e003",
  "documenten": {
   "02002L0058-20091219": {
    "melding": null,
@@ -28,14 +28,18 @@
    ]
   },
   "02012R1215-20150226": {
-   "melding": "Formex-bron geweigerd: de tekst roept afbeelding L_2015054NL.01000303.tif aan, maar de handeling noemt haar niet",
-   "oorzaak": "de tekst roept afbeelding L_#NL.#.tif aan, maar de handeling noemt haar niet",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "geconsolideerd",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
-   "waarschuwingen": []
+   "sha256": "3f47c8cc218e3bf7204c74257cd5eaed40dab403c7cf76d7781cfc2672bc23ce",
+   "status": "ok",
+   "tekens": 112149,
+   "waarschuwingen": [
+    "Overwegingen en aanhef zijn overgenomen uit de oorspronkelijke handeling (CELEX:32012R1215); de geconsolideerde tekst op EUR-Lex bevat deze niet.",
+    "CLG.MDFO in de tekst noemt 32012R1215R(06), dat niet als wijziging in GR.MOD.ACT staat; amendments kan onvolledig zijn.",
+    "7 afbeeldingen uit de Formex-bron niet overgenomen (TIFF); de tekst die de bron bij 7 ervan meelevert (IMG.CNT) is wel overgenomen; de tekst eromheen staat er wel: L_2015054NL.01000303.tif, L_2015054NL.01000401.tif, L_2015054NL.01000501.tif, L_2015054NL.01000601.tif, L_2015054NL.01000702.tif en 2 meer."
+   ]
   },
   "02013R0575-20270101": {
    "melding": "Formex-element(en) met tekst zonder eigen behandeling: FORMULA (220×); omzetting geweigerd. Een formule wordt bewust niet omgezet: een index, breuk of operator heeft geen tekstvorm die leesbaar blijft en door de woordcontrole te bewijzen is.",
@@ -141,14 +145,18 @@
    ]
   },
   "02017R0745-20260719": {
-   "melding": "Formex-bron geweigerd: de tekst roept afbeelding L_2017117NL.01011402.tif aan, maar de handeling noemt haar niet",
-   "oorzaak": "de tekst roept afbeelding L_#NL.#.tif aan, maar de handeling noemt haar niet",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "geconsolideerd",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
-   "waarschuwingen": []
+   "sha256": "09dcd4fe7d53302b686e23c73d2ed0a36bfc3d456da23c59035fc0745bb9db33",
+   "status": "ok",
+   "tekens": 725033,
+   "waarschuwingen": [
+    "Overwegingen en aanhef zijn overgenomen uit de oorspronkelijke handeling (CELEX:32017R0745); de geconsolideerde tekst op EUR-Lex bevat deze niet.",
+    "CLG.MDFO in de tekst noemt 32017R0745R(01), 32017R0745R(02), 32017R0745R(03), dat niet als wijziging in GR.MOD.ACT staat; amendments kan onvolledig zijn.",
+    "1 afbeelding uit de Formex-bron niet overgenomen (TIFF); de tekst eromheen staat er wel: L_2017117NL.01011402.tif."
+   ]
   },
   "02017R1939-20210110": {
    "melding": null,
@@ -1051,13 +1059,13 @@
    ]
   },
   "32013D0287": {
-   "melding": "Formex-bron geweigerd: een inclusie (INCL.ELEMENT) als los blok is alleen voor een afbeelding gemeten",
-   "oorzaak": "een inclusie als los blok is alleen voor een afbeelding gemeten",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "0511270b37f2dae52bde9e77150db449af53988e6d36b3d2497a311a917f3845",
+   "status": "ok",
+   "tekens": 18225,
    "waarschuwingen": []
   },
   "32013D0785": {
@@ -1081,8 +1089,8 @@
    "waarschuwingen": []
   },
   "32013L0052": {
-   "melding": "Formex-bron geweigerd: een inclusie (INCL.ELEMENT) als los blok is alleen voor een afbeelding gemeten",
-   "oorzaak": "een inclusie als los blok is alleen voor een afbeelding gemeten",
+   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['van', 'en', 'en', 'en', 'en', 'en', 'en', 'en', 'en', 'en', 'en', 'en'], extra=niets).",
+   "oorzaak": "woordcontrole: tekst valt weg",
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
    "sha256": null,
@@ -1091,13 +1099,13 @@
    "waarschuwingen": []
   },
   "32013R0390": {
-   "melding": "Formex-bron geweigerd: een inclusie (INCL.ELEMENT) staat midden in een zin; alleen een inclusie als eigen alinea binnen QUOT.S is gemeten",
-   "oorzaak": "een inclusie staat midden in een zin",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "0b6da4a431fbab10d68793e7ad3732d7a7fe412a3d2aa32b9d9659ad3a64dbf1",
+   "status": "ok",
+   "tekens": 121478,
    "waarschuwingen": []
   },
   "32013R0503": {
@@ -1173,13 +1181,13 @@
    "waarschuwingen": []
   },
   "32014L0106": {
-   "melding": "Formex-bron geweigerd: een inclusie (INCL.ELEMENT) als los blok is alleen voor een afbeelding gemeten",
-   "oorzaak": "een inclusie als los blok is alleen voor een afbeelding gemeten",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "d8b8f3bda71e631e1260e090a1995e90b2517751a7677e364e9caaf2ba948129",
+   "status": "ok",
+   "tekens": 20645,
    "waarschuwingen": []
   },
   "32014R0167": {
@@ -1455,8 +1463,8 @@
    "waarschuwingen": []
   },
   "32016R2390": {
-   "melding": "Formex-bron geweigerd: een inclusie (INCL.ELEMENT) als los blok is alleen voor een afbeelding gemeten",
-   "oorzaak": "een inclusie als los blok is alleen voor een afbeelding gemeten",
+   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['vervaardiging', '02', '1h', '1h', '1h', '1h', '1h', '1h', '1h', '1h', '9h', '9h'], extra=['1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '2', '2']).",
+   "oorzaak": "woordcontrole: tekst verschilt",
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
    "sha256": null,
@@ -1579,13 +1587,13 @@
    "waarschuwingen": []
   },
   "32018D0187": {
-   "melding": "Formex-bron geweigerd: een inclusie (INCL.ELEMENT) staat midden in een zin; alleen een inclusie als eigen alinea binnen QUOT.S is gemeten",
-   "oorzaak": "een inclusie staat midden in een zin",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "a71659ea07968c84c10c48e5e50b66d51f023ecdc45b0c15a254d6348610c432",
+   "status": "ok",
+   "tekens": 4259,
    "waarschuwingen": []
   },
   "32018D1622": {
@@ -1599,13 +1607,13 @@
    "waarschuwingen": []
   },
   "32018L0100": {
-   "melding": "Formex-bron geweigerd: een inclusie (INCL.ELEMENT) staat midden in een zin; alleen een inclusie als eigen alinea binnen QUOT.S is gemeten",
-   "oorzaak": "een inclusie staat midden in een zin",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "9c0a7a3857ff772dd2596e7cbb5fd732da74e049a41595ba8684beb8cd7dc405",
+   "status": "ok",
+   "tekens": 14720,
    "waarschuwingen": []
   },
   "32018L0597": {
@@ -1759,8 +1767,8 @@
    "waarschuwingen": []
   },
   "32019L0114": {
-   "melding": "Formex-bron geweigerd: een inclusie (INCL.ELEMENT) staat midden in een zin; alleen een inclusie als eigen alinea binnen QUOT.S is gemeten",
-   "oorzaak": "een inclusie staat midden in een zin",
+   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['xfestulolium'], extra=['xfestuloliu', 'm']).",
+   "oorzaak": "woordcontrole: tekst verschilt",
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
    "sha256": null,
@@ -1769,8 +1777,8 @@
    "waarschuwingen": []
   },
   "32019L0782": {
-   "melding": "Formex-bron geweigerd: een inclusie (INCL.ELEMENT) staat midden in een zin; alleen een inclusie als eigen alinea binnen QUOT.S is gemeten",
-   "oorzaak": "een inclusie staat midden in een zin",
+   "melding": "Formex-bron geweigerd: een inclusie staat tussen aanhalingstekens met de onbekende code '0022'",
+   "oorzaak": "een inclusie staat tussen aanhalingstekens met de onbekende code '#'",
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
    "sha256": null,
@@ -1889,17 +1897,17 @@
    "waarschuwingen": []
   },
   "32020D1402": {
-   "melding": "Formex-bron geweigerd: een inclusie (INCL.ELEMENT) staat midden in een zin; alleen een inclusie als eigen alinea binnen QUOT.S is gemeten",
-   "oorzaak": "een inclusie staat midden in een zin",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "a8c42109d6bb5c439b7662b12607eb67d2bfcb183b15301b14ce9df0431a7898",
+   "status": "ok",
+   "tekens": 79605,
    "waarschuwingen": []
   },
   "32020D1675": {
-   "melding": "Formex-bron geweigerd: een inclusie (INCL.ELEMENT) staat midden in een zin; alleen een inclusie als eigen alinea binnen QUOT.S is gemeten",
+   "melding": "Formex-bron geweigerd: een inclusie (INCL.ELEMENT) staat midden in een zin; alleen een inclusie als eigen alinea, met hooguit haar aanhalingstekens, is gemeten",
    "oorzaak": "een inclusie staat midden in een zin",
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
@@ -2123,13 +2131,13 @@
    "waarschuwingen": []
   },
   "32022L1648": {
-   "melding": "Formex-bron geweigerd: een inclusie (INCL.ELEMENT) staat midden in een zin; alleen een inclusie als eigen alinea binnen QUOT.S is gemeten",
-   "oorzaak": "een inclusie staat midden in een zin",
+   "melding": null,
+   "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
+   "sha256": "e9dcbca358e3526ee7bd49a585e9745df7197d769683b7d7d8beebb29555a3a4",
+   "status": "ok",
+   "tekens": 9198,
    "waarschuwingen": []
   },
   "32022L2464": {
@@ -2277,7 +2285,7 @@
    "waarschuwingen": []
   },
   "32023L0544": {
-   "melding": "Formex-bron geweigerd: een inclusie (INCL.ELEMENT) staat midden in een zin; alleen een inclusie als eigen alinea binnen QUOT.S is gemeten",
+   "melding": "Formex-bron geweigerd: een inclusie (INCL.ELEMENT) staat midden in een zin; alleen een inclusie als eigen alinea, met hooguit haar aanhalingstekens, is gemeten",
    "oorzaak": "een inclusie staat midden in een zin",
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
@@ -2741,8 +2749,8 @@
    "waarschuwingen": []
   },
   "32026D0816": {
-   "melding": "Formex-bron geweigerd: een inclusie (INCL.ELEMENT) staat midden in een zin; alleen een inclusie als eigen alinea binnen QUOT.S is gemeten",
-   "oorzaak": "een inclusie staat midden in een zin",
+   "melding": "Formex-tekstbehoud faalt (woordmultiset verschilt; ontbreekt=['c', 'c', 'c', 'c', 'c', 'c', 'c', 'c', 'c', 'c', 'c', 'c'], extra=niets).",
+   "oorzaak": "woordcontrole: tekst valt weg",
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
    "sha256": null,
@@ -2791,8 +2799,8 @@
    "waarschuwingen": []
   },
   "32026R1383": {
-   "melding": "Formex-bron geweigerd: een inclusie (INCL.ELEMENT) staat midden in een zin; alleen een inclusie als eigen alinea binnen QUOT.S is gemeten",
-   "oorzaak": "een inclusie staat midden in een zin",
+   "melding": "Formex-bron geweigerd: de tekst roept afbeelding L_202601383NL.001001.fmx.tif aan, maar de handeling noemt haar niet",
+   "oorzaak": "de tekst roept afbeelding L_#NL.#.fmx.tif aan, maar de handeling noemt haar niet",
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
    "sha256": null,
@@ -2944,14 +2952,17 @@
    "waarschuwingen": []
   },
   "62012TJ0235": {
-   "melding": "Formex-uitspraak geweigerd: de zip bevat naast de XML ook ECR_62012TJ0235_NL_01_01.tif, ECR_62012TJ0235_NL_01_02.tif, ECR_62012TJ0235_NL_01_03.tif, ECR_62012TJ0235_NL_01_06.tif; een afbeelding of bijlage zou buiten de omzetting blijven",
-   "oorzaak": "zip bevat ook andere bestanden",
+   "melding": null,
+   "oorzaak": null,
    "route": "hof",
    "sectie": "steekproef-hof",
-   "sha256": null,
-   "status": "weigering",
-   "tekens": null,
-   "waarschuwingen": []
+   "sha256": "709c3972b2a14f072d50ea9bb91e139f69eecd11913d959be953b30036a3facf",
+   "status": "ok",
+   "tekens": 61525,
+   "waarschuwingen": [
+    "18 keer vet of cursief niet overgenomen; de tekst blijft.",
+    "4 afbeeldingen uit de Formex-bron niet overgenomen (TIFF); de tekst eromheen staat er wel: ECR_62012TJ0235_NL_01_01.tif, ECR_62012TJ0235_NL_01_02.tif, ECR_62012TJ0235_NL_01_03.tif, ECR_62012TJ0235_NL_01_06.tif."
+   ]
   },
   "62013CJ0148": {
    "melding": null,
@@ -3642,6 +3653,6 @@
    ]
   }
  },
- "gemeten": "2026-09-23 16:06",
+ "gemeten": "2026-09-23 16:07",
  "taal": "NL"
 }
