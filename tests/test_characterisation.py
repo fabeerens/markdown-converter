@@ -1657,6 +1657,38 @@ def test_pdf_upload_reports_the_engine_in_the_source():
     assert doc.kind == "document"
 
 
+def test_warn_if_unmapped_glyphs_flags_the_replacement_character():
+    """Een `�` in de tekst betekent dat de extractie een glyph niet naar
+    tekens kon terugvertalen — vaak een typografische ligatuur ("fi", "ft",
+    "th") zonder tekstcodering. Stilzwijgend doorlaten zou een gebruiker een
+    verkeerd citaat kunnen laten overnemen, dus moet er een waarschuwing boven
+    de tekst komen i.p.v. de tekst ongewijzigd te laten."""
+    from mdconv.sources.files import warn_if_unmapped_glyphs
+
+    broken = "Dit gold. �ese diensten zijn o�en onderling verbonden."
+    warned = warn_if_unmapped_glyphs(broken)
+    assert warned.startswith("*Let op:")
+    assert broken in warned
+
+    clean = "Dit is gewone tekst zonder problemen."
+    assert warn_if_unmapped_glyphs(clean) == clean
+
+
+def test_from_file_warns_when_pdf_inspector_leaves_unmapped_glyphs(monkeypatch):
+    """De waarschuwing moet ook via `from_file()` doorkomen — zowel op de
+    gewone route als op de per-pagina/inline-afbeeldingenroute."""
+    import mdconv.sources as sources_mod
+    from mdconv.sources import from_file
+
+    monkeypatch.setattr(
+        sources_mod.files, "convert",
+        lambda data, filename: ("Tekst met � erin.", "pdf-inspector"),
+    )
+    doc = from_file(b"%PDF-fake%", "rapport.pdf")
+    assert doc.markdown.startswith("*Let op:")
+    assert "Tekst met � erin." in doc.markdown
+
+
 # ---------------------------------------------------------------------------
 # Front-end: één regel waar de UI stilletjes op stukliep
 # ---------------------------------------------------------------------------

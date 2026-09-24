@@ -304,6 +304,17 @@ accountregistratie namens de gebruiker):
   pdf-inspector kent alleen PDF. `files.convert()` geeft `(markdown, engine)`
   terug zodat de UI kan tonen welke engine het document daadwerkelijk verwerkte
   (`"pdf-inspector"` of `"MarkItDown"` in het bronveld).
+  - **Onvertaalde glyphs worden niet stilzwijgend doorgelaten.** Sommige lettertypen slaan
+    een typografische ligatuur (bv. "fi", "ft", "th") op als één samengesteld glyph, zónder
+    tekstcodering (`ToUnicode`) naar de onderliggende letters — de PDF "weet" dan zelf niet
+    meer welke tekens het zijn, dus geen extractie-engine kan dat achteraf herstellen. Zowel
+    pdf-inspector als MarkItDown zetten daar dan een `�` (replacement character) neer,
+    bv. "these" → "�ese", "often" → "o�en". `files.warn_if_unmapped_glyphs()` (aangeroepen
+    vanuit `sources.from_file()`, op alle PDF-routes: gewoon, per-pagina-inline en de
+    MarkItDown-terugval) zet daarom een waarschuwing boven de tekst zodra `�` erin
+    voorkomt — anders zou een gebruiker een verkeerd citaat kunnen overnemen zonder dat te
+    weten. Geen poging tot giswerk-herstel: welke letters het precies waren staat nergens in
+    het bestand, dus alleen handmatig tegen het origineel controleren is betrouwbaar.
 - **Losse afbeeldingen extraheren** (`extract_images=1` op `/api/convert/file` en
   `/api/convert/file-url`, alleen voor `.pdf`, bij Documentupload): een **aanvulling** op de
   normale PDF-tekst (pdf-inspector/MarkItDown hierboven), geen alternatief — de UI-toggle
@@ -824,7 +835,7 @@ regel), inclusief de vloeiende tabbalk-indicator.
   weggeschreven bestand nooit als geldige staat gelezen kan worden.
 
 ## Tests
-`.venv/bin/python -m pytest tests/ -q` — 198 karakteriseringstests die het gedrag
+`.venv/bin/python -m pytest tests/ -q` — 200 karakteriseringstests die het gedrag
 vastleggen in plaats van het te beschrijven: `detect_source`-precedentie, ELI→CELEX,
 de geconsolideerde-CELEX-afhandeling (datum behouden, preambule invoegen, en de vier
 terugvalpaden als dat niet lukt), de versie-terugvalladder (nieuwste versie op of vóór de

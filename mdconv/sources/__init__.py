@@ -162,6 +162,11 @@ def from_file(data: bytes, filename: str, *, extract_images: bool = False) -> Do
     een gok. Bij elk ander bestandstype (of als poppler-utils niet
     geïnstalleerd is) wordt deze vlag genegeerd, precies zoals de UI 'm ook
     alleen bij PDF-invoer toont.
+
+    Bevat de geëxtraheerde tekst onvertaalde glyphs (`�`, zie
+    `files.warn_if_unmapped_glyphs`), dan krijgt de tekst een waarschuwing
+    boven zich i.p.v. de gebruiker stilzwijgend een gat in de tekst te laten
+    overnemen.
     """
     if filename.lower().endswith(".xml") and looks_like_formex(data):
         markdown = formex.convert_formex(data)
@@ -172,6 +177,7 @@ def from_file(data: bytes, filename: str, *, extract_images: bool = False) -> Do
         pages = files.convert_pdf_pages(data)
         if pages is not None:
             markdown, attachments = _attach_pdf_images_inline(pages, data)
+            markdown = files.warn_if_unmapped_glyphs(markdown)
             engine = files.ENGINE_PDF_INSPECTOR
             if attachments:
                 engine = f"{engine} + {len(attachments)} afbeelding(en)"
@@ -192,6 +198,7 @@ def from_file(data: bytes, filename: str, *, extract_images: bool = False) -> Do
             markdown = f"{markdown.rstrip()}\n\n## Bijlagen\n\n{embeds}\n"
             engine = f"{engine} + {len(attachments)} afbeelding(en)"
 
+    markdown = files.warn_if_unmapped_glyphs(markdown)
     return Document(markdown=markdown, source=f"{engine} • {filename}", attachments=attachments)
 
 

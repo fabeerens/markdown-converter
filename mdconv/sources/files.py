@@ -42,6 +42,30 @@ _NO_TEXT_LAYER = {"scanned", "image_based"}
 ENGINE_PDF_INSPECTOR = "pdf-inspector"
 ENGINE_MARKITDOWN = "MarkItDown"
 
+# Substitutieteken dat een extractie-engine invult zodra een glyph geen
+# tekstcodering (`ToUnicode`) heeft. Komt vooral voor bij typografische
+# ligaturen ("fi", "ft", "th", …) die een lettertype als één samengesteld
+# glyph opslaat zonder onderliggende letters — de PDF "weet" dan zelf niet
+# meer welke tekens het zijn, dus geen extractie-engine (pdf-inspector,
+# MarkItDown) kan dat achteraf herstellen. Zwijgend zo'n plek laten staan zou
+# een gebruiker een verkeerd citaat kunnen laten overnemen; vandaar een
+# waarschuwing boven de tekst i.p.v. stil doorlaten.
+_REPLACEMENT_CHAR = "�"
+_UNMAPPED_GLYPHS_NOTE = (
+    "*Let op: dit document bevat een of meer onleesbare tekens (`�`) op de plek van "
+    "letters die de extractie niet kon achterhalen — vaak een typografische ligatuur "
+    "(bv. \"fi\", \"ft\", \"th\") die het lettertype alleen als samengesteld glyph opslaat, "
+    "zonder tekstcodering. Controleer de gemarkeerde plekken handmatig tegen het origineel.*"
+)
+
+
+def warn_if_unmapped_glyphs(markdown: str) -> str:
+    """Zet de waarschuwing hierboven boven de tekst als er onvertaalde glyphs
+    (`�`) in staan; anders `markdown` ongewijzigd."""
+    if _REPLACEMENT_CHAR not in markdown:
+        return markdown
+    return f"{_UNMAPPED_GLYPHS_NOTE}\n\n{markdown}"
+
 _engine_lock = threading.Lock()
 _markitdown = None
 
