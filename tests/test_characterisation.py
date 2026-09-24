@@ -1237,6 +1237,34 @@ def test_stream_chunk_rejects_a_truncated_response(monkeypatch):
         list(openrouter.stream_chunk("tekst", model="x", system="y", profile="generic"))
 
 
+def test_stream_chunk_reports_a_mid_stream_provider_error_instead_of_swallowing_it(monkeypatch):
+    """Een storing bij de onderliggende provider komt, ná de HTTP 200, als een
+    SSE-regel mét een `error`-veld binnen (geen `choices`). Zonder expliciete
+    check verdween die regel stilzwijgend en kwam de stream leeg uit met de
+    nietszeggende "geen inhoud terug"-melding — de echte oorzaak moet
+    doorkomen."""
+    from mdconv.cleanup import openrouter
+    from mdconv.errors import ConversionError
+
+    class FakeStreamResp:
+        status_code = 200
+        close = staticmethod(lambda: None)
+
+        @staticmethod
+        def iter_lines(decode_unicode=True):
+            return iter([
+                'data: {"error":{"message":"Provider returned error","code":502}}',
+                "data: [DONE]",
+            ])
+
+    monkeypatch.setattr(openrouter.config, "api_key", lambda: "sk-test")
+    monkeypatch.setattr(openrouter.net, "llm",
+                         lambda: type("S", (), {"post": staticmethod(lambda *a, **k: FakeStreamResp())})())
+
+    with pytest.raises(ConversionError, match="Provider returned error"):
+        list(openrouter.stream_chunk("tekst", model="x", system="y", profile="generic"))
+
+
 def test_clean_chunk_returns_usage_alongside_the_text(monkeypatch):
     from mdconv.cleanup import openrouter
 

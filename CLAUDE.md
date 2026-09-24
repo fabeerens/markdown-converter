@@ -469,6 +469,18 @@ accountregistratie namens de gebruiker):
   verdween daardoor **zonder enige foutmelding**. `_truncation_message(profile)` geeft een
   profielspecifieke boodschap: bij `obsidian` (dat nooit chunkt) wordt aangeraden een ander
   profiel te gebruiken; bij `generic`/`caselaw` wordt aangeraden de deelgrootte te verlagen.
+- **Een mid-stream providerfout wordt niet stilzwijgend als "geen inhoud" gemeld.**
+  `stream_chunk()`/`ocr_pages_stream()` krijgen de HTTP 200 en headers al vóórdat de
+  onderliggende provider daadwerkelijk begint te genereren; loopt die provider daarna vast
+  (tijdelijk niet beschikbaar, een providerspecifieke contextlimiet, moderatie), dan stuurt
+  OpenRouter dat als een SSE-regel mét een `error`-veld in plaats van `choices`. Zonder
+  expliciete check op `event.get("error")` werd die regel overgeslagen en kwam de stream leeg
+  uit — dat leverde de nietszeggende `"AI-opschoning gaf geen inhoud terug."` op (de fallback
+  voor "geen enkele delta binnengekomen"), terwijl de eigenlijke reden (bv. "Provider returned
+  error") verborgen bleef. Dit trad in de praktijk vooral op bij grotere documenten met meer
+  delen — elk deel is een aparte aanroep, dus meer delen = meer kans dat één ervan zo'n
+  providerhobbel raakt. `_error_message()` pakt `error.message` (of het hele veld) eruit en
+  komt terecht in dezelfde `ConversionError`-afhandeling als elke andere opschoonfout.
 - **Streaming** (`clean_stream()` in `cleanup/__init__.py`, endpoint `/api/clean/stream`):
   levert de opgeschoonde tekst als een reeks stukjes op i.p.v. één keer het hele resultaat.
   Bij meerdere delen worden die **na elkaar** gestreamd (niet parallel zoals `clean()`) —
@@ -812,7 +824,7 @@ regel), inclusief de vloeiende tabbalk-indicator.
   weggeschreven bestand nooit als geldige staat gelezen kan worden.
 
 ## Tests
-`.venv/bin/python -m pytest tests/ -q` — 197 karakteriseringstests die het gedrag
+`.venv/bin/python -m pytest tests/ -q` — 198 karakteriseringstests die het gedrag
 vastleggen in plaats van het te beschrijven: `detect_source`-precedentie, ELI→CELEX,
 de geconsolideerde-CELEX-afhandeling (datum behouden, preambule invoegen, en de vier
 terugvalpaden als dat niet lukt), de versie-terugvalladder (nieuwste versie op of vóór de

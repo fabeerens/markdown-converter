@@ -246,6 +246,17 @@ def stream_chunk(
                 event = json.loads(payload)
             except ValueError:
                 continue
+            # OpenRouter heeft de HTTP-status (200) en headers dan al verzonden;
+            # een storing bij de onderliggende provider (tijdelijk niet
+            # beschikbaar, een providerspecifieke contextlimiet, moderatie) komt
+            # daarna alleen nog als een SSE-regel mét een `error`-veld in plaats
+            # van `choices` binnen. Zonder deze check verdween die regel
+            # stilzwijgend en kwam de stream leeg uit — met de nietszeggende
+            # "geen inhoud terug"-melding, die de eigenlijke oorzaak verborg.
+            if event.get("error"):
+                raise ConversionError(
+                    f"AI-opschoning mislukt (OpenRouter): {_error_message(event['error'])}"
+                )
             choice = (event.get("choices") or [{}])[0]
             delta_piece = choice.get("delta", {}).get("content")
             if delta_piece:
@@ -341,6 +352,10 @@ def ocr_pages_stream(
                 event = json.loads(payload)
             except ValueError:
                 continue
+            if event.get("error"):
+                raise ConversionError(
+                    f"Wiskunde-modus mislukt (OpenRouter): {_error_message(event['error'])}"
+                )
             choice = (event.get("choices") or [{}])[0]
             delta_piece = choice.get("delta", {}).get("content")
             if delta_piece:
@@ -401,3 +416,11 @@ def _error_detail(resp: requests.Response) -> str:
         return resp.json().get("error", {}).get("message", "") or resp.text[:200]
     except Exception:  # noqa: BLE001
         return resp.text[:200]
+
+
+def _error_message(error) -> str:
+    """Zoals `_error_detail`, maar voor een `error`-veld dat al als dict/str
+    binnenkomt (een mid-stream SSE-fout, geen HTTP-respons)."""
+    if isinstance(error, dict):
+        return str(error.get("message") or error)[:200]
+    return str(error)[:200]
