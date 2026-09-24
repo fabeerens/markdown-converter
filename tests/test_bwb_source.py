@@ -167,6 +167,24 @@ def test_a_heading_with_the_label_first_is_not_reported():
     assert extra["waarschuwingen"] == []
 
 
+def test_the_reversed_heading_warning_travels_with_the_provenance(monkeypatch):
+    """De melding van de omzetter komt in `herkomst.waarschuwingen`, en zo in `ophaal.json`."""
+    xml = toestand().replace(
+        b"<artikel ",
+        b'<titeldeel><kop><nr>Vierde</nr><label>titel</label><titel>De vierde titel</titel></kop><artikel ', 1
+    ).replace(b"</artikel>", b"</artikel></titeldeel>", 1)
+
+    def get(url, **kwargs):
+        return response(manifest(), url) if url.endswith("manifest.xml") else response(xml, url)
+
+    monkeypatch.setattr(wetten.net, "documents", lambda: SimpleNamespace(get=get))
+    document = from_link("BWBR0000001/2020-02-01")
+
+    assert "Vierde titel. De vierde titel" in document.markdown
+    assert ("De BWB-XML zet 1 keer het nummer vóór het label in een kop ('Vierde titel'); "
+            "de omzetter volgt die volgorde.") in document.provenance.waarschuwingen
+
+
 def test_not_yet_effective_status_on_anything_but_an_article_is_refused():
     """Alleen bij een artikel weet de omzetter hoe hij dit toont; elders is het een weigering."""
     xml = toestand().replace(b"<artikel ", b'<hoofdstuk status="nogniet" inwerking="2020-01-01"><kop><label>Hoofdstuk</label><nr>1</nr><titel>Eerste</titel></kop><artikel ', 1).replace(

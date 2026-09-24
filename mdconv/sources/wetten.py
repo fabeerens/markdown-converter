@@ -268,6 +268,9 @@ def _fetch_bwb_xml(query: str) -> tuple[str, str, Herkomst]:
             "De SHA-512 wijkt af van het KOOP-manifest; identiteit en versie van "
             "de toestand zijn wel rechtstreeks gecontroleerd."
         )
+    # Wat de omzetter zelf meldt (een kop met het nummer vóór het label, kb WP-09),
+    # reist met de herkomst mee naar `ophaal.json`, net als de Formex-meldingen.
+    waarschuwingen.extend(extra["waarschuwingen"])
     bron_url = getattr(xml_response, "url", "") or xml_url
     record_source(
         data,
