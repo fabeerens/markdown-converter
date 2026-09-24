@@ -105,6 +105,68 @@ def test_container_heading_without_label_and_number_is_only_its_title():
     assert "Artikel 1. Reikwijdte" in markdown
 
 
+def _artikel(nr):
+    return (f'<artikel status="goed" inwerking="2020-01-01"><kop><label>Artikel</label>'
+            f'<nr>{nr}</nr></kop><lid><lidnr>1</lidnr><al>Tekst van artikel {nr}.</al></lid></artikel>')
+
+
+def _paragraaf_1(nr):
+    return (f'<paragraaf><kop><label>§</label><nr>1</nr><titel>Eerste paragraaf</titel></kop>'
+            f'{_artikel(nr)}</paragraaf>')
+
+
+def test_a_heading_with_the_number_before_the_label_follows_the_source_order():
+    """`<nr>Vierde</nr><label>titel</label>` wordt `Vierde titel`, zoals de bron het zet.
+
+    Het Wetboek van Koophandel telt zijn paragrafen per titel opnieuw en zet het
+    rangtelwoord vóór het label: `Eerste Boek`, `Vierde titel`, `Vijfde afdeeling`.
+    `kopregel()` schreef altijd eerst het label (`titel Vierde.`), een vorm die het
+    profiel van de kennisbank niet kent; titel en boek kregen daar geen anker, en de
+    twee keer `§ 1` werd twee keer `par-1` (kb WP-09, klasse G). Een kop met het label
+    vóór het nummer, zoals `<label>Vijfde titel</label><nr>A</nr>`, verandert niet."""
+    xml = f"""<toestand bwb-id="BWBR0000001" inwerkingtreding="2020-01-01"><wetgeving>
+<citeertitel>Testwetboek</citeertitel><wet-besluit><wettekst>
+<boek><kop><nr>Tweede</nr><label>Boek</label><titel>Het tweede boek</titel></kop>
+<titeldeel><kop><nr>Vierde</nr><label>titel</label><titel>De vierde titel</titel></kop>
+{_paragraaf_1("341")}
+<afdeling><kop><nr>Vijfde</nr><label>afdeeling</label><titel>De vijfde afdeling</titel></kop>
+{_artikel("360")}</afdeling></titeldeel>
+<titeldeel><kop><nr>Vijfde</nr><label>titel</label><titel>De vijfde titel</titel></kop>
+{_paragraaf_1("378")}</titeldeel>
+<titeldeel><kop><label>Vijfde titel</label><nr>A</nr><titel>De ingevoegde titel</titel></kop>
+{_artikel("400")}</titeldeel>
+</boek></wettekst></wet-besluit></wetgeving></toestand>""".encode()
+
+    markdown, eenheden, onbekend, extra = wetten.bwb_xml.omzetten(xml)
+
+    assert onbekend == {}
+    assert "\n## Tweede Boek. Het tweede boek\n" in markdown
+    assert "\n### Vierde titel. De vierde titel\n" in markdown
+    assert "\n#### Vijfde afdeeling. De vijfde afdeling\n" in markdown
+    assert "\n### Vijfde titel. De vijfde titel\n" in markdown
+    assert markdown.count("\n#### § 1. Eerste paragraaf\n") == 2
+    for omgedraaid in ("Boek Tweede", "titel Vierde", "titel Vijfde", "afdeeling Vijfde"):
+        assert omgedraaid not in markdown
+    # Label vóór nummer blijft label vóór nummer.
+    assert "\n### Vijfde titel A. De ingevoegde titel\n" in markdown
+    # De eenheden dragen dezelfde kopregel; de ankers komen uit het nummer en veranderen niet.
+    teksten = {e.anker: e.tekst for e in eenheden}
+    assert teksten["tit-vierde"] == "Vierde titel. De vierde titel"
+    assert teksten["tit-a"] == "Vijfde titel A. De ingevoegde titel"
+    # Gevolgd, en gemeld.
+    assert extra["omgedraaide_koppen"] == 4
+    assert extra["waarschuwingen"] == [
+        "De BWB-XML zet 4 keer het nummer vóór het label in een kop ('Tweede Boek', "
+        "'Vierde titel', 'Vijfde afdeeling', 'Vijfde titel'); de omzetter volgt die volgorde."]
+
+
+def test_a_heading_with_the_label_first_is_not_reported():
+    markdown, _, _, extra = wetten.bwb_xml.omzetten(toestand())
+    assert "Artikel 1. Reikwijdte" in markdown
+    assert extra["omgedraaide_koppen"] == 0
+    assert extra["waarschuwingen"] == []
+
+
 def test_not_yet_effective_status_on_anything_but_an_article_is_refused():
     """Alleen bij een artikel weet de omzetter hoe hij dit toont; elders is het een weigering."""
     xml = toestand().replace(b"<artikel ", b'<hoofdstuk status="nogniet" inwerking="2020-01-01"><kop><label>Hoofdstuk</label><nr>1</nr><titel>Eerste</titel></kop><artikel ', 1).replace(

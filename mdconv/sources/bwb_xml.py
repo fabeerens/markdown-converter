@@ -30,6 +30,7 @@ class BwbOmzetter:
         self.bijlage_ankers: list[str] = []
         self.herhaalde_cellen = 0
         self.expired: dict[str, str] = {}
+        self.omgedraaid: list[str] = []
 
     # ---------- inline ----------
     def inline(self, el, noot_prefix: str = "") -> str:
@@ -118,24 +119,52 @@ class BwbOmzetter:
         for kind in el:
             self.plat(kind)
 
-    def kop(self, el) -> tuple[str, str, str]:
+    def kop(self, el) -> tuple[str, str, str, bool]:
+        """`(label, nr, titel, nr_eerst)`; `nr_eerst` als de bron `<nr>` vóór `<label>` zet.
+
+        Het Wetboek van Koophandel schrijft `<nr>Vierde</nr><label>titel</label>`, en zo
+        ook `Eerste Boek` en `Vijfde afdeeling`: het rangtelwoord staat vóór het label.
+        Die volgorde is de bron (kb WP-09, klasse G).
+        """
         k = el.find("kop")
         if k is None:
-            return "", "", ""
-        return (ws(self.inline(k.find("label"))) if k.find("label") is not None else "",
-                ws(self.inline(k.find("nr"))) if k.find("nr") is not None else "",
-                ws(self.inline(k.find("titel"))) if k.find("titel") is not None else "")
+            return "", "", "", False
+        label = ws(self.inline(k.find("label"))) if k.find("label") is not None else ""
+        nr = ws(self.inline(k.find("nr"))) if k.find("nr") is not None else ""
+        titel = ws(self.inline(k.find("titel"))) if k.find("titel") is not None else ""
+        kinderen = [kind.tag for kind in k]
+        nr_eerst = bool(label and nr) and kinderen.index("nr") < kinderen.index("label")
+        if nr_eerst:
+            self.omgedraaid.append(f"{nr} {label}")
+        return label, nr, titel, nr_eerst
 
-    def kopregel(self, label: str, nr: str, titel: str) -> str:
+    def kopregel(self, label: str, nr: str, titel: str, nr_eerst: bool = False) -> str:
         # Zonder label en nummer is de kop alleen de titel. De Wet bescherming
         # persoonsgegevens BES (BWBR0028067) heeft een hoofdstuk met enkel
         # `<titel>Slotbepalingen</titel>`; dat werd `## . Slotbepalingen`, en de
         # kennisbank struikelde over een kop die met een leesteken begint
         # (WP-04, 23 september 2026).
-        eerste = " ".join(x for x in (label, nr) if x)
+        #
+        # Label en nummer staan in de volgorde van de bron. Altijd eerst het label
+        # maakte van `<nr>Vierde</nr><label>titel</label>` de regel `titel Vierde.`:
+        # een vorm die de bron niet heeft en het profiel van de kennisbank niet kent.
+        # Titel en boek kregen daar geen anker, en `§ 1` onder twee titels werd twee
+        # keer `par-1` (het Wetboek van Koophandel, kb WP-09).
+        paar = (nr, label) if nr_eerst else (label, nr)
+        eerste = " ".join(x for x in paar if x)
         if not eerste:
             return titel
         return f"{eerste}. {titel}" if titel else eerste
+
+    def meld_omgedraaid(self) -> str | None:
+        """Koppen waarin de bron het nummer vóór het label zet: gevolgd, en gemeld."""
+        if not self.omgedraaid:
+            return None
+        vormen = list(dict.fromkeys(self.omgedraaid))
+        voorbeeld = ", ".join(f"'{v}'" for v in vormen[:5]) + (
+            f" en {len(vormen) - 5} meer" if len(vormen) > 5 else "")
+        return (f"De BWB-XML zet {len(self.omgedraaid)} keer het nummer vóór het label in een "
+                f"kop ({voorbeeld}); de omzetter volgt die volgorde.")
 
     def container_anker(self, tag: str, nr: str, pad: dict) -> str:
         n = nummer_anker(nr, romeins_omrekenen=True)
@@ -158,10 +187,11 @@ class BwbOmzetter:
     def container_inhoud(self, el, niveau: int, pad: dict) -> None:
         for kind in el:
             if kind.tag in CONTAINERS:
-                label, nr, titel = self.kop(kind)
+                label, nr, titel, nr_eerst = self.kop(kind)
                 anker = self.container_anker(kind.tag, nr, pad)
-                self.u.blok(f"{'#' * min(niveau, 6)} {self.kopregel(label, nr, titel)}")
-                self.u.eenheid(anker, kind.tag, self.kopregel(label, nr, titel))
+                regel = self.kopregel(label, nr, titel, nr_eerst)
+                self.u.blok(f"{'#' * min(niveau, 6)} {regel}")
+                self.u.eenheid(anker, kind.tag, regel)
                 eigen = anker.split("-", 1)[1] if not pad.get("annex") else anker.split(f"{CONTAINERS[kind.tag]}-", 1)[1]
                 sleutel = {"hoofdstuk": "hfd", "afdeling": "afd", "titeldeel": "tit"}.get(kind.tag)
                 nieuw = dict(pad)
@@ -179,10 +209,10 @@ class BwbOmzetter:
                 self.container_inhoud(kind, niveau, pad)
 
     def artikel(self, el, niveau: int, pad: dict) -> None:
-        label, nr, titel = self.kop(el)
+        label, nr, titel, nr_eerst = self.kop(el)
         naam = nummer_anker(nr)
         anker = f"{pad['annex']}-art-{naam}" if pad.get("annex") else f"art-{naam}"
-        regel = self.kopregel(label or "Artikel", nr, titel)
+        regel = self.kopregel(label or "Artikel", nr, titel, nr_eerst)
         self.u.blok(f"{'#' * min(niveau, 6)} {regel}")
         self.u.eenheid(anker, "artikel", regel)
         status = (el.get("status") or "").lower()
@@ -318,8 +348,8 @@ class BwbOmzetter:
         een citeeranker (`annex-2-art-7`); daarvoor moet `bijlage()` het kopniveau
         en het ankerpad meegeven. Zonder die twee blijft een artikel onbekend.
         """
-        label, nr, titel = self.kop(el)
-        regel = self.kopregel(label, nr, titel) if label or nr else titel
+        label, nr, titel, nr_eerst = self.kop(el)
+        regel = self.kopregel(label, nr, titel, nr_eerst) if label or nr else titel
         if regel:
             self.u.blok(regel)
         for kind in el:
@@ -392,11 +422,11 @@ class BwbOmzetter:
             self.u.blok(md)
 
     def bijlage(self, el, niveau: int) -> None:
-        label, nr, titel = self.kop(el)
+        label, nr, titel, nr_eerst = self.kop(el)
         n = nummer_anker(nr, romeins_omrekenen=True) if nr else str(len(self.bijlage_ankers) + 1)
         anker = f"annex-{n}"
         self.bijlage_ankers.append(anker)
-        regel = self.kopregel(label or "Bijlage", nr, titel)
+        regel = self.kopregel(label or "Bijlage", nr, titel, nr_eerst)
         self.u.blok(f"{'#' * niveau} {regel}")
         self.u.eenheid(anker, "bijlage", regel)
         prefix = f"{anker}-"
@@ -421,7 +451,10 @@ def omzetten(data: bytes | str) -> tuple[str, list, dict, dict]:
         raise ConversionError(f"BWB-XML is niet leesbaar: {exc}") from exc
     o = BwbOmzetter()
     u = o.omzetten(root)
+    melding = o.meld_omgedraaid()
     return u.markdown(), u.eenheden, u.onbekend, {
         "herhaalde_cellen": o.herhaalde_cellen,
         "expired": o.expired,
+        "omgedraaide_koppen": len(o.omgedraaid),
+        "waarschuwingen": [melding] if melding else [],
     }
