@@ -13,6 +13,8 @@ from mdconv.errors import ConversionError
 from mdconv.sources import formex_xml, from_link
 from mdconv.sources.xml_gedeeld import tabel_markdown
 
+NBSP = formex_xml.NBSP
+
 
 DOC = b"""<FMX>
 <PUBLICATION.REF><COLL>L</COLL><NO.OJ>265</NO.OJ><LG.OJ>NL</LG.OJ>
@@ -2000,6 +2002,50 @@ def test_a_number_the_source_writes_against_a_word_in_a_table_cell_is_reported_t
     markdown, _, _, extra = formex_xml.omzetten(formex_zip(act=act))
     assert "| Som van MA4 + 8,9Z-MA4 |" in markdown
     assert any("('9Z')" in w for w in extra["metadata"]["waarschuwingen"])
+
+
+# Een nootverwijzing is in de bron een woordgrens (`_plat_bron` zet er spaties om,
+# want NOTE staat niet in AANEEN_IN_BRON). Schrijft de bron het volgende woord er
+# zonder witruimte achter, dan stond in raw `Act (1)voor`, en die marker leest de
+# planner van de kennisbank niet (WP-08, klasse D; 32023D1795, overweging 96).
+
+def test_a_note_reference_the_source_writes_against_the_next_word_is_separated_and_reported():
+    """32023D1795, overweging 96: `Stored Communications Act<NOTE …/>voor rechtshandhavingsdoeleinden`."""
+    act = ACT.replace(
+        b"Digitale diensten vragen duidelijke regels.",
+        b'Bovendien kan op grond van de Stored Communications Act<NOTE NOTE.ID="E0165" NUMBERING="ARAB" '
+        b'TYPE="FOOTNOTE"><P>18 U.S.C. \xc2\xa7\xc2\xa7 2701-2713.</P></NOTE>voor rechtshandhavingsdoeleinden '
+        b'toegang worden verkregen.')
+    markdown, _, _, extra = formex_xml.omzetten(formex_zip(act=act))
+    # `ws()` maakt van de harde spatie vóór de marker een gewone; de scheiding erna is nieuw.
+    assert "Stored Communications Act (1) voor rechtshandhavingsdoeleinden" in markdown.replace(NBSP, " ")
+    assert f"(1){NBSP}{NBSP}18 U.S.C. §§ 2701-2713." in markdown
+    meldingen = [w for w in extra["metadata"]["waarschuwingen"] if "nootverwijzing" in w]
+    assert meldingen == ["De Formex-bron schrijft 1 keer een nootverwijzing vast aan het woord erna "
+                         "('voor'); de omzetter zet er een spatie tussen, want de bron leest een noot als "
+                         "woordgrens."]
+
+
+def test_a_note_reference_before_an_element_in_a_table_cell_is_separated_too():
+    """32016R2390: `<CELL><NOTE NOTE.REF="E0007" TYPE="TABLE"/><FT TYPE="CN">ex07115900</FT></CELL>`."""
+    act = ACT.replace(
+        b"</ARTICLE>",
+        b'<ALINEA><TBL COLS="1"><GR.NOTES><NOTE NOTE.ID="E0007" NUMBERING="ARAB" TYPE="TABLE"><P>Onder '
+        b'douanetoezicht.</P></NOTE></GR.NOTES><CORPUS><ROW><CELL COL="1"><NOTE NOTE.REF="E0007" '
+        b'TYPE="TABLE"/><FT TYPE="CN">ex07115900</FT></CELL></ROW></CORPUS></TBL></ALINEA></ARTICLE>', 1)
+    markdown, _, _, extra = formex_xml.omzetten(formex_zip(act=act))
+    assert "| (1) ex07115900 |" in markdown
+    assert any("('ex07115900')" in w for w in extra["metadata"]["waarschuwingen"])
+
+
+def test_a_note_reference_followed_by_a_space_or_punctuation_is_unchanged_and_not_reported():
+    act = ACT.replace(b"eerste onderdeel;", b'eerste onderdeel<NOTE NOTE.ID="E1" TYPE="FOOTNOTE"><P>Een noot.'
+                      b'</P></NOTE>;').replace(
+        b"tweede onderdeel.", b'tweede<NOTE NOTE.ID="E2" TYPE="FOOTNOTE"><P>Nog een.</P></NOTE> onderdeel.')
+    markdown, _, _, extra = formex_xml.omzetten(formex_zip(act=act))
+    assert "eerste onderdeel (1);" in markdown.replace(NBSP, " ")
+    assert "tweede (2) onderdeel." in markdown.replace(NBSP, " ")
+    assert not any("nootverwijzing" in w for w in extra["metadata"].get("waarschuwingen", []))
 
 
 _NOOT = (b'<NOTE NOTE.ID="E0032" NUMBERING="STAR" TYPE="FOOTNOTE"><P>Verordening (EU) nr. 600/2014 van '

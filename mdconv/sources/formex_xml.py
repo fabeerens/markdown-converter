@@ -363,6 +363,38 @@ def _plat_bron(el) -> str:
     return uit
 
 
+def _vast_na_noot(root) -> dict[int, str]:
+    """De nootverwijzingen waar de bron het volgende woord zonder witruimte achter schrijft.
+
+    `Stored Communications Act<NOTE …/>voor rechtshandhavingsdoeleinden`
+    (32023D1795, overweging 96) en `<CELL><NOTE NOTE.REF="E0007"/><FT
+    TYPE="CN">ex07115900</FT>` (32016R2390). Een NOTE is voor
+    `_plat_bron` een woordgrens (hij staat niet in AANEEN_IN_BRON), dus volgens de
+    eigen woordcontrole zijn dat twee woorden; `noot()` schrijft ze dan ook als
+    twee. Zonder scheiding stond in raw `Act (165)voor`, en de planner van de
+    kennisbank leest een marker alleen met witruimte of een leesteken erachter
+    (WP-08, klasse D). Gemeten op 24 september 2026 in de 282 cachezips buiten de
+    holdout: 727 keer in de tekst, in twee documenten (725 in 32016R2390, 2 in
+    32023D1795); daarnaast drie tabelnoten in een GR.NOTES met een annotatie erna
+    (32019R0089, 32023R0173), die niet door `noot()` gaan en dus niets veranderen.
+    Het volgende kind telt alleen als de staart leeg is, en een tweede NOTE niet:
+    die begint zelf met een harde spatie.
+    """
+    uit: dict[int, str] = {}
+    for ouder in root.iter():
+        kinderen = list(ouder)
+        for index, kind in enumerate(kinderen):
+            if kind.tag != "NOTE":
+                continue
+            erna = kind.tail or ""
+            if not erna and index + 1 < len(kinderen) and kinderen[index + 1].tag != "NOTE":
+                erna = "".join(kinderen[index + 1].itertext())
+            woord = re.match(r"\w+", erna)
+            if woord:
+                uit[id(kind)] = woord.group(0)
+    return uit
+
+
 def _woorden(tekst: str) -> list[str]:
     # Nootmarkers en overwegingnummers hebben dezelfde gedrukte vorm. Voor de
     # behoudscontrole mogen ze beide weg: de hiërarchiecontrole telt de
@@ -476,6 +508,8 @@ class FormexOmzetter:
         self.nootlabels: dict[str, int] = {}
         self.nootinhoud: dict[str, list[str]] = {}  # nootsleutel -> woorden van de definitie
         self.aaneen: dict[int, str] = {}            # id(element) -> aaneengeschreven woord
+        self.noot_erna: dict[int, str] = {}         # id(NOTE) -> woord dat de bron eraan vastschrijft
+        self.vast_na_noot: dict[int, str] = {}      # id(NOTE) -> gescheiden woord (voor de melding)
         self.herhaalde_cellen = 0
         self.bijlagen = 0
         self.metadata: dict = {}
@@ -695,6 +729,10 @@ class FormexOmzetter:
                 raise _xml_fout(
                     f"een nootverwijzing (NOTE.REF {el.get('NOTE.REF')}) draagt tekst die niet gelijk "
                     "is aan de noot waarnaar ze verwijst")
+        if id(el) in self.noot_erna:
+            # Zie `_vast_na_noot`: de bron leest hier twee woorden.
+            self.vast_na_noot[id(el)] = self.noot_erna[id(el)]
+            return f"{NBSP}({nummer}) "
         return f"{NBSP}({nummer})"
 
     def notenblok(self) -> None:
@@ -715,6 +753,8 @@ class FormexOmzetter:
         self.afbeeldingen = afbeeldingen
         inclusiedelen = [(f"inclusie:{naam}", root) for naam, root in inclusies.items()]
         self.controleer_elementen(onderdelen + inclusiedelen)
+        for _, root in onderdelen + inclusiedelen:
+            self.noot_erna.update(_vast_na_noot(root))
         self.markeringen = _wijzigingsmarkeringen(data)
         if basis is not None:
             self.basis = self.kies_basis(onderdelen, basis)
@@ -748,6 +788,8 @@ class FormexOmzetter:
             self.meld_afbeeldingen()
         if self.aaneen:
             self.meld_aaneen()
+        if self.vast_na_noot:
+            self.meld_vast_na_noot()
         if self.basis is not None:
             # De ingevoegde considerans is brontekst als elke andere: dezelfde
             # controles op verlies, verdubbeling en verweving gelden ook voor haar.
@@ -768,6 +810,7 @@ class FormexOmzetter:
         if preambule is None:
             raise _xml_fout(reden or "de basishandeling levert geen considerans")
         self.controleer_elementen([("basishandeling", preambule)])
+        self.noot_erna.update(_vast_na_noot(preambule))
         return preambule
 
     def zelfcontrole(self, onderdelen: list[tuple[str, ET.Element]],
@@ -1599,6 +1642,15 @@ class FormexOmzetter:
         self.metadata.setdefault("waarschuwingen", []).append(
             f"De Formex-bron schrijft {len(self.aaneen)} keer een datum of getal aaneen met het woord "
             f"ervoor of erna ({voorbeeld}); de omzetter neemt dat ongewijzigd over.")
+
+    def meld_vast_na_noot(self) -> None:
+        """Een nootverwijzing die de bron aan het woord erna vastschrijft: gescheiden, en gemeld."""
+        woorden = list(dict.fromkeys(self.vast_na_noot.values()))
+        voorbeeld = ", ".join(f"'{w}'" for w in woorden[:5]) + (f" en {len(woorden) - 5} meer" if len(woorden) > 5 else "")
+        self.metadata.setdefault("waarschuwingen", []).append(
+            f"De Formex-bron schrijft {len(self.vast_na_noot)} keer een nootverwijzing vast aan het woord "
+            f"erna ({voorbeeld}); de omzetter zet er een spatie tussen, want de bron leest een noot als "
+            f"woordgrens.")
 
     def meld_afbeeldingen(self) -> None:
         weg = self.afbeeldingen_weggelaten
