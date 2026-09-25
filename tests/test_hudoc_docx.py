@@ -61,9 +61,34 @@ VOETNOOT = '<w:r><w:footnoteReference w:id="2"/></w:r>'
 
 NUMBERING_BULLET = (
     '<w:abstractNum w:abstractNumId="0"><w:lvl w:ilvl="0"><w:numFmt w:val="bullet"/></w:lvl></w:abstractNum>'
-    '<w:abstractNum w:abstractNumId="1"><w:lvl w:ilvl="0"><w:numFmt w:val="decimal"/></w:lvl></w:abstractNum>'
+    '<w:abstractNum w:abstractNumId="1"><w:lvl w:ilvl="0"><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/>'
+    '<w:start w:val="1"/></w:lvl></w:abstractNum>'
+    '<w:abstractNum w:abstractNumId="2"><w:lvl w:ilvl="0"><w:lvlText w:val="%1."/></w:lvl></w:abstractNum>'
     '<w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num>'
-    '<w:num w:numId="2"><w:abstractNumId w:val="1"/></w:num>')
+    '<w:num w:numId="2"><w:abstractNumId w:val="1"/></w:num>'
+    '<w:num w:numId="3"><w:abstractNumId w:val="2"/></w:num>')
+
+# De nummering van de koppen zoals HUDOC die sinds 2019 aan de stijlen hangt (López Ribalda,
+# 001-197098): niveau 0 toont niets (JuHHead), 1 is romeins (JuHIRoman), 2 een letter (JuHA),
+# 3 decimaal (JuH1). Een tweede `num` op dezelfde abstractNum met een startOverride herstart
+# de reeks, zoals Big Brother Watch dat doet bij `I. RELEVANT DOMESTIC LAW`.
+NUMBERING_KOPPEN = (
+    '<w:abstractNum w:abstractNumId="15">'
+    '<w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="none"/><w:lvlText w:val="%1"/></w:lvl>'
+    '<w:lvl w:ilvl="1"><w:start w:val="1"/><w:numFmt w:val="upperRoman"/><w:lvlText w:val="%2."/></w:lvl>'
+    '<w:lvl w:ilvl="2"><w:start w:val="1"/><w:numFmt w:val="upperLetter"/><w:lvlText w:val="%3."/></w:lvl>'
+    '<w:lvl w:ilvl="3"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%4."/></w:lvl>'
+    '<w:lvl w:ilvl="4"><w:start w:val="1"/><w:numFmt w:val="lowerLetter"/><w:lvlText w:val="(%5)"/></w:lvl>'
+    '</w:abstractNum>'
+    '<w:num w:numId="4"><w:abstractNumId w:val="15"/></w:num>'
+    '<w:num w:numId="27"><w:abstractNumId w:val="15"/>'
+    '<w:lvlOverride w:ilvl="1"><w:startOverride w:val="1"/></w:lvlOverride></w:num>'
+    '<w:num w:numId="28"><w:abstractNumId w:val="15"/>'
+    '<w:lvlOverride w:ilvl="1"><w:startOverride w:val="3"/></w:lvlOverride></w:num>')
+
+
+def genummerd(tekst: str, stijl: str, num: str, ilvl: str) -> str:
+    return p(tekst, stijl, ppr=f'<w:numPr><w:ilvl w:val="{ilvl}"/><w:numId w:val="{num}"/></w:numPr>')
 
 BODY = "".join([
     p("FIFTH SECTION"),
@@ -145,8 +170,12 @@ def test_een_veld_dat_over_alineas_loopt_blijft_een_veld():
 @pytest.mark.parametrize("wijziging, reden", [
     (lambda b: b + p("tekst", "OnbekendeStijl"), "stijlen zonder eigen behandeling: OnbekendeStijl"),
     (lambda b: b + p("SUMMARY", "SuSummary"), "samenvatting"),
-    (lambda b: b + p("tekst", "JuPara", ppr='<w:numPr><w:ilvl w:val="0"/><w:numId w:val="2"/></w:numPr>'),
-     "automatische nummering \\(decimal\\)"),
+    # WP-20: een decimale nummering wordt nagerekend (`docx.Teller`); wat niet gemeten is,
+    # weigert nog: een vorm zonder numFmt, een niet-aansluitende reeks, een onbekende num.
+    (lambda b: b + p("tekst", "JuPara", ppr='<w:numPr><w:ilvl w:val="0"/><w:numId w:val="3"/></w:numPr>'),
+     "vorm None"),
+    (lambda b: b + p("tekst", "JuPara", ppr='<w:numPr><w:ilvl w:val="0"/><w:numId w:val="9"/></w:numPr>'),
+     "numbering.xml niet kent"),
     (lambda b: b + p(inhoud='<w:ins w:id="1"><w:r><w:t>toegevoegd</w:t></w:r></w:ins>', stijl="JuPara"),
      "bijgehouden wijziging"),
     (lambda b: b + p(inhoud='<w:del w:id="1"><w:r><w:delText>weg</w:delText></w:r></w:del>', stijl="JuPara"),
@@ -302,3 +331,66 @@ def test_een_uitspraak_krijgt_een_kb_bundel_met_de_docx(monkeypatch):
         assert f"raw/jurisprudentie/{pad_id}.md" in namen
         assert f"raw/jurisprudentie/{pad_id}.source.json" in namen
         assert any(n.startswith(f"raw/source-evidence/{pad_id}/") and n.endswith(".docx") for n in namen)
+
+
+def test_de_nummering_van_de_koppen_wordt_nagerekend_zoals_word_die_toont():
+    """T2-F19 (kb WP-20): vijf van de twaalf arresten van test 2 droegen het nummer van hun
+    koppen niet in de tekst maar in de nummering van de stijl. De tellers horen bij de
+    abstractNum, een hoger niveau herstart de diepere, en een startOverride herstart een reeks."""
+    body = "".join([
+        p("CASE OF X v. Y"),
+        genummerd("THE FACTS", "JuHHead", "4", "0"),
+        genummerd("THE CIRCUMSTANCES OF THE CASE", "JuHIRoman", "4", "1"),
+        genummerd("The applicants", "JuHA", "4", "2"),
+        genummerd("The proceedings", "JuH1", "4", "3"),
+        genummerd("The appeal", "JuH1", "4", "3"),
+        genummerd("The Government", "JuHA", "4", "2"),
+        genummerd("RELEVANT DOMESTIC LAW", "JuHIRoman", "4", "1"),
+        genummerd("The Constitution", "JuHA", "4", "2"),
+        genummerd("THE LAW", "JuHHead", "4", "0"),
+        genummerd("PRELIMINARY ISSUES", "JuHIRoman", "4", "1"),
+        genummerd("Locus standi", "JuHA", "4", "2"),
+        genummerd("The applicants", "JuHa0", "4", "4"),
+        genummerd("RELEVANT INTERNATIONAL LAW", "JuHIRoman", "27", "1"),   # herstart: I.
+        genummerd("EUROPEAN UNION LAW", "JuHIRoman", "4", "1"),              # telt door: II.
+        p(f"1.{NBSP}{NBSP}The case originated in an application.", "JuPara"),
+    ])
+    markdown, meta = hudoc_docx.omzetten(docx(body, numbering=NUMBERING_KOPPEN), "CASE OF X v. Y")
+    koppen = [r for r in markdown.splitlines() if r.startswith("## ")]
+    assert koppen == [
+        "## THE FACTS", "## I. THE CIRCUMSTANCES OF THE CASE", "## A. The applicants", "## 1. The proceedings",
+        "## 2. The appeal", "## B. The Government", "## II. RELEVANT DOMESTIC LAW", "## A. The Constitution",
+        "## THE LAW", "## I. PRELIMINARY ISSUES", "## A. Locus standi", "## (a) The applicants",
+        "## I. RELEVANT INTERNATIONAL LAW", "## II. EUROPEAN UNION LAW",
+    ]
+    assert meta["koppen"] == 14 and meta["randnummers"] == 1
+
+
+def test_een_gerekend_nummer_voor_een_gewone_alinea_is_geen_randnummer():
+    """De lijst van verzoekers in de bijlage van López Ribalda: `Normal` met decimale
+    nummering. Het nummer komt in de vorm die de bron voor een getypt lijstnummer gebruikt
+    (nummer plus twee harde spaties) en telt niet als randnummer."""
+    body = "".join([
+        p("CASE OF X v. Y"),
+        p(f"1.{NBSP}{NBSP}The case originated in an application.", "JuPara"),
+        genummerd("Isabel LÓPEZ RIBALDA, born in 1963", "Normal", "2", "0"),
+        genummerd("María GANCEDO, born in 1967", "Normal", "2", "0"),
+    ])
+    markdown, meta = hudoc_docx.omzetten(docx(body, numbering=NUMBERING_BULLET), "CASE OF X v. Y")
+    assert f"\n1.{NBSP}{NBSP}Isabel LÓPEZ RIBALDA, born in 1963\n" in markdown
+    assert f"\n2.{NBSP}{NBSP}María GANCEDO, born in 1967\n" in markdown
+    assert meta["randnummers"] == 1
+
+
+@pytest.mark.parametrize("body, reden", [
+    # Een reeks die niet aansluit: een startOverride op niveau 1 (num 28: 3) die een alinea
+    # op niveau 2 als eerste gebruikt, waarna niveau 1 op de gewone num van I. naar III. springt.
+    ("".join([genummerd("A", "JuHIRoman", "4", "1"), genummerd("x", "JuHA", "28", "2"),
+              genummerd("B", "JuHIRoman", "4", "1")]),
+     "sluit niet aan"),
+    # Het nummer staat al in de tekst én als nummering: welke geldt is niet te bewijzen.
+    (genummerd(f"I.{NBSP}{NBSP}THE FACTS", "JuHIRoman", "4", "1"), "al in haar tekst"),
+])
+def test_wat_de_teller_niet_kan_bewijzen_weigert(body, reden):
+    with pytest.raises(ConversionError, match=reden):
+        hudoc_docx.omzetten(docx(p("CASE OF X v. Y") + body, numbering=NUMBERING_KOPPEN), "CASE OF X v. Y")

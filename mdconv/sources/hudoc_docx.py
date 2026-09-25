@@ -54,11 +54,19 @@ ALINEA = {
     "JuParaSub", "JuCourt", "JuCase", "jucase0", "JuJudges", "JuSigned", "JuInitialled",
     "ECHRDecisionBody", "DecHCase", "OpiPara", "OpiParaSub", "OpiQuot", "OpiTranslation",
     "ECHRCoverTitle4", "JuTitle", "ListParagraph",
+    # Gemeten in test 2 van 25 september 2026 (kb WP-20, T2-F19): `Header` is in Rotaru
+    # (001-58586) één lege alinea; `Default` zijn in Copland (001-79996) twee alinea's van
+    # het lichaam met een randnummer (`26.  The “data protection principles” …`).
+    "Header", "Default",
+    # López Ribalda (001-197098): `Title4` (`_Title_4`, op JuPara) is de regel met de
+    # klachtnummers onder de titel, `(Applications nos. 1874/13 and 8567/13)`.
+    "Title4",
 }
-TOC = {"TOC1": 0, "TOC2": 1, "TOC3": 2, "TOC4": 3, "TOC5": 4}
+# `TOC6`: de inhoudsopgave van Hurbain (001-225814) gaat zes niveaus diep (kb WP-20).
+TOC = {"TOC1": 0, "TOC2": 1, "TOC3": 2, "TOC4": 3, "TOC5": 4, "TOC6": 5}
 # Alleen deze alinea's dragen een randnummer van het lichaam. Een citaat, een lijst en
 # een afwijkende mening houden hun nummering zoals de bron haar schrijft.
-RANDNUMMER = {"Normal", "JuPara", "JuParaLast", "jupara", "jupara0", "ECHRPara"}
+RANDNUMMER = {"Normal", "JuPara", "JuParaLast", "jupara", "jupara0", "ECHRPara", "Default"}
 WEIGER_VOORVOEGSEL = ("Su",)
 
 

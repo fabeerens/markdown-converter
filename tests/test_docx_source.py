@@ -108,7 +108,9 @@ def test_headings_notes_tables_and_bullets_come_from_the_word_structure():
 @pytest.mark.parametrize("body, reden", [
     (p("Tekst", "Wees"), "stijlen zonder eigen behandeling: Wees"),
     (p("Tekst", "Lus"), "verwijst via basedOn naar zichzelf"),
-    (p("Punt", ppr='<w:numPr><w:ilvl w:val="0"/><w:numId w:val="2"/></w:numPr>'), "automatische nummering \\(decimal\\)"),
+    # WP-20: een decimale nummering wordt nagerekend (`docx.Teller`); een num die numbering.xml
+    # niet kent blijft een weigering.
+    (p("Punt", ppr='<w:numPr><w:ilvl w:val="0"/><w:numId w:val="3"/></w:numPr>'), "niet kent"),
     (p(inhoud='<w:r><w:drawing/></w:r>'), "afbeelding, object of tekstvak"),
     ("<w:tbl><w:tr>" + cel("A", '<w:gridSpan w:val="2"/>') + "</w:tr></w:tbl>", "gridSpan of vMerge"),
     ("<w:tbl><w:tr><w:tc>" + TABEL + p("x") + "</w:tc></w:tr></w:tbl>", "tabel in een tabelcel"),

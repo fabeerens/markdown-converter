@@ -137,6 +137,7 @@ class Docx:
         self._numfmt = self._lees_numfmt()
         self._stijl_num = self._lees_stijl_numpr()
         self._stijldefs = self._lees_stijldefs()
+        self.nummering_def = self._lees_nummering()
 
     def _lees_noten(self) -> dict[str, ET.Element]:
         uit: dict[str, ET.Element] = {}
@@ -168,6 +169,68 @@ class Docx:
                 if aid == a.get(W + "val"):
                     uit[(num.get(W + "numId"), ilvl)] = fmt
         return uit
+
+    def _lees_nummering(self) -> dict:
+        """Wat `numbering.xml` per lijst zegt: de niveaus van elke `abstractNum` en per
+        `num` de `abstractNum` met haar overschrijvingen.
+
+        `{"abstract": {(abstractId, ilvl): {fmt, text, start}}, "num": {numId: (abstractId,
+        {ilvl: {"start": int | None, "lvl": {fmt, text, start} | None}})}}`. Een
+        `lvlRestart` is in de twaalf gemeten EHRM-bestanden nergens gezien en blijft een
+        weigering in `Teller`.
+        """
+        uit: dict = {"abstract": {}, "num": {}, "lvlRestart": False, "numStyleLink": {}, "styleLink": {}}
+        if self.nummering is None:
+            return uit
+
+        def niveau(lvl) -> dict:
+            fmt, tekst, start = lvl.find(W + "numFmt"), lvl.find(W + "lvlText"), lvl.find(W + "start")
+            if lvl.find(W + "lvlRestart") is not None:
+                uit["lvlRestart"] = True
+            return {"fmt": fmt.get(W + "val") if fmt is not None else None,
+                    "text": tekst.get(W + "val") if tekst is not None else None,
+                    "start": int(start.get(W + "val")) if start is not None
+                    and (start.get(W + "val") or "").lstrip("-").isdigit() else 1}
+
+        for a in self.nummering.findall(W + "abstractNum"):
+            # Een abstractNum die naar een nummeringsstijl verwijst (`numStyleLink`) heeft
+            # zelf geen niveaus; die staan bij de abstractNum met de `styleLink` van
+            # dezelfde naam. Zo hangt het dictum van Glukhin, Hurbain en Podchasov aan
+            # `ECHRA1StyleList` (gemeten, kb WP-20).
+            koppeling, definitie = a.find(W + "numStyleLink"), a.find(W + "styleLink")
+            if koppeling is not None:
+                uit["numStyleLink"][a.get(W + "abstractNumId")] = koppeling.get(W + "val")
+            if definitie is not None:
+                uit["styleLink"][definitie.get(W + "val")] = a.get(W + "abstractNumId")
+            for lvl in a.findall(W + "lvl"):
+                uit["abstract"][(a.get(W + "abstractNumId"), lvl.get(W + "ilvl"))] = niveau(lvl)
+        for num in self.nummering.findall(W + "num"):
+            a = num.find(W + "abstractNumId")
+            if a is None:
+                continue
+            overschrijvingen = {}
+            for o in num.findall(W + "lvlOverride"):
+                so, lvl = o.find(W + "startOverride"), o.find(W + "lvl")
+                overschrijvingen[o.get(W + "ilvl")] = {
+                    "start": int(so.get(W + "val")) if so is not None and (so.get(W + "val") or "").isdigit() else None,
+                    "lvl": niveau(lvl) if lvl is not None else None}
+            uit["num"][num.get(W + "numId")] = (a.get(W + "val"), overschrijvingen)
+        return uit
+
+    def nummering_van(self, p, stijl: str) -> tuple[str, str] | None:
+        """`(numId, ilvl)` van een alinea met automatische nummering, of None."""
+        np_ = p.find(W + "pPr/" + W + "numPr")
+        if np_ is not None:
+            nid, il = np_.find(W + "numId"), np_.find(W + "ilvl")
+            num, lvl = (nid.get(W + "val") if nid is not None else None,
+                        il.get(W + "val") if il is not None else "0")
+        elif stijl in self._stijl_num:
+            num, lvl = self._stijl_num[stijl]
+        else:
+            return None
+        if num in (None, "0"):
+            return None  # numId 0 schakelt de nummering uit
+        return num, lvl
 
     def _lees_stijl_numpr(self) -> dict[str, tuple[str, str]]:
         """Stijlen die zelf een nummering dragen (dan staat er geen numPr in de alinea)."""
@@ -237,6 +300,148 @@ class Docx:
         if num in (None, "0"):
             return None  # numId 0 schakelt de nummering uit
         return self._numfmt.get((num, lvl), "?")
+
+
+# --------------------------------------------------------------------------
+# De automatische nummering
+# --------------------------------------------------------------------------
+
+def _romeins(n: int) -> str:
+    uit = ""
+    for waarde, teken in ((1000, "M"), (900, "CM"), (500, "D"), (400, "CD"), (100, "C"), (90, "XC"),
+                          (50, "L"), (40, "XL"), (10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I")):
+        while n >= waarde:
+            uit += teken
+            n -= waarde
+    return uit
+
+
+def _letter(n: int) -> str:
+    uit = ""
+    while n > 0:
+        n, rest = divmod(n - 1, 26)
+        uit = chr(65 + rest) + uit
+    return uit
+
+
+# De nummervormen die in de twaalf EHRM-bestanden van 25 september 2026 voorkomen, plus
+# `decimalZero` uit het Word-sjabloon `ArticleSection`. Wat hier niet staat is niet gemeten.
+_VORMEN = {
+    "decimal": str,
+    "decimalZero": lambda n: f"{n:02d}",
+    "upperRoman": _romeins,
+    "lowerRoman": lambda n: _romeins(n).lower(),
+    "upperLetter": _letter,
+    "lowerLetter": lambda n: _letter(n).lower(),
+    "none": lambda n: "",
+}
+
+
+class Teller:
+    """Rekent het nummer uit dat Word vóór een alinea met `numPr` zou tonen.
+
+    Waarom hier en niet in de tekst: bij HUDOC staat het nummer van een kop (`I.`, `A.`,
+    `1.`, `(a)`) sinds 2019 niet meer in de tekst maar in de nummering van de stijl
+    (`JuHIRoman` en zusters); vijf van de twaalf arresten van test 2 weigerden erop
+    (T2-F19, kb WP-20). De regels zijn die van Word, gemeten op die bestanden:
+
+    - de tellers horen bij de `abstractNum`, niet bij de `num`: twee `num`-instanties op
+      dezelfde `abstractNum` tellen door (Glukhin: `I.` en `II.` van THE LAW staan op een
+      andere `num` dan `III.` tot en met `VI.`, en de reeks loopt);
+    - een `startOverride` herstart dat niveau bij het eerste gebruik van die `num`
+      (Big Brother Watch: `I. RELEVANT DOMESTIC LAW` na `III. DOMESTIC PROCEEDINGS`);
+    - een alinea op niveau L zet de tellers dieper dan L terug (de `A.` onder een nieuwe
+      `I.` begint opnieuw), ook als dat niveau zelf niets toont (`JuHHead`, `numFmt none`);
+    - `%n` in `lvlText` is de teller van niveau n, in de vorm van dat niveau.
+
+    De zelfcontrole (`controleer`): binnen één `abstractNum` sluit de reeks per niveau
+    aan (I, II, III …) tenzij een hoger niveau ertussen kwam of een `startOverride`
+    het nummer zet; anders is de nummering niet begrepen en weigert de omzetting.
+    """
+
+    def __init__(self, docx: Docx) -> None:
+        self.docx = docx
+        self.defs = docx.nummering_def
+        self.tellers: dict[str, dict[int, int]] = {}
+        self.gezien: set[str] = set()
+        self.vorige: dict[tuple[str, int], int] = {}     # (abstract, niveau) -> laatste nummer
+
+    def _definitie(self, abstract: str, ilvl: str) -> dict | None:
+        d = self.defs["abstract"].get((abstract, ilvl))
+        if d is None and abstract in self.defs["numStyleLink"]:
+            doel = self.defs["styleLink"].get(self.defs["numStyleLink"][abstract])
+            if doel is not None and doel != abstract:
+                d = self.defs["abstract"].get((doel, ilvl))
+        return d
+
+    def _niveau(self, num: str, abstract: str, ilvl: str, overschrijvingen: dict) -> dict:
+        o = overschrijvingen.get(ilvl) or {}
+        d = (o.get("lvl") or self._definitie(abstract, ilvl))
+        if d is None:
+            raise _fout(self.docx.naam, f"nummering {num} niveau {ilvl} is niet gedefinieerd in numbering.xml")
+        if o.get("start") is not None:
+            d = dict(d, start=o["start"])
+        return d
+
+    def label(self, num: str, ilvl: str) -> str | None:
+        """Het getoonde nummer, of None als de lijst een opsommingsteken is."""
+        if self.defs["lvlRestart"]:
+            raise _fout(self.docx.naam, "een lvlRestart in numbering.xml is niet gemeten")
+        if num not in self.defs["num"]:
+            raise _fout(self.docx.naam, f"de alinea verwijst naar nummering {num}, die numbering.xml niet kent")
+        abstract, overschrijvingen = self.defs["num"][num]
+        niveau = int(ilvl)
+        d = self._niveau(num, abstract, ilvl, overschrijvingen)
+        if d["fmt"] == "bullet":
+            return None
+        if d["fmt"] not in _VORMEN:
+            # Zonder numFmt is de vorm niet te weten: in Big Brother Watch en Podchasov
+            # zijn de koppen van niveau 6 (`JuHalpha`) Griekse letters ((α), (β)). Raden
+            # (decimaal) zou daar een verkeerd nummer in de tekst zetten.
+            raise _fout(self.docx.naam, f"automatische nummering van de vorm {d['fmt']!r} (numbering.xml, "
+                        f"niveau {ilvl}) is niet gemeten")
+        c = self.tellers.setdefault(abstract, {})
+        herstart = None
+        if num not in self.gezien:
+            self.gezien.add(num)
+            for lvl, o in overschrijvingen.items():
+                if o.get("start") is not None:
+                    c[int(lvl)] = o["start"] - 1
+                    if int(lvl) == niveau:
+                        herstart = o["start"]
+        c[niveau] = c.get(niveau, d["start"] - 1) + 1
+        for k in [k for k in c if k > niveau]:
+            del c[k]
+        # Een niveau dat niets toont (`JuHHead`, numFmt none) telt alleen om de diepere
+        # niveaus te herstarten; zijn eigen reeks is onzichtbaar en een `startOverride`
+        # erop (Hurbain: 6 na 3) verandert geen enkel getoond nummer.
+        if d["fmt"] != "none":
+            self.controleer(abstract, niveau, c[niveau], d["start"], herstart)
+        else:
+            self.controleer(abstract, niveau, None, d["start"], herstart)
+
+        def vorm(m) -> str:
+            n = int(m.group(1)) - 1
+            dn = self._niveau(num, abstract, str(n), overschrijvingen)
+            return _VORMEN.get(dn["fmt"], str)(c.get(n, dn["start"]))
+
+        return re.sub(r"%(\d)", vorm, d["text"] or "")
+
+    def controleer(self, abstract: str, niveau: int, nummer: int | None, start: int,
+                   herstart: int | None) -> None:
+        """`nummer` None: een onzichtbaar niveau, dat alleen de diepere reeksen afsluit."""
+        if nummer is not None:
+            vorig = self.vorige.get((abstract, niveau))
+            toegestaan = {vorig + 1} if vorig is not None else {start}
+            toegestaan.add(start)            # na een hoger niveau begint de reeks opnieuw
+            if herstart is not None:
+                toegestaan.add(herstart)
+            if nummer not in toegestaan:
+                raise _fout(self.docx.naam, f"de automatische nummering sluit niet aan: op niveau {niveau} volgt "
+                            f"{nummer} op {vorig}")
+            self.vorige[(abstract, niveau)] = nummer
+        for k in [k for k in self.vorige if k[0] == abstract and k[1] > niveau]:
+            del self.vorige[k]
 
 
 # --------------------------------------------------------------------------
@@ -459,6 +664,7 @@ def omzetten(data: bytes, kaart: Kaart, *, titel: str | None = None) -> tuple[st
     """
     docx = Docx(data, kaart.naam)
     lezer = Lezer(docx)
+    teller = Teller(docx)
     blokken: list[str] = []
     koppen = 0
     onbekend: Counter = Counter()
@@ -491,27 +697,40 @@ def omzetten(data: bytes, kaart: Kaart, *, titel: str | None = None) -> tuple[st
             onbekend[stijl] += 1
             continue
 
-        fmt = docx.numfmt(kind, stijl)
+        nummering = docx.nummering_van(kind, stijl)
         tekst = lezer.tekst(kind, eenregelig=(soort in ("kop", "toc")))
-        if fmt is not None and fmt not in ("bullet", "none"):
-            raise _fout(docx.naam, f"automatische nummering ({fmt}) in stijl {stijl}: het nummer staat "
-                        "niet in de tekst en zou van de renderer komen")
         bullet = "@@BULLET@@" in tekst
         tekst = tekst.replace("@@BULLET@@", "").strip(" \t" + NBSP)
         if not tekst:
             continue
+        # Het nummer dat Word vóór de alinea zet (`Teller`); None bij een opsommingsteken,
+        # "" bij een niveau dat niets toont. Zijn woorden zijn gegenereerd, niet brontekst.
+        label = teller.label(*nummering) if nummering is not None else ""
+        if label is None:
+            bullet = True
+            label = ""
+        if label and _RANDNUMMER.match(tekst) or label and tekst.startswith(label):
+            raise _fout(docx.naam, f"de alinea draagt het nummer {label!r} al in haar tekst en ook als "
+                        "automatische nummering; welke van de twee geldt is niet te bewijzen")
+        if label:
+            gegenereerd.update(_woorden(label))
         if soort == "alinea" and stijl in kaart.randnummer:
             lichaam.append(tekst)
-        if fmt == "bullet" or bullet:
+        if bullet:
             bullets += 1
             blokken.append("- " + tekst.replace("\n", "\n  "))
             continue
 
         if soort == "kop":
             koppen += 1
-            blokken.append(kaart.kopprefix(docx, kind, stijl) + tekst)
+            blokken.append(kaart.kopprefix(docx, kind, stijl) + (f"{label} " if label else "") + tekst)
         elif soort == "toc":
-            blokken.append("  " * kaart.toc_niveau(stijl) + "- " + tekst)
+            blokken.append("  " * kaart.toc_niveau(stijl) + "- " + (f"{label} " if label else "") + tekst)
+        elif label:
+            # Een gerekend nummer vóór een gewone alinea (de lijst van verzoekers in López
+            # Ribalda, het dictum): in de vorm die de bron zelf voor een getypt lijstnummer
+            # gebruikt, nummer plus twee harde spaties (`1.  Holds`), en geen randnummer.
+            blokken.append(f"{label}{NBSP}{NBSP}{tekst}")
         else:
             m = _RANDNUMMER.match(tekst) if stijl in kaart.randnummer else None
             if m:
