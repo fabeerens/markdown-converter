@@ -175,6 +175,29 @@ def test_what_the_route_does_not_know_is_refused_with_the_reason(wijziging, rede
         ob.converteer(wijziging(XML), METADATA, "kst-34851-4")
 
 
+def test_nootref_herhaalt_de_marker_van_de_noot_waar_hij_naar_wijst():
+    """kst-36764-3 (memorie van toelichting Cyberbeveiligingswet): een `nootref` midden in
+    een alinea verwijst naar een eerdere noot. Geen tweede definitie, wel een melding."""
+    xml = XML.replace(b"<al>Diep ", b'<al>Diep<nootref refid="a"/> ')
+    markdown, _, herkomst = ob.converteer(xml, METADATA, "kst-34851-4")
+
+    assert "Diep[^2] http://x/ verwijs." in markdown.split("\n")
+    assert markdown.count("[^2]:") == 1 and markdown.count("[^2]") == 3
+    assert herkomst.extra["noten"] == 3 and herkomst.extra["nootverwijzingen"] == 1
+    assert any("nootref" in w for w in herkomst.waarschuwingen)
+
+
+@pytest.mark.parametrize("nootref, reden", [
+    (b'<nootref refid="bestaat-niet"/>', "geen noot in dit stuk"),
+    (b"<nootref/>", "geen noot in dit stuk"),
+    (b'<nootref refid="a">2</nootref>', "met inhoud"),
+])
+def test_nootref_zonder_eenduidig_doel_wordt_geweigerd(nootref, reden):
+    xml = XML.replace(b"<al>Diep ", b"<al>Diep" + nootref + b" ")
+    with pytest.raises(ConversionError, match=reden):
+        ob.converteer(xml, METADATA, "kst-34851-4")
+
+
 def test_self_check_refuses_lost_text(monkeypatch):
     oorspronkelijk = ob._Lezer.inline
 

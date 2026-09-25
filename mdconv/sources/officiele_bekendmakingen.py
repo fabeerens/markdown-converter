@@ -26,8 +26,9 @@ komt, matcht de kopherkenning niet meer. De tekst verandert er niet door.
 Wat de route **weigert** in plaats van raadt: een ander worteldocument dan `kamerstuk` (het
 vocabulaire van Staatsblad en Staatscourant is niet gemeten), elk element met tekst zonder
 eigen behandeling, een lijst die niet `expliciet` genummerd is, een geneste lijst, een
-tabel die niet rechthoekig te maken is, een nootmarker zonder definitie, en een bron
-waarvan de woorden na omzetting niet als multiset gelijk zijn.
+tabel die niet rechthoekig te maken is, een nootmarker zonder definitie, een `nootref` die
+naar geen noot in het stuk wijst, en een bron waarvan de woorden na omzetting niet als
+multiset gelijk zijn.
 """
 
 from __future__ import annotations
@@ -130,7 +131,7 @@ def converteer(data: bytes, metadata_bytes: bytes, pub_id: str,
         waarschuwingen=tuple(meta["waarschuwingen"]),
         extra={"publicatie_id": pub_id, "metadata": metadata, **{
             k: meta[k] for k in ("noten", "lijstitems", "tabellen", "bijlagen", "opmaak_weggelaten",
-                                  "extrefs")}},
+                                  "extrefs", "nootverwijzingen")}},
     )
     return markdown, f"Officiële Bekendmakingen • {pub_id}", herkomst
 
@@ -202,6 +203,8 @@ class _Lezer:
     def __init__(self) -> None:
         self.uit = xg.Uitvoer()
         self.noot_labels: dict = {}      # element -> label (lxml houdt de proxy levend zolang we hem bewaren)
+        self.noot_ids: dict[str, str] = {}   # @id van een noot -> label, voor `nootref`
+        self.nootrefs = 0
         self.gebruikt: list[str] = []
         self.koppen = self.lijstitems = self.tabellen = self.bijlagen = 0
         self.opmaak = self.extrefs = 0
@@ -224,6 +227,22 @@ class _Lezer:
                 if label is None:
                     raise ConversionError("Een noot in de bron is niet verzameld; omzetting geweigerd.")
                 self.gebruikt.append(label)
+                delen.append(f"[^{label}]")
+            elif naam == "nootref":
+                # Een tweede verwijzing naar een noot die al eerder staat:
+                # `…de wettelijke grondslag noemen.<nootref refid="ID-…-d36e7172"/>` in de
+                # memorie van toelichting bij de Cyberbeveiligingswet (kst-36764-3). De
+                # bron zegt met `@refid` naar welke noot; de marker is die van die noot,
+                # en er komt geen tweede definitie. Een `refid` die naar geen noot in het
+                # stuk wijst, of een `nootref` met inhoud, is niet gemeten.
+                label = self.noot_ids.get(kind.get("refid") or "")
+                if label is None:
+                    raise ConversionError(
+                        f"Een nootverwijzing (nootref) wijst naar {kind.get('refid')!r}, en dat is "
+                        "geen noot in dit stuk; omzetting geweigerd.")
+                if len(kind) or (kind.text or "").strip():
+                    raise ConversionError("Een nootverwijzing (nootref) met inhoud; omzetting geweigerd.")
+                self.nootrefs += 1
                 delen.append(f"[^{label}]")
             elif naam == "nadruk":
                 self.opmaak += 1
@@ -461,10 +480,16 @@ def omzetten(data: bytes, metadata: dict) -> tuple[str, dict]:
     waarschuwingen = []
     if lezer.opmaak:
         waarschuwingen.append(f"{lezer.opmaak} keer opmaak (<nadruk>) niet overgenomen; de tekst blijft.")
+    if lezer.nootrefs:
+        # Een tweede marker naar dezelfde noot: de kennisbank telt markers per noot, en
+        # moet deze relatie ook lezen voordat het document door haar poort kan.
+        waarschuwingen.append(
+            f"{lezer.nootrefs} keer verwijst een tweede marker naar een noot die al eerder "
+            "staat (nootref); de marker is die van die noot.")
     return markdown, {
         "koppen": lezer.koppen, "noten": len(lezer.uit.noten), "lijstitems": lezer.lijstitems,
         "tabellen": lezer.tabellen, "bijlagen": lezer.bijlagen, "opmaak_weggelaten": lezer.opmaak,
-        "extrefs": lezer.extrefs, "waarschuwingen": waarschuwingen,
+        "extrefs": lezer.extrefs, "nootverwijzingen": lezer.nootrefs, "waarschuwingen": waarschuwingen,
     }
 
 
@@ -502,6 +527,8 @@ def _verzamel_noten(stuk, lezer: _Lezer) -> None:
             raise ConversionError(f"Twee noten met hetzelfde label ({label}).")
         gezien.add(label)
         lezer.noot_labels[noot] = label
+        if noot.get("id"):
+            lezer.noot_ids[noot.get("id")] = label
 
 
 def _zelfcontrole(stuk, lezer: _Lezer, markdown: str) -> None:
