@@ -780,9 +780,47 @@ kantelen van betekenis tussen de modi — zonder die omkering leest het niet als
 **Toegankelijkheid is geen ander thema, maar dezelfde schakelaar.**
 `prefers-reduced-transparency: reduce` maakt elk `.glass`-element ondoorzichtig
 (geen blur, geen specular) en verbergt de achtergrondgloed helemaal — die
-bestaat immers alleen om door glas heen gezien te worden. `prefers-reduced-
-motion: reduce` zet alle transitie-/animatieduur op nagenoeg 0 (één globale
-regel), inclusief de vloeiende tabbalk-indicator.
+bestaat immers alleen om door glas heen gezien te worden. Ook de blur op
+`.overlay` (zie hieronder) gaat er dan uit. `prefers-reduced-motion: reduce`
+zet alle transitie-/animatieduur op nagenoeg 0 (één globale regel), inclusief
+de vloeiende tabbalk-indicator en de specular-highlight hieronder.
+
+**Specular highlight die de cursor volgt** (de Apple-Liquid-Glass-verversing,
+macOS/iOS 26): op een scherm is er geen kijkhoek zoals bij een fysieke lens,
+maar de cursor is de dichtstbijzijnde analogie. `--mx`/`--my` zijn met
+`@property` als `<percentage>` geregistreerd (dus animeerbaar — een gewone
+custom property springt instant, deze glijdt mee dankzij `transition: --mx …`
+op `.glass` zelf); `initGlassSpecular()` in `app.js` zet ze als inline style
+op elk `.glass`-element bij `pointermove`, en `.glass::before` tekent daar een
+radiale highlight op (`radial-gradient(640px circle at var(--mx, 30%)
+var(--my, 10%), …)`). Zonder muis — aanraakscherm (`hover: hover` faalt),
+toetsenbord, of `prefers-reduced-motion` — blijft de `initial-value`
+(30%, 10%, ongeveer de oude vaste linksboven-highlight) gewoon staan: dit is
+verrijking, geen vereiste, en breekt nergens iets af.
+Bewust **niet** de WebGL/canvas-refractie-met-chromatic-aberration-aanpak van
+bv. `liquid-glass-react` gekopieerd: die tekent zelf pas iets in Chromium en
+laat Safari/Firefox leeg (bevestigd in die library's eigen documentatie) —
+voor een eenpersoons-lokale-tool zonder build-stap een te zware, te breekbare
+afhankelijkheid voor een puur cosmetisch effect.
+
+**De kop zweeft** (`position: sticky`, i.p.v. gewoon meescrollen): een
+Liquid-Glass-navigatiebalk blijft zichtbaar boven de inhoud die erdoorheen
+scrolt. `initHeaderElevation()` zet `.is-scrolled` zodra `window.scrollY > 4`
+— die class heeft een hogere specificiteit dan `.glass` alleen (twee classes
+i.p.v. één), dus de iets diepere schaduw daarin wint zonder `!important`.
+
+**`.overlay` (de instellingendialoog) vervaagt de inhoud erachter** i.p.v.
+'m alleen te verduisteren (`backdrop-filter: blur(6px) saturate(140%)`) —
+zoals een iOS-sheet, om duidelijker te maken dat de dialoog er letterlijk
+"boven" ligt. Gaat uit onder `prefers-reduced-transparency`, net als `.glass`.
+
+**Iets scherper en meer verzadigd dan de vorige "frosted glass"-versie**:
+`--glass-blur` ging van 24px naar 20px en `saturate()` van 180% naar 200%
+(plus een vaste `contrast(105%)`) — Liquid Glass blurt minder en laat de
+kleur van wat erachter zit sterker doorschijnen. Elk `.glass`-element kreeg
+ook een tweede, donkerdere randlijn onderaan (`--glass-rim-bottom`, naast de
+bestaande lichte `--glass-rim-top`) voor het gevoel van een materiaal met
+enige dikte, niet een plat vlak met alleen een hoogtelicht.
 
 ## Prestaties — waar de winst zit (en waarom)
 - **Lui laden.** `import markitdown` kost honderden ms; die gebeurt nu pas bij de eerste

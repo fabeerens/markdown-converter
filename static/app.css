@@ -80,14 +80,25 @@
   --card-ring: 0 0 0 1px var(--gray-a5);
 
   /* Glas: een lichtrand bovenaan (het "licht dat op het materiaal valt"),
-     een dunne randlijn rondom, en een zachte drijf-schaduw. In licht is de
-     rand zelf donker (anders onzichtbaar op een lichte gloed); de bovenrand
-     blijft in beide standen wit-achtig, want die simuleert een lichtbron. */
+     een dunne, donkerder rand onderaan (de dikte van het "glas" zelf — waar
+     het materiaal het licht weer loslaat), een dunne randlijn rondom, en een
+     zachte drijf-schaduw. In licht is de omtrekrand zelf donker (anders
+     onzichtbaar op een lichte gloed); de bovenrand blijft in beide standen
+     wit-achtig, want die simuleert een lichtbron. */
   --glass-tint: #ffffffb3;
   --glass-rim-top: #ffffffcc;
+  --glass-rim-bottom: #00000012;
   --glass-rim-edge: #00000014;
-  --glass-specular: linear-gradient(135deg, #ffffff59, #ffffff00 45%);
+  /* De specular highlight is een radiale gloed die de cursor volgt (zie
+     `initGlassSpecular()` in app.js, dat `--mx`/`--my` zet) — dit zijn alleen
+     de kleurstops; positie en straal staan in de `.glass::before`-regel. */
+  --glass-specular-inner: #ffffff70;
+  --glass-specular-outer: #ffffff00;
   --glass-shadow: 0 12px 40px -12px var(--gray-a7), 0 2px 8px -2px var(--black-a2);
+  /* Iets scherper en meer verzadigd dan gewone "frosted glass": Liquid Glass
+     blurt minder en laat de kleur van wat erachter zit sterker doorschijnen. */
+  --glass-blur: 20px;
+  --glass-saturate: 200%;
 
   /* Maatvoering */
   --space-1: 4px;  --space-2: 8px;  --space-3: 12px; --space-4: 16px;
@@ -170,11 +181,14 @@
     /* In donker is het glas zelf een licht-getint, doorschijnend vlak op een
        donkere gloed — de bovenrand blijft wit-achtig (lichtbron-highlight),
        de ronde rand wordt licht i.p.v. donker, anders verdwijnt hij tegen de
-       donkere achtergrond. */
+       donkere achtergrond. De onderrand blijft hier wél donker (dieper in de
+       schaduw), voor hetzelfde "dikte"-effect als in licht. */
     --glass-tint: #ffffff14;
     --glass-rim-top: #ffffff40;
+    --glass-rim-bottom: #00000040;
     --glass-rim-edge: #ffffff1a;
-    --glass-specular: linear-gradient(135deg, #ffffff21, #ffffff00 45%);
+    --glass-specular-inner: #ffffff38;
+    --glass-specular-outer: #ffffff00;
     --glass-shadow: 0 12px 40px -12px #00000080, 0 2px 10px -2px #00000066;
   }
 }
@@ -205,6 +219,15 @@ body::before {
 }
 @media (prefers-reduced-transparency: reduce) { body::before { display: none; } }
 
+/* Geregistreerd als `<percentage>` zodat ze animeerbaar zijn (een gewone
+   custom property springt instant van waarde naar waarde; met `@property`
+   interpoleert de browser 'm, dus de highlight glijdt mee i.p.v. te
+   spronggewijs te verplaatsen). `inherits: true` is bewust: `initGlassSpecular()`
+   in app.js zet `--mx`/`--my` als inline style op het `.glass`-element zelf,
+   en die moeten doorwerken naar de `::before` die de highlight tekent. */
+@property --mx { syntax: "<percentage>"; inherits: true; initial-value: 30%; }
+@property --my { syntax: "<percentage>"; inherits: true; initial-value: 10%; }
+
 /* --------------------------------------------------------------------------
    Glas: gedeelde basis voor drijvend chrome (kop, tabbalk, dialoog,
    statusregel, opschoonpaneel, documentchips, sleepzone). Nooit op
@@ -214,19 +237,27 @@ body::before {
 .glass {
   position: relative; overflow: hidden;
   background: color-mix(in srgb, var(--panel) 62%, var(--glass-tint) 38%);
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate)) contrast(105%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate)) contrast(105%);
   box-shadow:
     inset 0 1px 0 0 var(--glass-rim-top),
+    inset 0 -1px 0 0 var(--glass-rim-bottom),
     inset 0 0 0 1px var(--glass-rim-edge),
     var(--glass-shadow);
+  /* Alleen de highlight-positie transitioneert hier — niet box-shadow/achtergrond,
+     die veranderen verder nooit op dit element. */
+  transition: --mx var(--dur-standard) var(--ease-standard),
+              --my var(--dur-standard) var(--ease-standard);
 }
-/* De specular highlight: licht dat schuin op het glas valt. Geknipt op de
-   vorm van het element (overflow op de host), dus altijd op `border-radius:
-   inherit` en los van de eigen padding/inhoud. */
+/* De specular highlight: een radiale gloed die de cursor volgt (`--mx`/`--my`,
+   gezet door `initGlassSpecular()` in app.js; zonder muis — aanraakscherm,
+   toetsenbord, reduced motion — blijft de statische `initial-value`-positie
+   hierboven gewoon staan). Geknipt op de vorm van het element (overflow op
+   de host), dus altijd op `border-radius: inherit`. */
 .glass::before {
   content: ""; position: absolute; inset: 0; border-radius: inherit;
-  background: var(--glass-specular);
+  background: radial-gradient(640px circle at var(--mx, 30%) var(--my, 10%),
+    var(--glass-specular-inner), var(--glass-specular-outer) 55%);
   pointer-events: none; mix-blend-mode: overlay;
 }
 @media (prefers-reduced-transparency: reduce) {
@@ -276,6 +307,22 @@ body::before {
   margin: var(--space-5) auto 0;
   padding: var(--space-4) var(--space-5);
   border-radius: var(--radius-5);
+  /* Een Liquid Glass-navigatiebalk blijft zwevend zichtbaar terwijl de
+     inhoud erdoorheen scrolt, i.p.v. gewoon met de pagina mee te scrollen. */
+  position: sticky; top: var(--space-3); z-index: 30;
+  transition: box-shadow var(--dur-standard) var(--ease-standard);
+}
+/* Iets meer diepte zodra er onder de kop doorgescrold wordt (`initHeaderElevation()`
+   in app.js) — het onderscheid tussen "ligt boven op de pagina" en "zweeft
+   erboven". Twee classes = hogere specificiteit dan `.glass` alleen, dus dit
+   wint zonder `!important`. */
+.app-header.is-scrolled {
+  box-shadow:
+    inset 0 1px 0 0 var(--glass-rim-top),
+    inset 0 -1px 0 0 var(--glass-rim-bottom),
+    inset 0 0 0 1px var(--glass-rim-edge),
+    0 16px 40px -16px var(--gray-a7),
+    0 4px 16px -4px var(--black-a2);
 }
 .app-header .titles { flex: 1; min-width: 0; }
 .app-header h1 {
@@ -764,7 +811,14 @@ body::before {
   display: none; align-items: flex-start; justify-content: center;
   padding: var(--space-6) var(--space-4);
   background: var(--overlay);
+  /* Een iOS-sheet vervaagt de inhoud erachter, niet alleen verduisteren —
+     dat maakt duidelijker dat de dialoog er letterlijk "boven" ligt. */
+  backdrop-filter: blur(6px) saturate(140%);
+  -webkit-backdrop-filter: blur(6px) saturate(140%);
   overflow-y: auto;
+}
+@media (prefers-reduced-transparency: reduce) {
+  .overlay { backdrop-filter: none; -webkit-backdrop-filter: none; }
 }
 .overlay.show { display: flex; animation: overlay-in var(--dur-standard) var(--ease-standard); }
 @keyframes overlay-in { from { opacity: 0; } to { opacity: 1; } }

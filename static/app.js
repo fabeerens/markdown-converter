@@ -1749,6 +1749,47 @@ function initUpload() {
 }
 
 /* --------------------------------------------------------------------------
+   Glas: specular highlight die de cursor volgt + een zwevende kop
+
+   Apple's Liquid Glass vangt licht dat verschuift met de kijkhoek — op een
+   Mac is er geen kijkhoek, maar de cursor is de dichtstbijzijnde analogie.
+   `--mx`/`--my` (in app.css als `@property` geregistreerd, dus animeerbaar)
+   staan op elk `.glass`-element; `.glass::before` tekent daar een radiale
+   highlight op. Zonder deze listener (aanraakscherm, toetsenbord, reduced
+   motion) blijft de CSS-fallbackpositie gewoon staan — dit is verrijking,
+   geen vereiste.
+   -------------------------------------------------------------------------- */
+
+function initGlassSpecular() {
+  if (!window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  document.querySelectorAll(".glass").forEach((el) => {
+    el.addEventListener("pointermove", (e) => {
+      const r = el.getBoundingClientRect();
+      if (r.width <= 0 || r.height <= 0) return;
+      el.style.setProperty("--mx", `${((e.clientX - r.left) / r.width) * 100}%`);
+      el.style.setProperty("--my", `${((e.clientY - r.top) / r.height) * 100}%`);
+    });
+    el.addEventListener("pointerleave", () => {
+      el.style.removeProperty("--mx");
+      el.style.removeProperty("--my");
+    });
+  });
+}
+
+/** De kop is `position: sticky` en krijgt iets meer diepte (schaduw) zodra
+ * er onder hem doorgescrold wordt — het "zweeft over de inhoud"-gevoel van
+ * een Liquid Glass-navigatiebalk, i.p.v. een kop die gewoon met de pagina
+ * meescrolt. */
+function initHeaderElevation() {
+  const header = $(".app-header");
+  if (!header) return;
+  const update = () => header.classList.toggle("is-scrolled", window.scrollY > 4);
+  update();
+  window.addEventListener("scroll", update, { passive: true });
+}
+
+/* --------------------------------------------------------------------------
    Opstarten
    -------------------------------------------------------------------------- */
 
@@ -1757,6 +1798,8 @@ function init() {
   initEditor();
   initSettings();
   initUpload();
+  initGlassSpecular();
+  initHeaderElevation();
 
   initRows("jur", () => fetchLinks("jur"));
   initRows("wet", () => fetchLinks("wet"));
