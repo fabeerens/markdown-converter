@@ -373,3 +373,85 @@ def test_unavailable_xml_falls_back_to_html_with_warning(monkeypatch):
     assert len(calls) == 2
     assert document.provenance.format == "wetten-nl"
     assert any("HTML-route" in melding for melding in document.provenance.waarschuwingen)
+
+
+# ---------- <noot> binnen een alinea (kb WP-13, klasse 1) ----------
+
+def noot_toestand(artikeltekst: str, bijlage: str = "") -> bytes:
+    """Artikel 1.3 van de Regeling ggz en fz 2026 (BWBR0051654), ingekort."""
+    return f"""<toestand bwb-id="BWBR0051654" inwerkingtreding="2026-01-01"><wetgeving>
+<citeertitel>Regeling ggz en fz</citeertitel><regeling><regeling-tekst>
+<artikel><kop><label>Artikel</label><nr>1.3</nr><titel>Reikwijdte</titel></kop>
+{artikeltekst}</artikel></regeling-tekst>{bijlage}</regeling>
+</wetgeving></toestand>""".encode()
+
+
+NOOT_AL = ("<al>voor zover voornoemde categorieën personen handelingen"
+           '<noot id="n1" type="voet"><noot.nr>1</noot.nr><noot.al>Het betreft hier de handelingen '
+           'bedoeld in <extref doc="x">artikel 1</extref> van de Wmg.</noot.al></noot> of werkzaamheden'
+           '<noot id="n2" type="voet"><noot.nr>2</noot.nr><noot.al>Het betreft hier de werkzaamheden.'
+           "</noot.al></noot> op het terrein van geneeskunst verrichten.</al>")
+
+
+def test_noot_in_een_alinea_wordt_een_native_noot_onder_haar_blok():
+    """De marker staat waar de noot staat; de definitie direct onder dat blok, niet
+    aan het eind van het document (daar las ze als tekst van de laatste bijlage)."""
+    bijlage = "<bijlage><kop><label>Bijlage</label><nr>1</nr><titel>Zorglabels</titel></kop><al>Lijst.</al></bijlage>"
+    markdown, _, onbekend, extra = wetten.bwb_xml.omzetten(noot_toestand(NOOT_AL, bijlage))
+
+    assert onbekend == {}
+    assert extra["noten"] == 2
+    assert ("voor zover voornoemde categorieën personen handelingen[^1] of werkzaamheden[^2] "
+            "op het terrein van geneeskunst verrichten.") in markdown
+    blokken = markdown.split("\n\n")
+    alinea = next(i for i, b in enumerate(blokken) if "handelingen[^1]" in b)
+    assert blokken[alinea + 1] == ("[^1]: Het betreft hier de handelingen bedoeld in artikel 1 van de Wmg.\n"
+                                   "[^2]: Het betreft hier de werkzaamheden.")
+    assert markdown.rstrip().endswith("Lijst.")
+
+
+def test_noot_in_een_lijst_komt_onder_de_hele_lijst():
+    """NR/REG-1829 (BWBR0041321) zet een noot in een onderdeel; midden in de lijst
+    zou de definitie de lijst breken."""
+    lijst = ('<lijst type="expliciet"><li><li.nr>a.</li.nr><al>DSM diagnose'
+             '<noot id="n2" type="voet"><noot.nr>2</noot.nr><noot.al>Veertien hoofdgroepen.</noot.al></noot>'
+             ' aantal minuten</al></li><li><li.nr>b.</li.nr><al>afspraaknummer</al></li></lijst>')
+    markdown, _, _, _ = wetten.bwb_xml.omzetten(noot_toestand(f"<al>Aanhef:</al>{lijst}"))
+
+    assert "- a. DSM diagnose[^2] aantal minuten\n- b. afspraaknummer\n\n[^2]: Veertien hoofdgroepen." in markdown
+
+
+def test_noot_in_een_bijlage_draagt_de_reeks_van_die_bijlage():
+    bijlage = ('<bijlage><kop><label>Bijlage</label><nr>2</nr><titel>Types</titel></kop>'
+               '<al>Zie het instrument<noot id="n9" type="voet"><noot.nr>1</noot.nr>'
+               "<noot.al>Versie 2026.</noot.al></noot>.</al></bijlage>")
+    markdown, _, _, _ = wetten.bwb_xml.omzetten(noot_toestand("<al>Tekst.</al>", bijlage))
+
+    assert "Zie het instrument[^annex-2-1]." in markdown
+    assert "[^annex-2-1]: Versie 2026." in markdown
+
+
+@pytest.mark.parametrize("noot, melding", [
+    ('<noot type="eind"><noot.nr>1</noot.nr><noot.al>x</noot.al></noot>', "type 'eind'"),
+    ('<noot type="voet"><noot.al>x</noot.al></noot>', "nummer of zijn tekst"),
+    ('<noot type="voet"><noot.nr>1</noot.nr><noot.al> </noot.al></noot>', "nummer of zijn tekst"),
+    ('<noot type="voet"><noot.nr>1*</noot.nr><noot.al>x</noot.al></noot>', "geen label"),
+    ('<noot type="voet"><noot.nr>1</noot.nr><noot.al>x</noot.al><tabel/></noot>', "tabel"),
+    ('<noot type="voet"><noot.nr>1</noot.nr><noot.al>x</noot.al></noot>'
+     '<noot type="voet"><noot.nr>1</noot.nr><noot.al>y</noot.al></noot>', "hetzelfde label"),
+])
+def test_noot_die_niet_de_gemeten_vorm_heeft_wordt_geweigerd(noot, melding):
+    with pytest.raises(ConversionError, match=melding):
+        wetten.bwb_xml.omzetten(noot_toestand(f"<al>Tekst{noot} verder.</al>"))
+
+
+@pytest.mark.parametrize("plek", ["lidnr", "nr"])
+def test_noot_in_een_nummer_wordt_geweigerd(plek):
+    """Een noot in een lidnummer werd `- 1[^1]`, en het lidanker stil `art-1-3-11`."""
+    noot = '<noot type="voet"><noot.nr>1</noot.nr><noot.al>x</noot.al></noot>'
+    if plek == "lidnr":
+        xml = noot_toestand(f"<lid><lidnr>1{noot}</lidnr><al>Tekst.</al></lid>")
+    else:
+        xml = noot_toestand("<al>Tekst.</al>").replace(b"<nr>1.3</nr>", f"<nr>1.3{noot}</nr>".encode())
+    with pytest.raises(ConversionError, match=f"<{plek}>"):
+        wetten.bwb_xml.omzetten(xml)

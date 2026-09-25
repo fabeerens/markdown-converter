@@ -24,13 +24,39 @@ INLINE = {"al", "nadruk", "sup", "extref", "intref", "redactie", "sub", "unl", "
 ONGEMARKEERD = re.compile(r"^[\-–—•·*]$")
 
 
+class _BwbUitvoer(Uitvoer):
+    """`Uitvoer`, met de definitie van een `<noot>` direct onder het blok van zijn marker.
+
+    Aan het eind van het document kwamen de twee noten van artikel 1.3 van BWBR0051654
+    onder de kop van bijlage 5 te staan, en lazen ze als tekst van die bijlage.
+    `conventions.md` §5 van de kennisbank noemt "direct onder de alinea" als eerste vorm.
+    Een lijst is hier één blok, dus een noot in een onderdeel komt onder de hele lijst
+    en breekt die niet.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.wachtend: list[tuple[str, str]] = []
+
+    def blok(self, tekst: str) -> None:
+        super().blok(tekst)
+        if self.wachtend:
+            self.blokken.append("\n".join(f"[^{label}]: {t}" for label, t in self.wachtend))
+            self.wachtend.clear()
+
+
 class BwbOmzetter:
     def __init__(self) -> None:
-        self.u = Uitvoer()
+        self.u = _BwbUitvoer()
         self.bijlage_ankers: list[str] = []
         self.herhaalde_cellen = 0
         self.expired: dict[str, str] = {}
         self.omgedraaid: list[str] = []
+        # Het anker van de bijlage die nu wordt geschreven; een `<noot>` daarin hoort
+        # bij de reeks van die bijlage, net als een `sup`-noot (`[^annex-1-5]`).
+        self.huidige_bijlage = ""
+        self.nootlabels: set[str] = set()
+        self.noten: list[tuple[str, str]] = []
 
     # ---------- inline ----------
     def inline(self, el, noot_prefix: str = "") -> str:
@@ -61,11 +87,51 @@ class BwbOmzetter:
             return f"^{tekst}^" if tekst else ""
         if tag == "redactie":
             return f"[Red: {ws(self.inline(el, noot_prefix))}]"
+        if tag == "noot":
+            return self.noot(el)
         if tag in ("al", "extref", "intref", "datum", "naam", "voornaam", "achternaam",
                    "functie", "plaats", "sub", "unl", "inf"):
             return self.inline(el, noot_prefix)
         self.u.markeer_onbekend(f"inline:{tag}")
         return self.inline(el, noot_prefix)
+
+    def noot(self, el) -> str:
+        """Een `<noot>` op de plek van zijn marker: `[^1]` daar, de definitie eronder.
+
+        De Regeling ggz en fz 2026 (BWBR0051654, artikel 1.3) en de nadere regel
+        NR/REG-1829 (BWBR0041321) zetten hun voetnoot midden in de alinea:
+        `handelingen<noot type="voet"><noot.nr>1</noot.nr><noot.al>…</noot.al></noot>`.
+        Tot 25 september 2026 was dat `inline:noot` zonder behandeling, en werd het
+        document geweigerd (kb, bronnenronde van 25 september). Het label is het nummer
+        uit de bron, zoals de OP-XML-route een voetnoot noemt; in een bijlage de reeks
+        van die bijlage, zoals een `sup`-noot daar. De definitie komt direct onder
+        het blok waarin de marker staat (zie `_BwbUitvoer`).
+        """
+        if el.get("type") != "voet":
+            raise ConversionError(
+                f"Een BWB-noot van type {el.get('type')!r}; alleen `voet` is gemeten.")
+        onbekend = [k.tag for k in el if k.tag not in ("noot.nr", "noot.al")]
+        if onbekend:
+            raise ConversionError(f"Een BWB-noot bevat {onbekend}; alleen noot.nr en noot.al zijn gemeten.")
+        nr = ws("".join(el.find("noot.nr").itertext())) if el.find("noot.nr") is not None else ""
+        alineas = [ws(self.inline(al)) for al in el.findall("noot.al")]
+        tekst = " ".join(a for a in alineas if a)
+        if not nr or not tekst:
+            raise ConversionError("Een BWB-noot mist zijn nummer of zijn tekst.")
+        if not re.fullmatch(r"[0-9A-Za-z]+", nr):
+            raise ConversionError(f"Een BWB-nootnummer dat geen label kan zijn ({nr!r}).")
+        label = f"{self.huidige_bijlage}-{nr}" if self.huidige_bijlage else nr
+        self.definieer(label)
+        self.noten.append((label, tekst))
+        self.u.wachtend.append((label, tekst))
+        return f"[^{label}]"
+
+    def definieer(self, label: str) -> None:
+        # Twee definities onder één label: welke een marker bedoelt, is dan niet meer te
+        # zeggen. Geldt ook tussen een `<noot>` en een `sup`-noot in dezelfde bijlage.
+        if label in self.nootlabels:
+            raise ConversionError(f"Twee BWB-noten met hetzelfde label ({label}); omzetting geweigerd.")
+        self.nootlabels.add(label)
 
     # ---------- blokken ----------
     def omzetten(self, root) -> Uitvoer:
@@ -78,6 +144,15 @@ class BwbOmzetter:
                     f"<{el.tag}> heeft status nogniet; alleen bij een artikel weet de "
                     "omzetter hoe een nog niet geldend onderdeel wordt getoond."
                 )
+        # Een noot in een nummer (`<lidnr>1<noot>…</noot></lidnr>`) werd `- 1[^1]`, en
+        # `nummer_anker()` maakte daar stil het lidanker `…-11` van. Waar een nummer
+        # een anker wordt, hoort geen marker; in een noot hoort geen tweede noot.
+        for el in root.iter():
+            if el.tag in ("nr", "lidnr", "li.nr", "label", "noot") and any(
+                    n is not el for n in el.iter("noot")):
+                raise ConversionError(
+                    f"Een BWB-noot staat in <{el.tag}>; daar is geen plek voor een marker "
+                    "gemeten, en een nummer met een marker erin geeft een verkeerd anker.")
         wet = root.find("wetgeving")
         titel = wet.findtext("citeertitel") or ""
         self.u.blok(f"# {ws(titel)}")
@@ -331,6 +406,7 @@ class BwbOmzetter:
         rest = (el[0].tail or "") + "".join(
             self.inline_el(kind, prefix_noot) + (kind.tail or "") for kind in list(el)[1:]
         )
+        self.definieer(f"{prefix_noot}{cijfer}")
         self.u.blok(f"[^{prefix_noot}{cijfer}]: {ws(rest)}")
         return True
 
@@ -426,6 +502,7 @@ class BwbOmzetter:
         n = nummer_anker(nr, romeins_omrekenen=True) if nr else str(len(self.bijlage_ankers) + 1)
         anker = f"annex-{n}"
         self.bijlage_ankers.append(anker)
+        self.huidige_bijlage = anker
         regel = self.kopregel(label or "Bijlage", nr, titel, nr_eerst)
         self.u.blok(f"{'#' * niveau} {regel}")
         self.u.eenheid(anker, "bijlage", regel)
@@ -442,6 +519,7 @@ class BwbOmzetter:
                              niveau=niveau + 1, pad={"annex": anker})
             else:
                 self.inhoud(kind, basis=anker, prefix_noot=prefix)
+        self.huidige_bijlage = ""
 
 
 def omzetten(data: bytes | str) -> tuple[str, list, dict, dict]:
@@ -451,10 +529,21 @@ def omzetten(data: bytes | str) -> tuple[str, list, dict, dict]:
         raise ConversionError(f"BWB-XML is niet leesbaar: {exc}") from exc
     o = BwbOmzetter()
     u = o.omzetten(root)
+    if u.wachtend:
+        raise ConversionError("Een BWB-noot kreeg geen blok om onder te staan; omzetting geweigerd.")
+    md = u.markdown()
+    # Een marker die in een tussenresultaat bleef hangen (een kop die alleen voor een
+    # anker wordt gelezen) laat een definitie zonder marker achter: weigeren, niet
+    # een losse noot doorlaten.
+    tekst = "\n".join(r for r in md.splitlines() if not re.match(r"^\[\^[^\]]+\]:", r))
+    zonder = sorted(label for label, _ in o.noten if f"[^{label}]" not in tekst)
+    if zonder:
+        raise ConversionError(f"Een BWB-noot heeft geen marker in de uitvoer: {zonder}; omzetting geweigerd.")
     melding = o.meld_omgedraaid()
-    return u.markdown(), u.eenheden, u.onbekend, {
+    return md, u.eenheden, u.onbekend, {
         "herhaalde_cellen": o.herhaalde_cellen,
         "expired": o.expired,
         "omgedraaide_koppen": len(o.omgedraaid),
+        "noten": len(o.noten),
         "waarschuwingen": [melding] if melding else [],
     }
