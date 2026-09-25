@@ -325,12 +325,44 @@ accountregistratie namens de gebruiker):
   probeert daarom eerst de eigen parser; lukt dat niet (geen geldige/ondersteunde
   EPUB-structuur — bv. corrupte zip of ontbrekende OPF), dan valt de conversie terug op
   MarkItDown, net als bij een PDF zonder tekstlaag.
-  - **Koppen**: `<h1>`-`<h6>` komen via `markdownify` gewoon als `#`-`######` uit — een
-    EPUB zonder échte kop-tags (alleen gestylede `<p>`'s) levert dus platte alinea's, geen
-    giswerk-koppen. Dat is een bewuste keuze, geen gemiste heuristiek: de
-    structuurwoorden-aanpak van `render.promote_headings()` (EUR-Lex: "HOOFDSTUK",
-    "Artikel N") is expliciet beperkt tot een vaste woordenlijst in de grote EU-talen en
-    zou op willekeurige boektekst juist onvoorspelbaar vals-positief gaan matchen.
+  - **Koppen: échte `<h1>`-`<h6>` tags, én koppromotie op typografie.** Echte kop-tags
+    komen via `markdownify` gewoon als `#`-`######` uit. Maar veel professioneel gezette
+    EPUB's (InDesign-export, bv. uitgeversboeken) hebben **géén** echte kop-tags —
+    hoofdstuktitels en paragraafkoppen zijn gewoon `<p class="...">` met een eigen
+    alinea-stijl. Bevestigd met een echt boek (CIPP-M, IAPP): zonder koppromotie leverde
+    dat **nul** koppen op in een boek van 750k tekens platte tekst. Tekstueel giswerk
+    ("lijkt deze zin op een titel?") zou hier onvoorspelbaar zijn op willekeurige
+    boektekst — precies waarom de structuurwoorden-aanpak van `render.promote_headings()`
+    (EUR-Lex: "HOOFDSTUK", "Artikel N", een vaste woordenlijst in de grote EU-talen) hier
+    niet herbruikt kan worden. Wat wél betrouwbaar is: de CSS zelf zegt hoe groot/vet/
+    welk lettertype elke alinea-stijl heeft — een meetbaar feit, geen gok.
+    - **`_load_css_classes()`** leest alle `.css`-bestanden in de zip met een simpele,
+      niet-geneste regex (`selector { declaraties }`) — de auto-gegenereerde CSS van
+      digitale-uitgeverssoftware heeft geen `@media`/geneste selectors, dus dat is
+      voldoende; `@font-face`/`@page`-blokken worden gewoon als (nooit matchende) "klasse"
+      meegelezen, geen probleem. Voor elke `.KlasseNaam` wordt `font-size` (naar een
+      em-equivalent: `px/16`, `pt/12`, `%/100`), `font-weight` (`bold`→700, `normal`→400,
+      cijfers direct) en het eerste `font-family`-token opgeslagen.
+    - **`_dominant_style()`** bepaalt de lettergrootte/lettertype die de méeste tekens in
+      het hele boek beslaat (over alle hoofdstukken se `<p>`'s heen, gewogen naar
+      tekstlengte) — in de praktijk de hoofdtekst, ongeacht hoe de uitgever die stijl
+      noemt. Dat is de baseline waar elke andere stijl tegen wordt afgezet; een aanpak die
+      werkt ongeacht de klassennamen-conventie van de specifieke uitgever/InDesign-sjabloon.
+    - **`_qualifying_heading_classes()`** promoveert een stijl alleen als hij **groter**
+      is dan de baseline (harde eis — sluit bv. een kleine "Chap-Num"-bijschriftstijl
+      altijd uit) én een samengestelde score van ≥2 haalt over drie signalen:
+      grootte-ratio (≥1,5× → 2 punten, ≥1,15× → 1 punt), `font-weight` ≥ 600 (1 punt), en
+      een ander lettertype dan de hoofdtekst (1 punt). Dit onderscheidt bv. een vette
+      auteursnaam-stijl (zelfde grootte als de hoofdtekst, dus 0 punten op grootte) van een
+      echte titelstijl (groter én vet én een ander lettertype) — puur op grootte of puur
+      op vet zou de auteursnaam ten onrechte ook promoveren.
+    - **Kopniveau via rangorde, niet via vaste ratio's**: de kwalificerende stijlen worden
+      gesorteerd op grootte (groot → `h1`, volgende → `h2`, …, maximaal `h6`) — vaste
+      ratio-afkappunten (bv. "≥2× = h1") zouden niet overdragen naar een ander boek met
+      een andere typografische schaal.
+    - **`_promote_headings_by_style()`** promoveert een `<p>` alleen als de tekst ≤ 150
+      tekens is — een hele alinea die toevallig een "kop"-stijlklasse hergebruikt (kan
+      voorkomen) blijft zo een alinea, geen kop.
   - **Interne links → Obsidian-wikilinks, externe links blijven gewoon.** Vóór de
     HTML→Markdown-conversie rewrite `_rewrite_links()` elke `<a>` met een relatieve `href`
     (geen `scheme:` zoals `http:`/`mailto:`) naar de kop waar hij naar verwijst:
@@ -914,15 +946,16 @@ enige dikte, niet een plat vlak met alleen een hoogtelicht.
   weggeschreven bestand nooit als geldige staat gelezen kan worden.
 
 ## Tests
-`.venv/bin/python -m pytest tests/ -q` — 204 karakteriseringstests die het gedrag
+`.venv/bin/python -m pytest tests/ -q` — 205 karakteriseringstests die het gedrag
 vastleggen in plaats van het te beschrijven: `detect_source`-precedentie, ELI→CELEX,
 de geconsolideerde-CELEX-afhandeling (datum behouden, preambule invoegen, en de vier
 terugvalpaden als dat niet lukt), de versie-terugvalladder (nieuwste versie op of vóór de
 gevraagde datum, nooit een latere, en een notitie die niet beweert dat een bestaande versie
 niet bestaat), de chunking-ladder (ook zonder witregels en met één te
-lang woord), de PDF-reflow, de Formex-parser, de EPUB-parser (koppen, interne links →
-wikilinks met de juiste terugvallen, de nav/inhoudsopgave overslaan, afbeeldingen weglaten,
-en de terugval naar MarkItDown bij een ongeldige structuur), de settings-semantiek (leeg
+lang woord), de PDF-reflow, de Formex-parser, de EPUB-parser (koppen (échte tags én
+koppromotie op CSS-typografie voor EPUB's zonder kop-tags), interne links → wikilinks met
+de juiste terugvallen, de nav/inhoudsopgave overslaan, afbeeldingen weglaten, en de
+terugval naar MarkItDown bij een ongeldige structuur), de settings-semantiek (leeg
 wist terug naar standaard), de batch-zip (eigen naam en eigen `attachments/`-map per
 document), de wiskunde-modus (paginasortering + paginagrens bij het rasteren, de
 stream-orchestratie: `\n\n`-join, voortgang per pagina, opgeteld tokengebruik, stil

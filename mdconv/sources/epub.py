@@ -12,11 +12,20 @@ Obsidian-wikilinks naar de kop waar ze naar verwijzen (`[[#Kop]]`, of
 `[[#Kop|linktekst]]` als de linktekst afwijkt) — dat blijft, anders dan een
 relatief bestandspad, ook werken ná het samenvoegen. Externe links (http(s),
 mailto) blijven gewone Markdown-links. Echte koppen (`<h1>`-`<h6>`) komen via
-`markdownify` gewoon als `#`-`######` uit; een EPUB zonder échte kop-tags
-(bv. alleen gestylede `<p>`'s) levert dus platte alinea's, geen giswerk-koppen
-— dezelfde terughoudendheid als bij de EUR-Lex-koppromotie, maar dat is daar
-een aparte, expliciet-beperkte heuristiek (structuurwoorden als "HOOFDSTUK"),
-niet iets wat hier zomaar hergebruikt kan worden op willekeurige boektekst.
+`markdownify` gewoon als `#`-`######` uit.
+
+**Koppromotie op typografie, niet op tekstinhoud.** Veel professioneel
+gezette EPUB's (InDesign-export, bv. uitgeversboeken) gebruiken géén échte
+kop-tags — hoofdstuktitels en paragraafkoppen zijn gewoon `<p class="...">`
+met een eigen alinea-stijl. Tekstueel giswerk ("lijkt dit op een titel?") zou
+hier onvoorspelbaar zijn op willekeurige boektekst. Wat wél betrouwbaar is:
+de CSS zelf zegt hoe groot/vet/welk lettertype elke stijl heeft — exact wat
+een lezer ook visueel als "groter/vetter dan de lopende tekst" zou herkennen.
+`_qualifying_heading_classes()` vergelijkt elke alinea-stijl met de stijl die
+in het hele boek de meeste tekens beslaat (de facto de hoofdtekst) op drie
+signalen (lettergrootte, gewicht, lettertypefamilie) en promoveert alleen
+stijlen die daar duidelijk van afwijken — en alleen als de instantie zelf kort
+is (een titel/kop, geen alinea die toevallig dezelfde stijlklasse hergebruikt).
 """
 
 from __future__ import annotations
@@ -37,13 +46,22 @@ _HEADING_TAGS = ("h1", "h2", "h3", "h4", "h5", "h6")
 # Een scheme zoals "http:", "mailto:", "data:" — zo'n link is nooit intern.
 _SCHEME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*:")
 
+# Een gepromoveerde "kop" die feitelijk een hele alinea is, is geen kop meer
+# — dit is de grens tussen een titel/kopregel en lopende tekst.
+_MAX_HEADING_CHARS = 150
+
 
 def convert_epub(data: bytes) -> str | None:
     """Zet EPUB-bytes om naar Markdown, of `None` als dit geen EPUB is die
     deze parser aankan (dan valt de aanroeper terug op MarkItDown)."""
-    chapters = _read_chapters(data)
+    chapters, class_styles = _read_chapters(data)
     if not chapters:
         return None
+
+    class_to_level = _qualifying_heading_classes(chapters, class_styles)
+    if class_to_level:
+        for _href, soup in chapters:
+            _promote_headings_by_style(soup, class_to_level)
 
     heading_index = _index_headings(chapters)
     blocks = []
@@ -63,18 +81,20 @@ def convert_epub(data: bytes) -> str | None:
 # EPUB-structuur lezen: container.xml → OPF → manifest/spine → hoofdstukken
 # --------------------------------------------------------------------------
 
-def _read_chapters(data: bytes) -> list[tuple[str, BeautifulSoup]]:
+def _read_chapters(data: bytes) -> tuple[list[tuple[str, BeautifulSoup]], dict[str, dict]]:
     try:
         with zipfile.ZipFile(io.BytesIO(data)) as z:
             opf_path, opf = _read_opf(z)
             manifest = _read_manifest(opf, opf_path)
             hrefs = _spine_hrefs(opf, manifest)
-            return [
+            chapters = [
                 (href, BeautifulSoup(z.read(href), "lxml"))
                 for href in hrefs if href in z.namelist()
             ]
+            class_styles = _load_css_classes(z)
     except (zipfile.BadZipFile, KeyError, OSError):
-        return []
+        return [], {}
+    return chapters, class_styles
 
 
 def _read_opf(z: zipfile.ZipFile) -> tuple[str, BeautifulSoup]:
@@ -111,6 +131,161 @@ def _spine_hrefs(opf: BeautifulSoup, manifest: dict[str, str]) -> list[str]:
         if idref in manifest:
             out.append(manifest[idref])
     return out
+
+
+# --------------------------------------------------------------------------
+# CSS lezen: alinea-stijl → (lettergrootte in em, gewicht, lettertype)
+#
+# De auto-gegenereerde CSS van digitale-uitgeverssoftware (InDesign e.d.) is
+# vlak: geen @media, geen geneste selectors. Een simpele, niet-geneste
+# regex over "selector { declaraties }" is daarom voldoende; @font-face/
+# @page-blokken hebben zelf ook geen nesting, dus die worden gewoon als
+# (nutteloze, nooit matchende) "klasse" meegelezen — geen probleem.
+# --------------------------------------------------------------------------
+
+_CSS_RULE_RE = re.compile(r"([^{}]+)\{([^{}]*)\}")
+_CSS_CLASS_RE = re.compile(r"\.([-\w]+)")
+_CSS_FONT_SIZE_RE = re.compile(r"font-size\s*:\s*([\d.]+)\s*(em|rem|px|pt|%)?", re.I)
+_CSS_FONT_WEIGHT_RE = re.compile(r"font-weight\s*:\s*([a-zA-Z0-9]+)", re.I)
+_CSS_FONT_FAMILY_RE = re.compile(r"font-family\s*:\s*([^;]+)", re.I)
+
+# Ruwe omzetting naar "em-equivalent", alleen om stijlen relatief aan elkaar
+# te kunnen afzetten — geen precieze layoutberekening nodig.
+_UNIT_TO_EM = {"em": 1.0, "rem": 1.0, "%": 0.01, "px": 1 / 16, "pt": 1 / 12}
+_FONT_WEIGHT_WORDS = {"normal": 400, "bold": 700, "bolder": 700, "lighter": 300}
+
+
+def _load_css_classes(z: zipfile.ZipFile) -> dict[str, dict]:
+    """`{klassenaam: {"size": em-equivalent|None, "weight": int, "family": str|None}}`
+    over álle `.css`-bestanden in de zip heen (geen manifest-opzoektocht nodig
+    — een los .css-bestand dat toevallig niets matcht, is harmloos)."""
+    classes: dict[str, dict] = {}
+    for name in z.namelist():
+        if not name.lower().endswith(".css"):
+            continue
+        try:
+            css = z.read(name).decode("utf-8", "replace")
+        except (KeyError, OSError):
+            continue
+        for selector, decls in _CSS_RULE_RE.findall(css):
+            if selector.strip().startswith("@"):
+                continue
+            names = {n for part in selector.split(",") for n in _CSS_CLASS_RE.findall(part)}
+            if not names:
+                continue
+            style = _parse_declarations(decls)
+            if not style:
+                continue
+            for cls in names:
+                classes.setdefault(cls, {}).update(style)
+    return classes
+
+
+def _parse_declarations(decls: str) -> dict:
+    style: dict = {}
+    m = _CSS_FONT_SIZE_RE.search(decls)
+    if m:
+        value, unit = float(m.group(1)), (m.group(2) or "em").lower()
+        style["size"] = value * _UNIT_TO_EM.get(unit, 1.0)
+    m = _CSS_FONT_WEIGHT_RE.search(decls)
+    if m:
+        token = m.group(1).lower()
+        style["weight"] = _FONT_WEIGHT_WORDS.get(token, int(token) if token.isdigit() else 400)
+    m = _CSS_FONT_FAMILY_RE.search(decls)
+    if m:
+        style["family"] = m.group(1).split(",")[0].strip().strip("'\"").lower()
+    return style
+
+
+# --------------------------------------------------------------------------
+# Koppromotie: welke alinea-stijlen zijn typografisch duidelijk "koppen"?
+# --------------------------------------------------------------------------
+
+def _qualifying_heading_classes(
+    chapters: list[tuple[str, BeautifulSoup]], class_styles: dict[str, dict]
+) -> dict[str, int]:
+    """`{klassenaam: kopniveau (1-6)}` voor stijlen die typografisch duidelijk
+    afwijken van de hoofdtekst — zie de moduledocstring voor de redenering."""
+    if not class_styles:
+        return {}
+
+    baseline_size, baseline_family = _dominant_style(chapters, class_styles)
+    if baseline_size is None:
+        return {}
+
+    qualifying_sizes: dict[str, float] = {}
+    for cls, style in class_styles.items():
+        size = style.get("size")
+        if not size or size <= baseline_size:
+            continue  # een kop is minstens een fractie groter dan de hoofdtekst
+        ratio = size / baseline_size
+        score = 0
+        if ratio >= 1.5:
+            score += 2
+        elif ratio >= 1.15:
+            score += 1
+        if style.get("weight", 400) >= 600:
+            score += 1
+        family = style.get("family")
+        if family and baseline_family and family != baseline_family:
+            score += 1
+        if score >= 2:
+            qualifying_sizes[cls] = size
+
+    if not qualifying_sizes:
+        return {}
+    # Grootste stijl → h1, volgende → h2, enz. — relatieve rangorde in plaats
+    # van vaste ratio-afkappunten, want die verhoudingen verschillen per boek.
+    levels = sorted(set(qualifying_sizes.values()), reverse=True)
+    level_by_size = {size: min(i + 1, 6) for i, size in enumerate(levels)}
+    return {cls: level_by_size[size] for cls, size in qualifying_sizes.items()}
+
+
+def _dominant_style(
+    chapters: list[tuple[str, BeautifulSoup]], class_styles: dict[str, dict]
+) -> tuple[float | None, str | None]:
+    """De lettergrootte/lettertype die de meeste tekens in het boek beslaat —
+    in de praktijk de hoofdtekst, ongeacht hoe de uitgever die stijl noemt."""
+    by_size: dict[float, int] = {}
+    by_family: dict[str, int] = {}
+    for _href, soup in chapters:
+        for p in soup.find_all("p"):
+            cls = _first_known_class(p, class_styles)
+            if cls is None:
+                continue
+            n = len(p.get_text())
+            if not n:
+                continue
+            style = class_styles[cls]
+            if style.get("size"):
+                by_size[style["size"]] = by_size.get(style["size"], 0) + n
+            if style.get("family"):
+                by_family[style["family"]] = by_family.get(style["family"], 0) + n
+    baseline_size = max(by_size, key=by_size.get) if by_size else None
+    baseline_family = max(by_family, key=by_family.get) if by_family else None
+    return baseline_size, baseline_family
+
+
+def _first_known_class(tag, class_styles: dict[str, dict]) -> str | None:
+    for cls in tag.get("class") or ():
+        if cls in class_styles:
+            return cls
+    return None
+
+
+def _promote_headings_by_style(soup: BeautifulSoup, class_to_level: dict[str, int]) -> None:
+    for p in soup.find_all("p"):
+        level = None
+        for cls in p.get("class") or ():
+            if cls in class_to_level:
+                level = class_to_level[cls]
+                break
+        if level is None:
+            continue
+        text = p.get_text(" ", strip=True)
+        if not text or len(text) > _MAX_HEADING_CHARS:
+            continue  # een hele alinea in een "kop"-stijl is geen kop
+        p.name = f"h{level}"
 
 
 # --------------------------------------------------------------------------

@@ -1702,6 +1702,86 @@ def test_epub_falls_back_to_markitdown_when_the_structure_is_invalid():
     assert engine == "MarkItDown"
 
 
+def test_epub_promotes_headings_based_on_css_typography_without_real_heading_tags():
+    """Veel professioneel gezette EPUB's (InDesign-export) hebben géén échte
+    <h1>-tags: hoofdstuktitels zijn gewoon <p class="..."> met een eigen,
+    grotere/vettere/anders-lettertype-stijl. Dit moest herkend worden zonder
+    op tekstinhoud te gokken — alleen op meetbare typografie t.o.v. de stijl
+    die de meeste tekens in het boek beslaat (de hoofdtekst). Vastgesteld met
+    een echt boek (CIPP-M, IAPP) dat zonder deze promotie nul koppen opleverde
+    en ermee 261, correct verdeeld over kopniveaus."""
+    from mdconv.sources.files import _convert_epub
+    markdown = _convert_epub(_indesign_style_epub())
+
+    assert "# Hoofdstuk 1: De titel" in markdown
+    assert "## 1.1 Een subsectie" in markdown
+    # Dezelfde grootte/gewicht als de hoofdtekst → geen kop, ook niet vet.
+    assert "# Jan Janssen" not in markdown
+    assert "Jan Janssen" in markdown
+    # Een gewone, lange alinea in de kop-stijlklasse blijft alinea — een hele
+    # alinea is geen titel, ongeacht de CSS-klasse erop.
+    assert "#" + " Dit is eigenlijk" not in markdown
+    assert "Dit is eigenlijk een hele lange alinea" in markdown
+
+
+def _indesign_style_epub() -> bytes:
+    """Eén hoofdstuk zonder échte kop-tags, met dezelfde soort CSS-opzet als
+    een InDesign-export: een hoofdtekststijl (klein, normaal gewicht, serif),
+    een titelstijl (groter, vet, sans-serif) en een auteursnaamstijl (vet,
+    zelfde grootte als de hoofdtekst — mag dus NIET als kop gelden)."""
+    import io
+    import zipfile
+
+    container_xml = """<?xml version="1.0"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>"""
+
+    content_opf = """<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:title>Testboek</dc:title>
+  </metadata>
+  <manifest>
+    <item id="css" href="style.css" media-type="text/css"/>
+    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine>
+    <itemref idref="ch1"/>
+  </spine>
+</package>"""
+
+    style_css = """
+p.Chap-Title { font-family:"Source Sans Pro", sans-serif; font-size:1.333em; font-weight:bold; }
+p.Chap-Author { font-family:"Arno Pro", serif; font-size:0.958em; font-weight:bold; }
+p.A-Head { font-family:"Source Sans Pro", sans-serif; font-size:1.25em; font-weight:bold; }
+p.Body { font-family:"Arno Pro", serif; font-size:0.958em; font-weight:normal; }
+"""
+
+    long_paragraph = " ".join(["Dit is eigenlijk een hele lange alinea die per ongeluk"] * 6)
+    chapter1 = f"""<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<body>
+<p class="Chap-Title">Hoofdstuk 1: De titel</p>
+<p class="Chap-Author">Jan Janssen</p>
+<p class="Body">{long_paragraph}</p>
+<p class="A-Head">1.1 Een subsectie</p>
+<p class="Body">Nog een gewone alinea.</p>
+<p class="Chap-Title">{long_paragraph}</p>
+</body></html>"""
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("mimetype", "application/epub+zip")
+        z.writestr("META-INF/container.xml", container_xml)
+        z.writestr("OEBPS/content.opf", content_opf)
+        z.writestr("OEBPS/style.css", style_css)
+        z.writestr("OEBPS/chapter1.xhtml", chapter1)
+    return buf.getvalue()
+
+
 def _minimal_epub() -> bytes:
     """Een handgeschreven, geldige minimale EPUB met twee hoofdstukken, een
     (in de spine als linear="no" gemarkeerde) navigatiepagina, een externe
