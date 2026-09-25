@@ -48,7 +48,13 @@ TABELMARKER = "\x00"
 ONGENUMMERD = {"DASH", "NDASH", "BULLET", "NONE", "DISC"}
 METADATA = {"BIB.INSTANCE", "BIB.DOC", "BIB.DATA", "PUBLICATION.REF", "NO.DOC", "INFO.CONSLEG",
             "INFO.PROD", "FAM.COMP", "GR.MOD.ACT", "DOCUMENT.REF", "PAGE.FIRST", "PAGE.LAST",
-            "PAGE.SEQ", "PAGE.TOTAL", "LG.DOC", "NO.SEQ", "VOLUME.REF"}
+            "PAGE.SEQ", "PAGE.TOTAL", "LG.DOC", "NO.SEQ", "VOLUME.REF",
+            # De paginaverwijzing in een regel van een inhoudsopgave (`TOC.ITEM/ITEM.REF`,
+            # `38` achter `1) Persoonsinformatie die bijzondere zorg vereist`): het
+            # bladzijdenummer van het Publicatieblad, net als PAGE.FIRST. De
+            # adequaatheidsbesluiten voor Japan (32019D0419) en Korea (32022D0254)
+            # weigerden erop (T1-F16, kb WP-20).
+            "ITEM.REF"}
 INLINE_TEKST = {"DATE", "REF.DOC.OJ", "FT", "HT", "QUOT.S", "IE", "PERIOD", "REF.DOC", "ACRONYM",
                 "ADDR", "PL.DATE", "NO.CELEX", "UNIT", "EXPONENT", "INF", "SUP", "TERM", "DEFINITION",
                 # De ELI-verwijzing die het Publicatieblad sinds 2026 achter elke
@@ -73,8 +79,10 @@ STRUCTUUR_ELEMENTEN = {
     "TOC", "TOC.BLK", "TOC.ITEM", "NO.ITEM", "ITEM.CONT",
     # Een afbeelding (TIFF-inclusie) kan haar tekst meedragen: het formulier van
     # Brussel I bis staat als P's in IMG.CNT. Wat daarbinnen staat, moet zelf
-    # bekend zijn; een FORMULA blijft dus een weigering.
-    "INCL.ELEMENT", "IMG.CNT",
+    # bekend zijn; een FORMULA blijft dus een weigering. Een bijschrift (CAPTION,
+    # `(stempel van de organisatie)` bij de handtekeningvakken van de SCC's van
+    # 2010, 32010D0087) is brontekst en komt op de plek van het beeld (`afbeelding()`).
+    "INCL.ELEMENT", "IMG.CNT", "CAPTION",
     # Een annotatie is een noot die geen voetnoot is: een NB, een opmerking,
     # een technische noot (`annotatie()`).
     "GR.ANNOTATION", "ANNOTATION",
@@ -92,6 +100,8 @@ STRUCTUUR_ELEMENTEN = {
     "GR.TBL",
     # Een verklaring of samenvatting naast of in plaats van de handeling; zie `algemeen()`.
     "GENERAL", "PROLOG",
+    # Een brief in een bijlage; zie `brief()`.
+    "LETTER",
 }
 ANNOTATIES = ("GR.ANNOTATION", "ANNOTATION")
 # De letter van een CELEX-nummer volgens het soort handeling (`LEG.VAL`). Wat hier
@@ -135,7 +145,10 @@ AANHALING = {"201E": "„", "201C": "“", "201D": "”"}
 # en met `8.9.`, en als `8` kregen die negen onderdelen één anker.
 ONDERDEELKOP = re.compile(
     r"[—–-]?\s*(?:(?:Afdeling|Deel|Onderdeel|Bepaling|Module|Titel|Hoofdstuk|Sectie|"
-    r"Prioritair\s+gebied)\s+)?([A-Z]|[IVXLC]+|\d+(?:\.\d+)*)(?:\.|\b)", re.I)
+    # Een romeins nummer met deelnummers (`IV.1`, `V.2`: de onderdelen van de bijlagen
+    # IV en V bij de EUCC-verordening 2024/482) staat vóór de losse letter, anders
+    # leest `V.1` als letter V en krijgen V.1 en V.2 hetzelfde anker (T1-F16, kb WP-20).
+    r"Prioritair\s+gebied)\s+)?([IVXLC]+(?:\.\d+)+|[A-Z]|[IVXLC]+|\d+(?:\.\d+)*)(?:\.|\b)", re.I)
 # Het nummer van een bijlageonderdeel zonder kop (`GR.SEQ/NO.GR.SEQ`), in de vormen
 # die de meetlat kent: 902 keer in 12 documenten (23 september 2026), `1.` (136),
 # `1.1.` (567), `1.1.1.` (180), `2)` (17, rijbewijsrichtlijn 2025/2205) en `d)` (2,
@@ -703,9 +716,10 @@ class FormexOmzetter:
             return " " + " ".join(ws(deel) for deel in delen if ws(deel)) + " "
         if tag in INLINE_TEKST or tag in INLINE_TRANSPARANT:
             return self.inline(el)
-        if tag == "INCL.ELEMENT" and self.afbeelding(el):
-            return ""
         if tag == "INCL.ELEMENT":
+            bijschrift = self.afbeelding(el)
+            if bijschrift is not None:
+                return f" {bijschrift} " if bijschrift else ""
             # Leeg, dus `onbekend()` zou hem stil laten vallen — en daarmee een
             # hele bijlage. Alleen een inclusie als eigen alinea is gemeten.
             raise _xml_fout(
@@ -1429,6 +1443,13 @@ class FormexOmzetter:
             inclusie = self._inclusie_in(el)
             if inclusie is not None:
                 self.geciteerde_inclusies(*inclusie)
+            elif (len(el) == 1 and el[0].tag == "ADDR.S" and not ws(el.text or "")
+                  and not ws(el[0].tail or "")):
+                # Een adresblok als enige inhoud van een P: de brieven in de bijlagen
+                # van het Privacyschildbesluit (32016D1250) zetten het adres van de
+                # geadresseerde zo onder de datum (`PL.DATE/P/ADDR.S`). Het blok is
+                # dan de alinea; met tekst ernaast blijft het een weigering.
+                self.inhoud(el[0], basis, teller, prefix, lid_anker, geankerd)
             elif (el.find("LIST") is not None or el.find("TBL") is not None or el.find("DLIST") is not None
                   or any(c.tag in ANNOTATIES for c in el)):
                 # Een P die een annotatie draagt, is in de bron een omhulsel: 57 van
@@ -1533,8 +1554,11 @@ class FormexOmzetter:
             self.tabelgroep(el)
         elif tag == "INCL.ELEMENT":
             # Leeg, dus `onbekend()` zou hem stil laten vallen.
-            if not self.afbeelding(el, blok=True):
+            bijschrift = self.afbeelding(el, blok=True)
+            if bijschrift is None:
                 raise _xml_fout("een inclusie (INCL.ELEMENT) als los blok is alleen voor een afbeelding gemeten")
+            if bijschrift:
+                self.u.blok(bijschrift)
         elif tag in METADATA:
             return
         else:
@@ -1626,8 +1650,9 @@ class FormexOmzetter:
             else:
                 self.u.blok(na)
 
-    def afbeelding(self, incl, blok: bool = False) -> bool:
-        """Een TIFF-inclusie: niet overnemen, wel vastleggen. False als het geen afbeelding is.
+    def afbeelding(self, incl, blok: bool = False) -> str | None:
+        """Een TIFF-inclusie: niet overnemen, wel vastleggen. None als het geen afbeelding is;
+        anders de tekst van haar bijschrift (CAPTION), of "" zonder bijschrift.
 
         Een afbeelding heeft geen tekst, dus de woordcontrole ziet het verschil niet;
         de melding in de herkomst en de lijst `afbeeldingen_weggelaten` zorgen dat het
@@ -1639,14 +1664,19 @@ class FormexOmzetter:
         adequaatheidsbesluit voor de VS (2023/1795, handtekeningen), ...
         """
         if (incl.get("TYPE") or "").upper() != AFBEELDINGSTYPE:
-            return False
+            return None
         naam = (incl.get("FILEREF") or "").rsplit("/", 1)[-1]
         if naam not in self.afbeeldingen:
             raise _xml_fout(f"de tekst roept afbeelding {naam or '?'} aan, maar de handeling noemt haar niet")
         inhoud = incl.find("IMG.CNT")
         met_tekst = inhoud is not None and bool(ws(" ".join(inhoud.itertext())))
+        bijschrift = incl.find("CAPTION")
+        # Het bijschrift is brontekst bij het beeld en komt op zijn plek: in een
+        # tabelcel wordt het de celtekst, als los blok een eigen alinea.
+        onderschrift = ws(" ".join(ws(self.inline(p)) for p in bijschrift.iter("P"))) if bijschrift is not None else ""
         self.afbeeldingen_weggelaten.append({"fileref": naam, "format": AFBEELDINGSTYPE,
-                                             "tekst_overgenomen": met_tekst})
+                                             "tekst_overgenomen": met_tekst,
+                                             **({"bijschrift": onderschrift} if onderschrift else {})})
         if met_tekst:
             # IMG.CNT is de tekst van het beeld (een formulier van Brussel I bis,
             # van de beschermingsbevelrichtlijn 2011/99). Die is brontekst en
@@ -1655,7 +1685,7 @@ class FormexOmzetter:
                 raise _xml_fout("een afbeelding met tekst (IMG.CNT) midden in een zin is niet gemeten")
             for kind in inhoud:
                 self.inhoud(kind, basis="", teller={"lijsten": 0})
-        return True
+        return onderschrift
 
     def let_op_aaneen(self, el, stuk: str, ervoor: str, erna: str) -> None:
         """Onthoud een datum of getal die zonder spatie aan een woord vastzit (`2016betreffende`)."""
@@ -2152,6 +2182,35 @@ class FormexOmzetter:
             self.bijlage_inhoud(inhoud, anker)
         self.notenblok()
 
+    def brief(self, el, anker: str, geciteerd: bool) -> None:
+        """Een brief in een bijlage (`LETTER`): titel, plaats en datum, inhoud, ondertekening.
+
+        De zeven bijlagen van het Privacyschildbesluit (32016D1250) zijn brieven van
+        Amerikaanse bewindslieden, elk als `LETTER` met `TITLE`, `PL.DATE`, `CONTENTS`
+        en `SIGNATORY` (gemeten: acht brieven, geen andere kinderen). De titel wordt
+        een gewone alinea, want de bron noemt haar geen bijlageonderdeel; de inhoud
+        gaat door `bijlage_inhoud()` onder het anker van de bijlage, zodat een
+        genummerd onderdeel in de brief hetzelfde anker krijgt als buiten een brief.
+        Tot 25 september 2026 was `LETTER` een weigering (T1-F16, kb WP-20).
+        """
+        for kind in el:
+            if kind.tag == "TITLE":
+                for p in kind.iter("P"):
+                    tekst = ws(self.inline(p))
+                    if tekst:
+                        self.u.blok(tekst)
+            elif kind.tag == "PL.DATE":
+                for sub in kind:
+                    self.inhoud(sub, basis="", teller={"lijsten": 0})
+            elif kind.tag == "CONTENTS":
+                self.bijlage_inhoud(kind, anker, geciteerd)
+            elif kind.tag == "SIGNATORY":
+                self.inhoud(kind, basis="", teller={"lijsten": 0})
+            elif kind.tag in METADATA:
+                continue
+            else:
+                self.onbekend("brief", kind)
+
     def inhoudsopgave(self, toc) -> None:
         """Een inhoudsopgave (TOC) in een bijlage: tekst, geen structuur.
 
@@ -2162,15 +2221,25 @@ class FormexOmzetter:
         opgave als losse punten (NP) staat: `I Algemene veiligheids- en
         prestatie-eisen`. Geneste blokken (`TOC.BLK`, de aanhangsels van bijlage
         II in 2005/66) volgen in bronvolgorde. Opmaak valt weg, zoals in een kop.
-        Een paginaverwijzing (`ITEM.REF`) of een titel in de TOC is niet gemeten
-        en blijft een weigering.
+        Een paginaverwijzing (`ITEM.REF`) is het bladzijdenummer van het
+        Publicatieblad en valt weg als metadata; de titel van de opgave
+        (`Inhoudsopgave`) is een gewone alinea.
         """
         for kind in toc:
             if kind.tag == "TOC.BLK":
                 self.inhoudsopgave(kind)
+            elif kind.tag == "TITLE":
+                # `Inhoudsopgave` boven de opgave in de bijlagen van de
+                # adequaatheidsbesluiten voor Japan (32019D0419) en Korea
+                # (32022D0254): tekst, geen kop, net als de regels eronder.
+                for p in kind.iter("P"):
+                    tekst = self.kop_tekst(p)
+                    if tekst:
+                        self.u.blok(tekst)
             elif kind.tag == "TOC.ITEM":
                 delen = [d for d in kind if d.tag in ("NO.ITEM", "ITEM.CONT")]
-                if len(delen) != len(kind) or ws(kind.text or "") or any(ws(d.tail or "") for d in delen):
+                rest = [d for d in kind if d.tag not in ("NO.ITEM", "ITEM.CONT") and d.tag not in METADATA]
+                if rest or ws(kind.text or "") or any(ws(d.tail or "") for d in kind):
                     raise _xml_fout("een regel van een inhoudsopgave (TOC.ITEM) bevat meer dan "
                                     "NO.ITEM en ITEM.CONT; dat is niet gemeten")
                 self.u.blok(" ".join(t for t in (self.kop_tekst(d) for d in delen) if t))
@@ -2309,6 +2378,8 @@ class FormexOmzetter:
             elif kind.tag == "TOC":
                 # `LIJST VAN BIJLAGEN` in 2005/66: de inhoudsopgave staat in CONTENTS.
                 self.inhoudsopgave(kind)
+            elif kind.tag == "LETTER":
+                self.brief(kind, anker, geciteerd)
             elif (kind.tag == "INCL.ELEMENT" and geciteerd
                   and (kind.get("TYPE") or "").upper() == "FORMEX.DOC"):
                 # Een QUOT.S van een bijlage die alleen een inclusie draagt, zonder P

@@ -1566,9 +1566,8 @@ def test_een_geneste_inhoudsopgave_houdt_haar_volgorde_zonder_opmaak():
 
 
 @pytest.mark.parametrize("bijlage, reden", [
-    # Een paginaverwijzing kent de omzetter niet eens als element.
-    (_bijlage(b"BIJLAGEN", b"<TOC><TOC.BLK><TOC.ITEM><NO.ITEM>I</NO.ITEM><ITEM.CONT>Eisen</ITEM.CONT>"
-              b"<ITEM.REF>12</ITEM.REF></TOC.ITEM></TOC.BLK></TOC>"), "ITEM.REF"),
+    # Een paginaverwijzing (ITEM.REF) is sinds kb WP-20 metadata en geen weigering meer;
+    # zie test_inhoudsopgave_met_titel_en_paginaverwijzingen_wordt_tekst_zonder_bladzijden.
     (_bijlage(b"BIJLAGEN", b"<TOC><TOC.BLK><TOC.ITEM><NO.ITEM>I</NO.ITEM><ITEM.CONT>Eisen</ITEM.CONT>"
               b"<P>Toelichting.</P></TOC.ITEM></TOC.BLK></TOC>"), "meer dan NO.ITEM en ITEM.CONT"),
     (b"<ANNEX><TITLE><TI><P>BIJLAGEN</P></TI></TITLE><TOC><TOC.BLK>" + _toc_item(b"I", b"Eisen")
@@ -2103,7 +2102,6 @@ def test_een_bijlage_met_wachtende_noten_is_een_weigering():
         o.bijlage(formex_xml.ET.fromstring(b"<CONS.ANNEX><TITLE><TI><P>BIJLAGE I</P></TI></TITLE></CONS.ANNEX>"))
 
 
-
 def test_een_opsomming_in_een_p_binnen_de_definitie_wordt_blokken():
     """Artikel 2, punt 2, van 2019/1150: `DEFINITION > [tekst, P > LIST]`. Via `inline()` werd de
     `P` één regel met a), b) en c) erin; de kennisbank weigerde terecht (T1-F6, kb WP-20)."""
@@ -2124,3 +2122,75 @@ def test_een_opsomming_in_een_p_binnen_de_definitie_wordt_blokken():
     assert [e.anker for e in eenheden if e.anker.startswith("art-1-1-2")] == [
         "art-1-1-2", "art-1-1-2-a", "art-1-1-2-b"]
     assert not onbekend
+
+
+def _act_met_bijlage(inhoud: bytes) -> bytes:
+    """De handeling met één bijlage achter de FINAL; `inhoud` is de CONTENTS van die bijlage."""
+    return ACT.replace(
+        b"</FINAL>",
+        b"</FINAL><ANNEX><TITLE><TI><P>BIJLAGE I</P></TI></TITLE><CONTENTS>" + inhoud + b"</CONTENTS></ANNEX>",
+    )
+
+
+def test_inhoudsopgave_met_titel_en_paginaverwijzingen_wordt_tekst_zonder_bladzijden():
+    """De bijlagen van de adequaatheidsbesluiten voor Japan (32019D0419) en Korea (32022D0254)
+    openen met `Inhoudsopgave` en per regel het bladzijdenummer (`ITEM.REF`); beide weigerden."""
+    toc = (b"<TOC><TITLE><TI><P>Inhoudsopgave</P></TI></TITLE><TOC.BLK>"
+           b"<TOC.ITEM><NO.ITEM>1)</NO.ITEM><ITEM.CONT>Bijzondere zorg</ITEM.CONT><ITEM.REF>38</ITEM.REF></TOC.ITEM>"
+           b"<TOC.ITEM><NO.ITEM>2)</NO.ITEM><ITEM.CONT>Bewaarde gegevens</ITEM.CONT><ITEM.REF>39</ITEM.REF></TOC.ITEM>"
+           b"</TOC.BLK></TOC><P>De tekst van de bijlage.</P>")
+    markdown, _, onbekend, _ = formex_xml.omzetten(formex_zip(act=_act_met_bijlage(toc)))
+    regels = [r for r in markdown.splitlines() if r.strip()]
+    assert "Inhoudsopgave" in regels
+    assert "1) Bijzondere zorg" in regels and "2) Bewaarde gegevens" in regels
+    assert "38" not in markdown and "39" not in markdown     # het bladzijdenummer is metadata
+    assert not onbekend
+
+
+def test_bijschrift_van_een_afbeelding_komt_op_de_plek_van_het_beeld():
+    """De handtekeningvakken van de SCC's van 2010 (32010D0087): een TIFF met `CAPTION`
+    `(stempel van de organisatie)` in een tabelcel, en als los blok in een alinea."""
+    inhoud = (b'<TBL COLS="2"><CORPUS><ROW><CELL COL="1"><INCL.ELEMENT TYPE="TIFF" FILEREF="L_stempel.tif">'
+              b"<CAPTION><P>(stempel van de organisatie)</P></CAPTION></INCL.ELEMENT></CELL>"
+              b"<CELL COL=\"2\">Handtekening</CELL></ROW></CORPUS></TBL>"
+              b'<P><INCL.ELEMENT TYPE="TIFF" FILEREF="L_stempel.tif"><CAPTION><P>Los bijschrift.</P></CAPTION>'
+              b"</INCL.ELEMENT></P>")
+    act = _act_met_bijlage(inhoud).replace(
+        b"<BIB.INSTANCE><PAGE.FIRST>1</PAGE.FIRST></BIB.INSTANCE>",
+        b"<BIB.INSTANCE><PAGE.FIRST>1</PAGE.FIRST><INCLUSIONS>"
+        b'<INCL.ELEMENT TYPE="TIFF" FILEREF="L_stempel.tif"/></INCLUSIONS></BIB.INSTANCE>')
+    markdown, _, onbekend, extra = formex_xml.omzetten(formex_zip(act=act, extra={"L_stempel.tif": b"II*"}))
+    assert "| (stempel van de organisatie) | Handtekening |" in markdown
+    assert "\nLos bijschrift.\n" in markdown
+    assert not onbekend
+    assert [b.get("bijschrift") for b in extra["metadata"]["afbeeldingen_weggelaten"]] == [
+        "(stempel van de organisatie)", "Los bijschrift."]
+
+
+def test_een_brief_in_een_bijlage_wordt_titel_datum_adres_inhoud_en_ondertekening():
+    """De bijlagen van het Privacyschildbesluit (32016D1250) zijn brieven (`LETTER`)."""
+    brief = (b'<LETTER NO.SEQ="001"><TITLE><TI><P><HT TYPE="BOLD">Brief van de minister</HT></P></TI></TITLE>'
+             b'<PL.DATE><P><DATE ISO="20160707">7 juli 2016</DATE></P><P><ADDR.S><P>Mw. Jourova</P>'
+             b"<P>Europese Commissie</P></ADDR.S></P></PL.DATE>"
+             b"<CONTENTS><P>Geachte commissaris,</P>"
+             b'<GR.SEQ LEVEL="1"><TITLE><TI><NP><NO.P>1.</NO.P><TXT>Eerste onderdeel</TXT></NP></TI></TITLE>'
+             b"<P>Tekst van het onderdeel.</P></GR.SEQ></CONTENTS>"
+             b"<SIGNATORY><P>Hoogachtend,</P><P>De minister</P></SIGNATORY></LETTER>")
+    markdown, eenheden, onbekend, _ = formex_xml.omzetten(formex_zip(act=_act_met_bijlage(brief)))
+    regels = [r for r in markdown.splitlines() if r.strip()]
+    for verwacht in ("**Brief van de minister**", "7 juli 2016", "Mw. Jourova", "Europese Commissie",
+                     "Geachte commissaris,", "Tekst van het onderdeel.", "Hoogachtend,", "De minister"):
+        assert verwacht in regels, verwacht
+    assert f"1.{NBSP * 3}Eerste onderdeel" in regels
+    assert [e.anker for e in eenheden if e.anker.startswith("annex")] == ["annex-1", "annex-1-1"]
+    assert not onbekend
+
+
+def test_een_romeins_onderdeelnummer_met_deelnummer_draagt_dat_deelnummer_in_het_anker():
+    """Bijlage IV en V bij de EUCC-verordening (32024R0482): `IV.1`, `IV.2`, `V.1`, `V.2`.
+    `V.1` las als letter V, en V.1 en V.2 kregen hetzelfde anker (dubbele structurele ankers)."""
+    delen = b"".join(
+        b'<GR.SEQ LEVEL="1"><TITLE><TI><NP><NO.P>' + nr + b"</NO.P><TXT>Onderdeel</TXT></NP></TI></TITLE>"
+        b"<P>Tekst.</P></GR.SEQ>" for nr in (b"V.1", b"V.2"))
+    _, eenheden, _, _ = formex_xml.omzetten(formex_zip(act=_act_met_bijlage(delen)))
+    assert [e.anker for e in eenheden if e.anker.startswith("annex")] == ["annex-1", "annex-1-v-1", "annex-1-v-2"]
