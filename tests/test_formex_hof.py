@@ -271,6 +271,10 @@ def _fake(monkeypatch, antwoorden):
             self.apparent_encoding = "utf-8"
             self.url = ""
 
+        def json(self):
+            import json as _json
+            return _json.loads(self.content)
+
     def get(url, headers=None, timeout=None, allow_redirects=None, params=None):
         calls.append((url, dict(headers or {})))
         for deel, (status, data) in antwoorden.items():
@@ -355,3 +359,48 @@ def test_een_arrest_krijgt_een_kb_bundel_op_zijn_ecli(monkeypatch):
             f"raw/source-evidence/ECLI-EU-C-2026-1/{digest}.fmx4.zip",
         }
         assert archive.read(f"raw/source-evidence/ECLI-EU-C-2026-1/{digest}.fmx4.zip") == data
+
+
+ZONDER_ECLI = ARREST.replace('<NO.ECLI ECLI="ECLI:EU:C:2026:1">EU:C:2026:1</NO.ECLI>', "")
+SPARQL_ECLI = (b'{"results": {"bindings": [{"ecli": {"type": "literal", "value": "ECLI:EU:C:2026:1"}}]}}')
+
+
+def test_een_ecli_uit_de_cellar_metadata_krijgt_zijn_herkomst_mee(monkeypatch):
+    """Satamedia (62007CJ0073) noemt in zijn Formex geen ECLI; de Cellar kent hem wel
+    (cdm:case-law_ecli). Vragen op de ECLI slaagt dan ook, en het zijbestand zegt waar de
+    ECLI vandaan komt (T2-F14, kb WP-20)."""
+    data = arrest_zip(ZONDER_ECLI)
+    calls = _fake(monkeypatch, {"resource/ecli/": (200, data), "resource/celex/": (200, data),
+                                "webapi/rdf/sparql": (200, SPARQL_ECLI)})
+    for vraag in ("ECLI:EU:C:2026:1", "62026CJ0001"):
+        doc = from_link(vraag)
+        h = doc.provenance
+        assert (h.ecli, h.celex, h.extra["ecli_herkomst"]) == ("ECLI:EU:C:2026:1", "62026CJ0001", "cellar-metadata")
+        assert ("De bron noemt geen ECLI; ECLI:EU:C:2026:1 komt uit de Cellar-metadata (cdm:case-law_ecli) "
+                "van 62026CJ0001.") in h.waarschuwingen
+    assert any("sparql" in url for url, _ in calls)
+
+
+def test_een_ecli_uit_de_bron_zelf_heeft_herkomst_formex_en_vraagt_de_cellar_niets(monkeypatch):
+    calls = _fake(monkeypatch, {"resource/celex/": (200, arrest_zip())})
+    h = from_link("62026CJ0001").provenance
+    assert (h.ecli, h.extra["ecli_herkomst"]) == ("ECLI:EU:C:2026:1", "formex")
+    assert not any("sparql" in url for url, _ in calls)
+
+
+@pytest.mark.parametrize("antwoord", [
+    (500, b""),                                                      # storing
+    (200, b'{"results": {"bindings": []}}'),                          # geen ECLI bekend
+    (200, b'{"results": {"bindings": [{"ecli": {"value": "ECLI:EU:C:2026:1"}}, '
+          b'{"ecli": {"value": "ECLI:EU:C:2026:2"}}]}}'),             # twee: niet raden
+    (200, b'{"results": {"bindings": [{"ecli": {"value": "EU:C:2026:1"}}]}}'),  # geen ECLI-vorm
+])
+def test_zonder_bruikbare_cellar_ecli_blijft_de_celex_de_identiteit(monkeypatch, antwoord):
+    data = arrest_zip(ZONDER_ECLI)
+    _fake(monkeypatch, {"resource/ecli/": (200, data), "resource/celex/": (200, data),
+                        "webapi/rdf/sparql": antwoord})
+    h = from_link("62026CJ0001").provenance
+    assert h.ecli is None and "ecli_herkomst" not in h.extra
+    assert "De bron noemt geen ECLI; het CELEX-nummer is de identiteit van dit document." in h.waarschuwingen
+    with pytest.raises(ConversionError, match="zonder ECLI"):
+        from_link("ECLI:EU:C:2026:1")

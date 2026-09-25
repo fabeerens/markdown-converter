@@ -354,7 +354,23 @@ def _fetch_hof(ident: str, lang: str, *, requested_url: str):
             "probeer het later opnieuw. Er is geen terugval op HTML."
         )
     bron_url = getattr(response, "url", "") or url
-    markdown, meta = formex_hof.omzetten(data, ident)
+    # Een oud arrest (Satamedia, 62007CJ0073, 2008) noemt in zijn Formex geen ECLI,
+    # terwijl de Cellar die wel kent (cdm:case-law_ecli). Zonder deze opzoeking
+    # weigerde een vraag op de ECLI ("de bron is 62007CJ0073 (zonder ECLI) en niet
+    # ECLI:EU:C:2008:727") en stond het arrest onder zijn CELEX in de kennisbank,
+    # waar de verwijzing kst-34851-nr-3 → ECLI:EU:C:2008:727 dangling bleef
+    # (T2-F14, kb WP-20). De ECLI uit de metadata krijgt zijn herkomst mee.
+    naam, root = formex_hof.openen(data)
+    eigen = formex_hof.metadata(root, naam)
+    verwacht, ecli_uit_cellar = ident, None
+    if not eigen["ecli"]:
+        ecli_uit_cellar = _ecli_uit_cellar(eigen["celex"])
+        if ecli_uit_cellar and ident.upper() == ecli_uit_cellar:
+            verwacht = eigen["celex"]
+    markdown, meta = formex_hof.omzetten(data, verwacht)
+    ecli_herkomst = "formex" if meta["ecli"] else None
+    if not meta["ecli"] and ecli_uit_cellar:
+        meta["ecli"], ecli_herkomst = ecli_uit_cellar, "cellar-metadata"
     # Pas na de identiteitscontrole vastleggen: een bron die een ander arrest blijkt
     # te zijn hoort niet als bewijs bij deze aanvraag te staan.
     record_source(
@@ -366,7 +382,11 @@ def _fetch_hof(ident: str, lang: str, *, requested_url: str):
         language=lang,
     )
     waarschuwingen = ["EUR-Lex is via de officiële Formex-manifestatie opgehaald."]
-    if not meta["ecli"]:
+    if ecli_herkomst == "cellar-metadata":
+        waarschuwingen.append(
+            f"De bron noemt geen ECLI; {meta['ecli']} komt uit de Cellar-metadata (cdm:case-law_ecli) "
+            f"van {meta['celex']}.")
+    elif not meta["ecli"]:
         waarschuwingen.append(
             "De bron noemt geen ECLI; het CELEX-nummer is de identiteit van dit document.")
     if meta["opmaak_weggelaten"]:
@@ -393,10 +413,44 @@ def _fetch_hof(ident: str, lang: str, *, requested_url: str):
                                        "secties", "paginakop", "soort", "noten", "bronbestand",
                                        "titelregels", "datum", "procestaal",
                                        "dictum_inleiding")},
-               **({"afbeeldingen_weggelaten": weg} if weg else {})},
+               **({"afbeeldingen_weggelaten": weg} if weg else {}),
+               **({"ecli_herkomst": ecli_herkomst} if ecli_herkomst else {})},
     )
     label = ident if ident.upper().startswith("ECLI:") else f"CELEX:{ident}"
     return markdown, f"EUR-Lex (Cellar Formex) • {label} • {lang}", herkomst
+
+
+_ECLI_HOF = re.compile(r"ECLI:EU:[CTF]:\d{4}:\d+")
+
+
+def _ecli_uit_cellar(celex: str) -> str | None:
+    """De ECLI die de Cellar aan een arrest koppelt (`cdm:case-law_ecli`), of None.
+
+    None bij een storing, bij geen antwoord en bij meer dan één ECLI: dan is er niets
+    te bewijzen en blijft het CELEX-nummer de identiteit, met de melding erbij.
+    """
+    query = (
+        "PREFIX cdm: <http://publications.europa.eu/ontology/cdm#>\n"
+        "SELECT DISTINCT ?ecli WHERE {\n"
+        f'  ?w cdm:resource_legal_id_celex "{celex}"^^<http://www.w3.org/2001/XMLSchema#string> ;\n'
+        "     cdm:case-law_ecli ?ecli .\n"
+        "}"
+    )
+    try:
+        r = net.documents().get(
+            _SPARQL_URL,
+            params={"query": query, "format": "application/sparql-results+json"},
+            timeout=_SPARQL_TIMEOUT,
+        )
+        rows = r.json()["results"]["bindings"]
+    except Exception:
+        return None
+    eclis = {(row.get("ecli", {}).get("value") or "").strip().upper() for row in rows}
+    eclis.discard("")
+    if len(eclis) != 1:
+        return None
+    ecli = eclis.pop()
+    return ecli if _ECLI_HOF.fullmatch(ecli) else None
 
 
 def _html_herkomst(celex: str, lang: str, requested_url: str,
