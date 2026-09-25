@@ -2101,3 +2101,26 @@ def test_een_bijlage_met_wachtende_noten_is_een_weigering():
     o.noten.append((1, "wachtende noot"))
     with pytest.raises(ConversionError, match="nog niet geschreven"):
         o.bijlage(formex_xml.ET.fromstring(b"<CONS.ANNEX><TITLE><TI><P>BIJLAGE I</P></TI></TITLE></CONS.ANNEX>"))
+
+
+
+def test_een_opsomming_in_een_p_binnen_de_definitie_wordt_blokken():
+    """Artikel 2, punt 2, van 2019/1150: `DEFINITION > [tekst, P > LIST]`. Via `inline()` werd de
+    `P` één regel met a), b) en c) erin; de kennisbank weigerde terecht (T1-F6, kb WP-20)."""
+    begin, eind = ACT.index(b'<LIST TYPE="ALPHA">'), ACT.index(b"</LIST>") + len(b"</LIST>")
+    act = ACT[:begin] + (
+        b'<DLIST SEPARATOR=":"><DLIST.ITEM><PREFIX>2)</PREFIX><TERM>onlinetussenhandelsdiensten</TERM>'
+        b"<DEFINITION>diensten die aan alle onderstaande vereisten voldoen:<P><LIST TYPE=\"alpha\">"
+        b"<ITEM><NP><NO.P>a)</NO.P><TXT>zij vormen diensten;</TXT></NP></ITEM>"
+        b"<ITEM><NP><NO.P>b)</NO.P><TXT>zij geven de mogelijkheid.</TXT></NP></ITEM></LIST></P>"
+        b"</DEFINITION></DLIST.ITEM></DLIST>"
+    ) + ACT[eind:]
+    markdown, eenheden, onbekend, _ = formex_xml.omzetten(formex_zip(act=act))
+    regels = [r for r in markdown.splitlines() if r.strip()]
+
+    assert "2) onlinetussenhandelsdiensten diensten die aan alle onderstaande vereisten voldoen:" in regels
+    assert "a) zij vormen diensten;" in regels
+    assert "b) zij geven de mogelijkheid." in regels
+    assert [e.anker for e in eenheden if e.anker.startswith("art-1-1-2")] == [
+        "art-1-1-2", "art-1-1-2-a", "art-1-1-2-b"]
+    assert not onbekend

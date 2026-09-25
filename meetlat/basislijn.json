@@ -1,5 +1,5 @@
 {
- "commit": "9f4683d+wijzigingen",
+ "commit": "e608024+wijzigingen",
  "documenten": {
   "02002L0058-20091219": {
    "melding": null,
@@ -66,9 +66,9 @@
    "oorzaak": null,
    "route": "wetgeving",
    "sectie": "geconsolideerd",
-   "sha256": "04ada8b33885c6166af2fafcaaf2a92bc3902fcbbd6b2af4b18a441b75d218ae",
+   "sha256": "e34e8a43e24f1b0cd64682eb2f81e09566623dd7814260d04dddbfdd040792b7",
    "status": "ok",
-   "tekens": 419498,
+   "tekens": 419556,
    "waarschuwingen": [
     "Overwegingen en aanhef zijn overgenomen uit de oorspronkelijke handeling (CELEX:32014R0600); de geconsolideerde tekst op EUR-Lex bevat deze niet.",
     "Geen CLG.MDFO in de tekst noemt 32021R0023, 32025R1156; van deze wijzigende handeling(en) is `shown` niet vastgesteld.",
@@ -1901,9 +1901,9 @@
    "oorzaak": null,
    "route": "wetgeving",
    "sectie": "belangrijk",
-   "sha256": "fb9dfbaff53eedf4bd2a46d680255830f4f01409095b84a4f82d48bc261284d1",
+   "sha256": "aae7906e8416cc65acac1f2b950ee11477cf5cabf4d0e6f47faa1e287123c509",
    "status": "ok",
-   "tekens": 110008,
+   "tekens": 110011,
    "waarschuwingen": []
   },
   "32020D1402": {
@@ -3672,6 +3672,6 @@
    ]
   }
  },
- "gemeten": "2026-09-25 20:43",
+ "gemeten": "2026-09-25 20:52",
  "taal": "NL"
 }

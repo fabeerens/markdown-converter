@@ -431,6 +431,32 @@ def _bronwoorden(onderdelen: list[tuple[str, ET.Element]]) -> Counter:
     return teller
 
 
+def _definitie_delen(definitie, structureel) -> list[tuple[str, ET.Element | None]]:
+    """`(tekst ervoor, kind)`-paren van een DEFINITION, met een `P` die een opsomming
+    draagt opengevouwen; het laatste paar heeft `None` als kind.
+
+    Artikel 2, punt 2, van 2019/1150 zet de opsomming niet direct in de DEFINITION
+    maar in een `P` daarbinnen (`DEFINITION > [tekst, P > LIST]`). Via `inline()` werd
+    die `P` één regel met a), b) en c) erin, en de kennisbank weigerde terecht: haar
+    lezer ziet de onderdelen wel (T1-F6, kb WP-20). Alleen een `P` die zelf een
+    opsomming of tabel draagt wordt opengevouwen; een gewone `P` blijft inline.
+    """
+    delen: list[tuple[str, ET.Element | None]] = []
+    lopend = definitie.text or ""
+    for kind in definitie:
+        if kind.tag == "P" and any(k.tag in structureel for k in kind):
+            lopend += kind.text or ""
+            for sub in kind:
+                delen.append((lopend, sub))
+                lopend = sub.tail or ""
+            lopend += kind.tail or ""
+        else:
+            delen.append((lopend, kind))
+            lopend = kind.tail or ""
+    delen.append((lopend, None))
+    return delen
+
+
 BLADALINEA_TAGS = {
     "P", "TXT", "TI", "STI", "TI.ART", "STI.ART", "DEFINITION", "TERM",
     "PREAMBLE.INIT", "PREAMBLE.FINAL", "GR.CONSID.INIT", "VISA", "COM",
@@ -1780,17 +1806,19 @@ class FormexOmzetter:
                 self.u.eenheid(anker, "onderdeel", regel)
 
         structureel = ("LIST", "DLIST", "TBL")
-        if definitie is None or not any(k.tag in structureel for k in definitie):
+        delen = _definitie_delen(definitie, structureel) if definitie is not None else []
+        if definitie is None or not any(k is not None and k.tag in structureel for _, k in delen):
             schrijf_kop(ws(self.inline(definitie)) if definitie is not None else "")
             return
 
         # Eén doorloop, zodat tekst ná een opsomming niet stil wegvalt: alles
         # tot het eerste structurele kind hoort bij de kopregel, wat erna komt
         # wordt een eigen alinea zonder eigen anker (zoals ALINEA het doet).
-        lopend, kop_geschreven = definitie.text or "", False
-        for kind in list(definitie) + [None]:
+        lopend, kop_geschreven = "", False
+        for voor, kind in delen:
+            lopend += voor
             if kind is not None and kind.tag not in structureel:
-                lopend += self.inline_el(kind) + (kind.tail or "")
+                lopend += self.inline_el(kind)
                 continue
             tekst, lopend = ws(lopend), ""
             if not kop_geschreven:
@@ -1804,7 +1832,6 @@ class FormexOmzetter:
                 self.tabel(kind)
             else:
                 self.lijst(kind, anker or basis, "")
-            lopend = kind.tail or ""
 
     def lijst(self, el, basis: str, extra: str) -> None:
         """Elk onderdeel is een eigen alinea: `a) tekst`, niet een Markdown-lijst."""
