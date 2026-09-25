@@ -382,12 +382,26 @@ def test_een_gerekend_nummer_voor_een_gewone_alinea_is_geen_randnummer():
     assert meta["randnummers"] == 1
 
 
+def test_een_startoverride_herstart_alleen_het_niveau_waarop_de_num_wordt_gebruikt():
+    """Hurbain (001-225814): de num van `B. Recommendation …` (niveau 2, start 2) draagt ook een
+    override voor niveau 1; toegepast bij het eerste gebruik van de num werd `IV. EUROPEAN
+    UNION LAW` weer `I.`. Alleen het niveau van de alinea zelf herstart."""
+    body = "".join([
+        genummerd("DOMESTIC LAW", "JuHIRoman", "4", "1"),
+        genummerd("The Constitution", "JuHA", "4", "2"),
+        genummerd("Recommendation", "JuHA", "28", "2"),      # override niveau 1 (3), niet gebruikt
+        genummerd("EUROPEAN UNION LAW", "JuHIRoman", "4", "1"),
+    ])
+    markdown, _ = hudoc_docx.omzetten(docx(p("CASE OF X v. Y") + body, numbering=NUMBERING_KOPPEN), "CASE OF X v. Y")
+    assert [r for r in markdown.splitlines() if r.startswith("## ")] == [
+        "## I. DOMESTIC LAW", "## A. The Constitution", "## B. Recommendation", "## II. EUROPEAN UNION LAW"]
+
+
 @pytest.mark.parametrize("body, reden", [
-    # Een reeks die niet aansluit: een startOverride op niveau 1 (num 28: 3) die een alinea
-    # op niveau 2 als eerste gebruikt, waarna niveau 1 op de gewone num van I. naar III. springt.
-    ("".join([genummerd("A", "JuHIRoman", "4", "1"), genummerd("x", "JuHA", "28", "2"),
-              genummerd("B", "JuHIRoman", "4", "1")]),
-     "sluit niet aan"),
+    # Een num die numbering.xml niet kent.
+    (genummerd("A", "JuHIRoman", "99", "1"), "niet kent"),
+    # Een niveau dat de abstractNum niet definieert.
+    (genummerd("A", "JuHalpha", "4", "6"), "niet gedefinieerd"),
     # Het nummer staat al in de tekst én als nummering: welke geldt is niet te bewijzen.
     (genummerd(f"I.{NBSP}{NBSP}THE FACTS", "JuHIRoman", "4", "1"), "al in haar tekst"),
 ])

@@ -354,16 +354,18 @@ class Teller:
       `I.` begint opnieuw), ook als dat niveau zelf niets toont (`JuHHead`, `numFmt none`);
     - `%n` in `lvlText` is de teller van niveau n, in de vorm van dat niveau.
 
-    De zelfcontrole (`controleer`): binnen één `abstractNum` sluit de reeks per niveau
-    aan (I, II, III …) tenzij een hoger niveau ertussen kwam of een `startOverride`
-    het nummer zet; anders is de nummering niet begrepen en weigert de omzetting.
+    De zelfcontrole (`controleer`): binnen één `abstractNum` sluit de reeks per zichtbaar
+    niveau aan (I, II, III …) tenzij een hoger niveau ertussen kwam of een `startOverride`
+    het begin zet; anders is de nummering niet begrepen en weigert de omzetting. Wat
+    hier niet gemeten is weigert: een niveau zonder numFmt, een `lvlRestart`, een num die
+    numbering.xml niet kent, en een nummer dat al in de tekst staat.
     """
 
     def __init__(self, docx: Docx) -> None:
         self.docx = docx
         self.defs = docx.nummering_def
         self.tellers: dict[str, dict[int, int]] = {}
-        self.gezien: set[str] = set()
+        self.gezien: set[tuple[str, int]] = set()        # (num, niveau) al gebruikt
         self.vorige: dict[tuple[str, int], int] = {}     # (abstract, niveau) -> laatste nummer
 
     def _definitie(self, abstract: str, ilvl: str) -> dict | None:
@@ -401,24 +403,22 @@ class Teller:
             raise _fout(self.docx.naam, f"automatische nummering van de vorm {d['fmt']!r} (numbering.xml, "
                         f"niveau {ilvl}) is niet gemeten")
         c = self.tellers.setdefault(abstract, {})
-        herstart = None
-        if num not in self.gezien:
-            self.gezien.add(num)
-            for lvl, o in overschrijvingen.items():
-                if o.get("start") is not None:
-                    c[int(lvl)] = o["start"] - 1
-                    if int(lvl) == niveau:
-                        herstart = o["start"]
+        # Een `startOverride` herstart zijn niveau bij het eerste gebruik van die `num` op
+        # dat niveau, en niet eerder: in Hurbain draagt de num van `B. Recommendation …`
+        # (niveau 2) ook een override voor niveau 1, en wie die meteen toepast maakt van
+        # `IV. EUROPEAN UNION LAW` weer `I.`. Gemeten tegen de gedrukte nummering.
+        o = overschrijvingen.get(ilvl) or {}
+        if (num, niveau) not in self.gezien:
+            self.gezien.add((num, niveau))
+            if o.get("start") is not None:
+                c[niveau] = o["start"] - 1
         c[niveau] = c.get(niveau, d["start"] - 1) + 1
         for k in [k for k in c if k > niveau]:
             del c[k]
         # Een niveau dat niets toont (`JuHHead`, numFmt none) telt alleen om de diepere
         # niveaus te herstarten; zijn eigen reeks is onzichtbaar en een `startOverride`
         # erop (Hurbain: 6 na 3) verandert geen enkel getoond nummer.
-        if d["fmt"] != "none":
-            self.controleer(abstract, niveau, c[niveau], d["start"], herstart)
-        else:
-            self.controleer(abstract, niveau, None, d["start"], herstart)
+        self.controleer(abstract, niveau, c[niveau] if d["fmt"] != "none" else None, d["start"])
 
         def vorm(m) -> str:
             n = int(m.group(1)) - 1
@@ -427,15 +427,14 @@ class Teller:
 
         return re.sub(r"%(\d)", vorm, d["text"] or "")
 
-    def controleer(self, abstract: str, niveau: int, nummer: int | None, start: int,
-                   herstart: int | None) -> None:
-        """`nummer` None: een onzichtbaar niveau, dat alleen de diepere reeksen afsluit."""
+    def controleer(self, abstract: str, niveau: int, nummer: int | None, start: int) -> None:
+        """De reeks per zichtbaar niveau sluit aan: het volgende nummer, of het begin van het
+        niveau (na een hoger niveau, of het begin dat een `startOverride` zet). `nummer` None
+        is een onzichtbaar niveau, dat alleen de diepere reeksen afsluit. Met de regels
+        hierboven is dit een grens tegen een fout in de tellers zelf, geen bronoordeel."""
         if nummer is not None:
             vorig = self.vorige.get((abstract, niveau))
-            toegestaan = {vorig + 1} if vorig is not None else {start}
-            toegestaan.add(start)            # na een hoger niveau begint de reeks opnieuw
-            if herstart is not None:
-                toegestaan.add(herstart)
+            toegestaan = {vorig + 1, start} if vorig is not None else {start}
             if nummer not in toegestaan:
                 raise _fout(self.docx.naam, f"de automatische nummering sluit niet aan: op niveau {niveau} volgt "
                             f"{nummer} op {vorig}")
