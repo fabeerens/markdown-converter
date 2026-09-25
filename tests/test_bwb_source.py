@@ -247,10 +247,14 @@ def test_regeling_route_is_converted_like_wet_besluit(monkeypatch):
 
 def test_unknown_top_level_element_under_wetgeving_is_refused_not_flattened():
     """Vroeger viel <regeling> hier stil in plat(); nu geldt dat voor elk
-    onbekend hoofdelement direct onder <wetgeving>, niet alleen <regeling>."""
-    xml = toestand().replace(b"<wet-besluit>", b"<circulaire>").replace(b"</wet-besluit>", b"</circulaire>")
+    onbekend hoofdelement direct onder <wetgeving>, niet alleen <regeling>.
 
-    with pytest.raises(ConversionError, match="circulaire"):
+    Tot 25 september 2026 stond hier <circulaire> als voorbeeld; dat is sinds de
+    nadere regel NR/REG-1829 (BWBR0041321) een bekend hoofdelement. Een verzonnen
+    naam houdt de grendel zelf vast."""
+    xml = toestand().replace(b"<wet-besluit>", b"<verdragstekst>").replace(b"</wet-besluit>", b"</verdragstekst>")
+
+    with pytest.raises(ConversionError, match="verdragstekst"):
         wetten.bwb_xml.omzetten(xml)
 
 
@@ -454,4 +458,54 @@ def test_noot_in_een_nummer_wordt_geweigerd(plek):
     else:
         xml = noot_toestand("<al>Tekst.</al>").replace(b"<nr>1.3</nr>", f"<nr>1.3{noot}</nr>".encode())
     with pytest.raises(ConversionError, match=f"<{plek}>"):
+        wetten.bwb_xml.omzetten(xml)
+
+
+# ---------- <circulaire> als hoofdelement (kb WP-13, klasse 2) ----------
+
+def circulaire(inhoud: str) -> bytes:
+    """De vorm van NR/REG-1829 (BWBR0041321), ingekort."""
+    return f"""<toestand bwb-id="BWBR0041321" inwerkingtreding="2019-04-15"><wetgeving>
+<intitule>Nadere regel</intitule><citeertitel>Nadere regel NR/REG-1829</citeertitel>
+<circulaire><circulaire-tekst>
+<tekst status="goed"><al>Ingevolge artikel 62 van de Wmg stelt de NZa vast:</al></tekst>
+{inhoud}
+</circulaire-tekst><circulaire-sluiting status="goed"><ondertekening>
+<organisatie>de Nederlandse Zorgautoriteit,</organisatie><functie>voorzitter</functie>
+</ondertekening></circulaire-sluiting></circulaire>
+</wetgeving></toestand>""".encode()
+
+
+DIVISIE = """<circulaire.divisie status="goed"><kop><nr status="officieel">2</nr>
+<titel status="officieel">Doel</titel></kop><tekst status="goed"><al>De gegevens dienen:</al>
+<lijst type="expliciet" nr-sluiting="."><li><li.nr>a.</li.nr><al>de taken van de NZa;</al></li>
+<li><li.nr>b.</li.nr><al>de informatie aan VWS.</al></li></lijst>
+<tussenkop>Behandeling:</tussenkop><al>Slot.</al></tekst></circulaire.divisie>"""
+
+
+def test_circulaire_heeft_de_vorm_van_een_regeling_met_divisies_als_kop_zonder_eenheid():
+    """De divisie heet in de bron geen artikel; de omzetter maakt er dus ook geen
+    artikelanker van, en ook de onderdelen a. en b. krijgen er geen."""
+    markdown, eenheden, onbekend, _ = wetten.bwb_xml.omzetten(circulaire(DIVISIE))
+
+    assert onbekend == {}
+    assert eenheden == []
+    assert markdown.rstrip("\n").split("\n\n") == [
+        "# Nadere regel NR/REG-1829",
+        "Nadere regel",
+        "Ingevolge artikel 62 van de Wmg stelt de NZa vast:",
+        "## 2. Doel",
+        "De gegevens dienen:",
+        "- a. de taken van de NZa;\n- b. de informatie aan VWS.",
+        "Behandeling:",
+        "Slot.",
+        "de Nederlandse Zorgautoriteit,",
+        "voorzitter",
+    ]
+
+
+def test_onbekend_element_in_een_circulaire_blijft_een_weigering():
+    xml = circulaire(DIVISIE.replace("<tussenkop>Behandeling:</tussenkop>",
+                                     "<plaatje>schema</plaatje>"))
+    with pytest.raises(ConversionError, match="plaatje"):
         wetten.bwb_xml.omzetten(xml)

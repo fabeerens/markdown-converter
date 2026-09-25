@@ -159,12 +159,15 @@ class BwbOmzetter:
         for kind in wet:
             if kind.tag == "intitule":
                 self.u.blok(ws(self.inline(kind)))
-            elif kind.tag in ("wet-besluit", "regeling"):
+            elif kind.tag in ("wet-besluit", "regeling", "circulaire"):
                 # Een wet/AMvB komt binnen als <wet-besluit> met <wettekst> en
                 # <wetsluiting>; een ministeriële regeling als <regeling> met
                 # <regeling-tekst> en <regeling-sluiting>. Zelfde vorm, andere naam.
+                # Een nadere regel van de NZa (NR/REG-1829, BWBR0041321) is een
+                # <circulaire> met <circulaire-tekst> en <circulaire-sluiting>; tot 25
+                # september 2026 een onbekend hoofdelement en dus een weigering.
                 for deel in kind:
-                    if deel.tag in ("wettekst", "regeling-tekst"):
+                    if deel.tag in ("wettekst", "regeling-tekst", "circulaire-tekst"):
                         self.container_inhoud(deel, niveau=2, pad={})
                     elif deel.tag == "bijlage":
                         self.bijlage(deel, niveau=2)
@@ -179,7 +182,7 @@ class BwbOmzetter:
                 raise ConversionError(
                     f"<{kind.tag}> is een onbekend hoofdelement direct onder "
                     "<wetgeving>; de omzetter kent alleen <intitule>, "
-                    "<wet-besluit>, <regeling> en <bijlage>."
+                    "<wet-besluit>, <regeling>, <circulaire> en <bijlage>."
                 )
         return self.u
 
@@ -275,13 +278,35 @@ class BwbOmzetter:
                 self.container_inhoud(kind, niveau + 1, nieuw)
             elif kind.tag == "artikel":
                 self.artikel(kind, niveau, pad)
+            elif kind.tag == "circulaire.divisie":
+                self.circulairedivisie(kind, niveau, pad)
+            elif kind.tag == "tekst":
+                # In een circulaire staat de lopende tekst in een omhulsel zonder eigen
+                # tekst (`<tekst><al>…</al><lijst>…</lijst></tekst>`); de kinderen tellen.
+                self.container_inhoud(kind, niveau, pad)
             elif kind.tag in OVERSLAAN:
                 continue
-            elif kind.tag in ("al", "lijst", "table"):
+            elif kind.tag in ("al", "lijst", "table", "tussenkop"):
                 self.inhoud(kind, basis="", prefix_noot="")
             else:
                 self.u.markeer_onbekend(f"blok:{kind.tag}")
                 self.container_inhoud(kind, niveau, pad)
+
+    def circulairedivisie(self, el, niveau: int, pad: dict) -> None:
+        """Een genummerd onderdeel van een circulaire: een kop, maar geen artikel.
+
+        NR/REG-1829 (BWBR0041321) deelt zich in tien `circulaire.divisie`s in met
+        `<kop><nr>1</nr><titel>Reikwijdte</titel></kop>` en geen label. De tekst
+        verwijst ernaar als "artikel 4", maar de bron markeert ze niet zo; een label of
+        een artikelanker zou de omzetter erbij bedenken. De kop wordt daarom de
+        koptekst die de bron geeft (`1. Reikwijdte`), zonder structuureenheid, zoals
+        een `divisie` in een bijlage er ook geen krijgt.
+        """
+        label, nr, titel, nr_eerst = self.kop(el)
+        regel = self.kopregel(label, nr, titel, nr_eerst)
+        if regel:
+            self.u.blok(f"{'#' * min(niveau, 6)} {regel}")
+        self.container_inhoud(el, niveau + 1, pad)
 
     def artikel(self, el, niveau: int, pad: dict) -> None:
         label, nr, titel, nr_eerst = self.kop(el)
