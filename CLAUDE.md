@@ -576,6 +576,14 @@ accountregistratie namens de gebruiker):
   `divisie`s in, en `divisie()` krijgt daarvoor van `bijlage()` het kopniveau en het ankerpad mee
   (`annex-2-art-7`). De leden van de tweede variant van 8:36c dragen dezelfde ankers als de eerste:
   dat zegt de bron, en de BWB-route controleert ankers niet op dubbelen.
+  Sinds kb WP-13 (25 september 2026) twee vormen erbij. Een **`<noot type="voet">` midden in
+  een alinea** (Regeling ggz en fz 2026, BWBR0051654) wordt native: `[^n]` op zijn plek, de
+  definitie direct onder het blok van de marker (aan het eind van het document las ze als tekst
+  van de laatste bijlage), in een bijlage met de reeks van die bijlage (`[^annex-2-1]`); een noot
+  in een nummer weigert, want `nummer_anker()` maakte van `1[^1]` stil het lidanker `-11`. En een
+  **`<circulaire>`** (nadere regel NR/REG-1829, BWBR0041321) heeft de vorm van `<regeling>`; haar
+  `circulaire.divisie`s worden koppen (`## 1. Reikwijdte`) zonder eenheid, omdat de bron ze geen
+  artikel noemt.
 - **Duitse rechtspraak** — twee lagen, met een gedeelde parser:
   - **Primair: OpenLegalData** (`de_openlegaldata.py`, `de.openlegaldata.io`) — een gratis,
     **sleutelloze** JSON-API, rechtstreeks doorzoekbaar op ECLI (`?ecli=<ECLI>`, dan een
@@ -1241,4 +1249,4 @@ Een geüpload bestand of een link naar een Kamerstuk komt als document in de ken
 
 **Noten zijn native** (`[^1]` en `[^1]: …`), zoals bij de rechtspraak, en niet de `(n)`-vorm die een eerste lezing van AGENTS.md regel 3 suggereert: het documenten-profiel koppelt `(n)` alleen met een aangewezen notenblok, terwijl de kern native noten al aankan. Een tabelnoot in de KOOP-XML heet `t<tabel>-<nr>` (elke tabel telt opnieuw bij 1).
 
-Gemeten op 11 Kamerstukken van KOOP: 5 komen door (waaronder `kst-34851-3`, 65.815 woorden, 102 noten); de weigeringen zijn `box`, `datumtekst`, `voorstel-wet`, `aanhef`, `label` in een kop en `dossierref` in een alinea: vocabulaire dat niet is gemeten en dus niet wordt geraden. Van zeven echte Word-modelovereenkomsten (ARVODI van PIANOo, een model van NVRR) komt er geen enkele door: zes hebben een tekstvak (`mc:AlternateContent`), één automatische nummering. De EHRM-Word-bestanden komen wel door de generieke kaart (42 koppen tegenover 0 bij MarkItDown).
+Gemeten op 11 Kamerstukken van KOOP: 5 komen door (waaronder `kst-34851-3`, 65.815 woorden, 102 noten); de weigeringen zijn `box`, `datumtekst`, `voorstel-wet`, `aanhef`, `label` in een kop en `dossierref` in een alinea: vocabulaire dat niet is gemeten en dus niet wordt geraden. Sinds kb WP-13 (25 september 2026) zijn `dossierref` (de tekst blijft, zoals bij `extref`) en `nootref` (de marker van de noot waar `@refid` naar wijst, zonder tweede definitie; gemeten in `kst-36764-3`) gemeten. Een `<staatsblad>` blijft een weigering: behalve het vocabulaire ontbreekt er een afgesproken slug. Van zeven echte Word-modelovereenkomsten (ARVODI van PIANOo, een model van NVRR) komt er geen enkele door: zes hebben een tekstvak (`mc:AlternateContent`), één automatische nummering. De EHRM-Word-bestanden komen wel door de generieke kaart (42 koppen tegenover 0 bij MarkItDown).
