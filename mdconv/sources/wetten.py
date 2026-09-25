@@ -304,6 +304,8 @@ def _fetch_bwb_xml(query: str) -> tuple[str, str, Herkomst]:
             "xml_sha512_gemeten": gemeten_sha512,
             "xml_sha512_wijkt_af_van_manifest": wijkt_af,
             "herhaalde_tabelcellen": extra["herhaalde_cellen"],
+            **({"afbeeldingen_weggelaten": extra["afbeeldingen_weggelaten"]}
+               if extra.get("afbeeldingen_weggelaten") else {}),
         },
     )
     label = f"KOOP BWB-XML • {bwb}/{versie['begin']}"

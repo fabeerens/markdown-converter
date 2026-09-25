@@ -71,6 +71,7 @@ class BwbOmzetter:
         self.huidige_bijlage = ""
         self.nootlabels: set[str] = set()
         self.noten: list[tuple[str, str]] = []
+        self.afbeeldingen_weggelaten: list[dict] = []
 
     # ---------- inline ----------
     def inline(self, el, noot_prefix: str = "") -> str:
@@ -103,6 +104,9 @@ class BwbOmzetter:
             return f"[Red: {ws(self.inline(el, noot_prefix))}]"
         if tag == "noot":
             return self.noot(el)
+        if tag == "plaatje":
+            # In een tabelcel (Opiumwet, bijlage): het bijschrift is de celtekst.
+            return self.plaatje(el)
         if tag in ("al", "extref", "intref", "datum", "naam", "voornaam", "achternaam",
                    "functie", "plaats", "sub", "unl", "inf"):
             return self.inline(el, noot_prefix)
@@ -247,6 +251,15 @@ class BwbOmzetter:
         if not eerste:
             return titel
         return f"{eerste}. {titel}" if titel else eerste
+
+    def meld_afbeeldingen(self) -> list[str]:
+        weg = self.afbeeldingen_weggelaten
+        if not weg:
+            return []
+        namen = [b["naam"] or b["id"] or "?" for b in weg]
+        voorbeeld = ", ".join(namen[:5]) + (f" en {len(namen) - 5} meer" if len(namen) > 5 else "")
+        return [f"{len(weg)} {'afbeelding' if len(weg) == 1 else 'afbeeldingen'} uit de BWB-XML niet "
+                f"overgenomen; de tekst eromheen en een bijschrift staan er wel: {voorbeeld}."]
 
     def meld_omgedraaid(self) -> str | None:
         """Koppen waarin de bron het nummer vóór het label zet: gevolgd, en gemeld."""
@@ -436,6 +449,10 @@ class BwbOmzetter:
             self.tabel(el, prefix_noot)
         elif el.tag == "divisie":
             self.divisie(el, basis, prefix_noot, teller, diepte)
+        elif el.tag == "plaatje":
+            bijschrift = self.plaatje(el)
+            if bijschrift:
+                self.u.blok(f"{inspring}{bijschrift}")
         elif el.tag == "tussenkop":
             # Artikel 8:36c Awb staat er twee keer (digitaal en op papier); de
             # `tussenkop` scheidt beide varianten. Geen kop en geen eenheid: als
@@ -453,6 +470,34 @@ class BwbOmzetter:
             tekst = ws(self.inline(el, prefix_noot))
             if tekst:
                 self.u.blok(tekst)
+
+    def plaatje(self, el) -> str:
+        """Een afbeelding (`plaatje`): niet overnemen, wel vastleggen; het bijschrift is tekst.
+
+        Dezelfde afspraak als bij de rechtspraakroute en de Formex-afbeelding: geen
+        beeldbytes en geen plaatshouder in de Markdown, een melding in de herkomst en
+        een lijst `afbeeldingen_weggelaten` in het zijbestand. Gemeten: de Wet BIG
+        (BWBR0006251, één plaatje in een bijlage) en de Opiumwet (BWBR0001941, elf:
+        zes in een divisie, vijf in een tabelcel); beide weigerden op `inhoud:plaatje`
+        (T3-F16, kb WP-20). Een `bijschrift` (`Figuur 1`) is brontekst en blijft;
+        een `illustratie` zonder bijschrift laat niets achter.
+        """
+        bijschriften = []
+        for kind in el:
+            if kind.tag == "illustratie":
+                self.afbeeldingen_weggelaten.append({
+                    "naam": kind.get("naam"), "id": kind.get("id"), "alt": kind.get("alt"),
+                    "breedte": kind.get("breedte"), "hoogte": kind.get("hoogte"),
+                    "formaat": kind.get("formaat")})
+            elif kind.tag == "bijschrift":
+                tekst = ws(self.inline(kind))
+                if tekst:
+                    bijschriften.append(tekst)
+            elif kind.tag in OVERSLAAN:
+                continue
+            else:
+                self.u.markeer_onbekend(f"plaatje:{kind.tag}")
+        return " ".join(bijschriften)
 
     def nootdefinitie(self, el, prefix_noot: str) -> bool:
         """Schrijf een bijlagenoot, ook wanneer die onder een divisie staat."""
@@ -541,8 +586,12 @@ class BwbOmzetter:
                     for row in s.findall("row"):
                         cellen = []
                         for entry in row.findall("entry"):
-                            tekst = " ".join(ws(self.inline(a, prefix_noot)) for a in entry
-                                             if a.tag not in OVERSLAAN) or ws(self.inline(entry, prefix_noot))
+                            kinderen = [a for a in entry if a.tag not in OVERSLAAN]
+                            # Een cel met alleen een plaatje zonder bijschrift is leeg;
+                            # terugvallen op `inline(entry)` zou het plaatje twee keer tellen.
+                            tekst = (" ".join((self.plaatje(a) if a.tag == "plaatje"
+                                               else ws(self.inline(a, prefix_noot))) for a in kinderen)
+                                     if kinderen else ws(self.inline(entry, prefix_noot)))
                             begin = entry.get("namest") or entry.get("colname")
                             eind = entry.get("nameend") or begin
                             kol = kolommen.get(begin)
@@ -604,5 +653,6 @@ def omzetten(data: bytes | str) -> tuple[str, list, dict, dict]:
         "expired": o.expired,
         "omgedraaide_koppen": len(o.omgedraaid),
         "noten": len(o.noten),
-        "waarschuwingen": [melding] if melding else [],
+        "waarschuwingen": ([melding] if melding else []) + o.meld_afbeeldingen(),
+        "afbeeldingen_weggelaten": o.afbeeldingen_weggelaten,
     }

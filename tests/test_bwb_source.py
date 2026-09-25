@@ -511,7 +511,6 @@ def test_onbekend_element_in_een_circulaire_blijft_een_weigering():
         wetten.bwb_xml.omzetten(xml)
 
 
-
 def test_onderdelen_van_een_nog_niet_geldend_lid_staan_ingesprongen_onder_het_lid():
     """Artikel 3.1.3 Wlz (BWBR0035917): plat geschreven hingen de onderdelen a. en b. in de
     kennisbank aan het artikel (`art-3-1-3-a`). Ingesprongen, zoals onder een geldend lid,
@@ -552,3 +551,27 @@ def test_een_leeg_ankersegment_van_een_artikel_is_een_weigering_van_de_omzetter_
         u.eenheid("art-", "artikel", "Artikel")
     with pytest.raises(ConversionError, match="leeg ankersegment"):
         u.eenheid("art-1-", "lid", "1")
+
+
+def test_een_plaatje_wordt_weggelaten_met_melding_en_het_bijschrift_blijft():
+    """Wet BIG (BWBR0006251, één plaatje in een bijlage) en Opiumwet (BWBR0001941, elf: in
+    een divisie en in een tabelcel) weigerden op `inhoud:plaatje` (T3-F16, kb WP-20)."""
+    xml = toestand().replace(
+        b"</artikel></wettekst>",
+        b"</artikel></wettekst></wet-besluit><bijlage><kop><label>Bijlage</label><nr>1</nr></kop>"
+        b"<al>Figuur 1 geeft de opbouw weer.</al>"
+        b'<plaatje><illustratie id="272866" alt="Figuur 1" breedte="740" hoogte="436" formaat="png" naam="272866.png"/>'
+        b'<bijschrift locatie="boven">Figuur 1</bijschrift></plaatje>'
+        b'<table><tgroup cols="2"><colspec colname="c1"/><colspec colname="c2"/><tbody><row>'
+        b'<entry colname="c1"><plaatje><illustratie id="1" naam="1.png" breedte="10" hoogte="10" formaat="png"/></plaatje></entry>'
+        b'<entry colname="c2"><al>Stof</al></entry></row></tbody></tgroup></table>'
+        b"</bijlage><wet-besluit><wettekst></wettekst>")
+    markdown, eenheden, onbekend, extra = wetten.bwb_xml.omzetten(xml)
+    assert "Figuur 1 geeft de opbouw weer.\n\nFiguur 1\n\n" in markdown
+    assert "|  | Stof |" in markdown
+    assert "272866" not in markdown and "![" not in markdown
+    assert [b["naam"] for b in extra["afbeeldingen_weggelaten"]] == ["272866.png", "1.png"]
+    assert extra["waarschuwingen"] == [
+        "2 afbeeldingen uit de BWB-XML niet overgenomen; de tekst eromheen en een bijschrift "
+        "staan er wel: 272866.png, 1.png."]
+    assert not onbekend
