@@ -360,7 +360,13 @@ class BwbOmzetter:
                 self.u.blok(f"{lidnr}. {tekst}" if lidnr else tekst)
                 eerste = False
             else:
-                self.inhoud(kind, basis="", prefix_noot="")
+                # Ingesprongen onder het lid, zoals de onderdelen van een geldend lid
+                # (`lid()`, diepte 1). Plat geschreven hingen de onderdelen van
+                # artikel 3.1.3 Wlz aan het artikel (`art-3-1-3-a`); de kennisbank
+                # leest beide vormen en geeft ze geen anker (T3-F1, kb WP-19 en
+                # WP-20, besluit 8 van 25 september 2026). Nog steeds zonder
+                # lidanker, dus zonder basis.
+                self.inhoud(kind, basis="", prefix_noot="", diepte=1)
 
     def lid(self, el, lidnr: str, anker: str | None) -> None:
         eerste = True

@@ -509,3 +509,19 @@ def test_onbekend_element_in_een_circulaire_blijft_een_weigering():
                                      "<plaatje>schema</plaatje>"))
     with pytest.raises(ConversionError, match="plaatje"):
         wetten.bwb_xml.omzetten(xml)
+
+
+
+def test_onderdelen_van_een_nog_niet_geldend_lid_staan_ingesprongen_onder_het_lid():
+    """Artikel 3.1.3 Wlz (BWBR0035917): plat geschreven hingen de onderdelen a. en b. in de
+    kennisbank aan het artikel (`art-3-1-3-a`). Ingesprongen, zoals onder een geldend lid,
+    en nog steeds zonder lidanker (T3-F1, kb WP-19 en WP-20, besluit 8)."""
+    xml = toestand(status="nogniet", artikel_inwerking="").replace(
+        b"<al>Deze wet geldt.</al></lid>",
+        b"<al>Deze wet geldt, voor zover:</al><lijst><li><li.nr>a.</li.nr><al>het past, en</al></li>"
+        b"<li><li.nr>b.</li.nr><al>het mag.</al></li></lijst></lid>"
+        b"<lid><lidnr>2</lidnr><al>Tweede lid.</al></lid>")
+    markdown, eenheden, _, _ = wetten.bwb_xml.omzetten(xml)
+    assert ("[Nog niet in werking getreden.]\n\n1. Deze wet geldt, voor zover:\n\n"
+            "  - a. het past, en\n  - b. het mag.\n\n2. Tweede lid.") in markdown
+    assert [e.anker for e in eenheden] == ["art-1"]
