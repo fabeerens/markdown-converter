@@ -44,6 +44,20 @@ class _BwbUitvoer(Uitvoer):
             self.blokken.append("\n".join(f"[^{label}]: {t}" for label, t in self.wachtend))
             self.wachtend.clear()
 
+    def eenheid(self, anker: str, soort: str, tekst: str) -> None:
+        # Een artikel, lid of onderdeel zonder nummer (`art-`, `art-1-`) mag de
+        # omzetter nooit uitgeven: het nummer is de identiteit, en de kennisbank
+        # weigerde tot dan het hele zijbestand zonder dat de reden hier te lezen
+        # was (Wet RO, T3-F3, kb WP-20). Gemeten over de 55 BWB-bronnen van de
+        # kennisbank (25 september 2026): alleen de twee `art-` van de Wet RO.
+        # Bewust niet strenger: `hfd-` voor het hoofdstuk met alleen een titel
+        # (Wbp BES, BWBR0028067, kb WP-04) en een dubbel anker in drie bronnen
+        # (Awb 8:36c in twee varianten, `art-1-1-1-i` in BWBR0040635, `art-10-2f-2`
+        # in BWBR0045754) staan in clean/ en zijn daar met bronbewijs beoordeeld.
+        if soort in ("artikel", "lid", "onderdeel") and (not anker or anker.endswith("-") or "--" in anker):
+            raise ConversionError(f"Een leeg ankersegment ({anker!r}, {soort}); omzetting geweigerd.")
+        super().eenheid(anker, soort, tekst)
+
 
 class BwbOmzetter:
     def __init__(self) -> None:
@@ -310,6 +324,20 @@ class BwbOmzetter:
 
     def artikel(self, el, niveau: int, pad: dict) -> None:
         label, nr, titel, nr_eerst = self.kop(el)
+        if not nr:
+            # De Wet RO (BWBR0001830) schrijft twee koppen zonder `<nr>`:
+            # `<label>Artikel 11a</label>` en `<label>Artikel 59i</label>`. Het
+            # nummer staat dan in het label; zonder deze lezing gaf de omzetter
+            # twee keer het lege anker `art-` uit en weigerde de kennisbank het
+            # zijbestand (T3-F3, kb WP-20). Een andere vorm zonder nummer is
+            # niet gemeten en blijft een weigering: een artikel zonder anker
+            # bestaat niet.
+            m = re.fullmatch(r"(Artikel)\s+(\S+)", label)
+            if not m:
+                raise ConversionError(
+                    f"Een artikel zonder <nr> en zonder nummer in het label ({label!r}); "
+                    "omzetting geweigerd.")
+            label, nr = m.group(1), m.group(2)
         naam = nummer_anker(nr)
         anker = f"{pad['annex']}-art-{naam}" if pad.get("annex") else f"art-{naam}"
         regel = self.kopregel(label or "Artikel", nr, titel, nr_eerst)

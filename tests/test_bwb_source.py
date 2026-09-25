@@ -525,3 +525,30 @@ def test_onderdelen_van_een_nog_niet_geldend_lid_staan_ingesprongen_onder_het_li
     assert ("[Nog niet in werking getreden.]\n\n1. Deze wet geldt, voor zover:\n\n"
             "  - a. het past, en\n  - b. het mag.\n\n2. Tweede lid.") in markdown
     assert [e.anker for e in eenheden] == ["art-1"]
+
+
+def test_een_artikelnummer_in_het_label_zonder_nr_is_het_nummer():
+    """De Wet RO (BWBR0001830) schrijft `<label>Artikel 11a</label>` zonder `<nr>`; de
+    omzetter gaf twee keer het lege anker `art-` uit en de kennisbank weigerde het
+    zijbestand (T3-F3, kb WP-20)."""
+    xml = toestand().replace(b"<label>Artikel</label>\n<nr>1</nr>", b"<label>Artikel 11a</label>")
+    markdown, eenheden, _, _ = wetten.bwb_xml.omzetten(xml)
+    assert "\n## Artikel 11a. Reikwijdte\n" in markdown
+    assert [e.anker for e in eenheden] == ["art-11a", "art-11a-1"]
+
+
+def test_een_artikel_zonder_nummer_in_nr_of_label_is_een_weigering():
+    xml = toestand().replace(b"<label>Artikel</label>\n<nr>1</nr>", b"<label>Artikel</label>")
+    with pytest.raises(ConversionError, match="zonder nummer in het label"):
+        wetten.bwb_xml.omzetten(xml)
+
+
+def test_een_leeg_ankersegment_van_een_artikel_is_een_weigering_van_de_omzetter_zelf():
+    """Gemeten over de 55 BWB-bronnen van de kennisbank: alleen de twee `art-` van de Wet
+    RO. Een hoofdstuk met alleen een titel (`hfd-`, Wbp BES) blijft zoals het in clean/ staat."""
+    u = wetten.bwb_xml._BwbUitvoer()
+    u.eenheid("hfd-", "hoofdstuk", "Slotbepalingen")
+    with pytest.raises(ConversionError, match="leeg ankersegment"):
+        u.eenheid("art-", "artikel", "Artikel")
+    with pytest.raises(ConversionError, match="leeg ankersegment"):
+        u.eenheid("art-1-", "lid", "1")
