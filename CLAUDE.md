@@ -300,10 +300,10 @@ accountregistratie namens de gebruiker):
   `result.pdf_type` classificeert de PDF (`text_based`/`scanned`/`image_based`/`mixed`); bij
   `scanned`/`image_based` (geen tekstlaag) of een lege/foutieve extractie valt de code terug op
   MarkItDown (die óók geen OCR doet, maar wel de bestaande gedrag is voor dat geval). Alle andere
-  formaten (Word/Excel/PowerPoint/HTML/CSV/JSON/EPUB/…) blijven altijd via MarkItDown lopen —
-  pdf-inspector kent alleen PDF. `files.convert()` geeft `(markdown, engine)`
-  terug zodat de UI kan tonen welke engine het document daadwerkelijk verwerkte
-  (`"pdf-inspector"` of `"MarkItDown"` in het bronveld).
+  formaten (Word/Excel/PowerPoint/HTML/CSV/JSON/…) blijven altijd via MarkItDown lopen — behalve
+  EPUB, zie hieronder. `files.convert()` geeft `(markdown, engine)` terug zodat de UI kan tonen
+  welke engine het document daadwerkelijk verwerkte (`"pdf-inspector"`/`"epub"`/`"MarkItDown"`
+  in het bronveld).
   - **Onvertaalde glyphs worden niet stilzwijgend doorgelaten.** Sommige lettertypen slaan
     een typografische ligatuur (bv. "fi", "ft", "th") op als één samengesteld glyph, zónder
     tekstcodering (`ToUnicode`) naar de onderliggende letters — de PDF "weet" dan zelf niet
@@ -315,6 +315,45 @@ accountregistratie namens de gebruiker):
     voorkomt — anders zou een gebruiker een verkeerd citaat kunnen overnemen zonder dat te
     weten. Geen poging tot giswerk-herstel: welke letters het precies waren staat nergens in
     het bestand, dus alleen handmatig tegen het origineel controleren is betrouwbaar.
+- **EPUB-conversie** (`mdconv/sources/epub.py`, zonder AI): een EPUB is een zip met
+  XHTML-hoofdstukken plus een package-document (OPF) dat de leesvolgorde (`spine`) en de
+  bestanden (`manifest`) beschrijft. MarkItDown kan een EPUB al lezen (`_epub_converter.py`
+  in die dependency, zelf ook al container.xml/OPF/spine-bewust), maar behandelt elk
+  hoofdstuk als losse HTML: interne links (tussen hoofdstukken, voetnoten, de
+  inhoudsopgave) blijven dan gewone relatieve `href`'s — kapotte links zodra alle
+  hoofdstukken tot één Markdown-bestand worden samengevoegd. `files._convert_epub()`
+  probeert daarom eerst de eigen parser; lukt dat niet (geen geldige/ondersteunde
+  EPUB-structuur — bv. corrupte zip of ontbrekende OPF), dan valt de conversie terug op
+  MarkItDown, net als bij een PDF zonder tekstlaag.
+  - **Koppen**: `<h1>`-`<h6>` komen via `markdownify` gewoon als `#`-`######` uit — een
+    EPUB zonder échte kop-tags (alleen gestylede `<p>`'s) levert dus platte alinea's, geen
+    giswerk-koppen. Dat is een bewuste keuze, geen gemiste heuristiek: de
+    structuurwoorden-aanpak van `render.promote_headings()` (EUR-Lex: "HOOFDSTUK",
+    "Artikel N") is expliciet beperkt tot een vaste woordenlijst in de grote EU-talen en
+    zou op willekeurige boektekst juist onvoorspelbaar vals-positief gaan matchen.
+  - **Interne links → Obsidian-wikilinks, externe links blijven gewoon.** Vóór de
+    HTML→Markdown-conversie rewrite `_rewrite_links()` elke `<a>` met een relatieve `href`
+    (geen `scheme:` zoals `http:`/`mailto:`) naar de kop waar hij naar verwijst:
+    `[[#Kop]]`, of `[[#Kop|linktekst]]` als de linktekst afwijkt van de koptekst. Een link
+    zonder anker (naar het hele hoofdstuk) valt terug op de titel-kop van dat hoofdstuk; een
+    anker dat zelf geen kop is (bv. een voetnootmarkering) valt terug op de dichtstbijzijnde
+    voorafgaande kop — een betekenisvolle wikilink in plaats van een dode interne id. Is er
+    na die twee terugvallen nog niets te vinden, dan blijft de platte linktekst staan, geen
+    kapotte link. `_index_headings()` bouwt deze `(hoofdstuk, anker) → koptekst`-opzoektabel
+    in één keer over alle hoofdstukken vóór het herschrijven begint.
+  - **De nav/inhoudsopgave komt niet als apart "hoofdstuk" mee.** EPUB3 markeert die in de
+    spine met `linear="no"` (geen gewone leesvolgorde-pagina); `_spine_hrefs()` slaat zulke
+    `itemref`'s over.
+  - **Afbeeldingen worden weggelaten, niet als kapotte link.** Een `<img src="images/…">`
+    verwijst naar een pad binnen de zip; zonder een bijlage-mechanisme zoals bij PDF's zou
+    dat een dode `![alt](pad/in/de/zip.jpg)` opleveren. Buiten scope van deze functie (die
+    vroeg specifiek om koppen + wikilinks) — `<img>`-tags worden vóór de conversie
+    gedecomposet.
+  - **`BeautifulSoup(..., "xml")`** (lxml's XML-parser) voor container.xml/OPF, niet de
+    gewone `"lxml"` HTML-parser — die laatste zou de namespace-declaraties (`xmlns=`) in de
+    OPF niet betrouwbaar even goed verwerken. De hoofdstukken zelf gaan wél door `"lxml"`
+    (HTML-modus, vergevingsgezind bij ontbrekende `<body>` e.d.), zoals de rest van het
+    project al doet.
 - **Losse afbeeldingen extraheren** (`extract_images=1` op `/api/convert/file` en
   `/api/convert/file-url`, alleen voor `.pdf`, bij Documentupload): een **aanvulling** op de
   normale PDF-tekst (pdf-inspector/MarkItDown hierboven), geen alternatief — de UI-toggle
@@ -739,17 +778,20 @@ document zelf stonden en uit elkaar liepen bij het wisselen van tabblad.
 De opmaak is **"liquid glass"**: het navigatie-chrome (kop, tabbalk, dialoog,
 statusregel, opschoonpaneel, documentchips, sleepzone) is vertaald glas —
 `backdrop-filter` + een lichtrand boven + een zachte specular highlight —
-dat drijft over een zacht gekleurde achtergrondgloed (`body::before`, drie
-vaste `radial-gradient`-vlekken). Het onderliggende kleurenpalet blijft de
-12-stapsschaal van Radix Themes, met de hand in platte CSS (geen React/npm),
+dat over de gewone paginakleur drijft (géén achtergrondgloed — die
+kleurige `body::before`-vlekken zijn op verzoek verwijderd; de pagina is nu
+gewoon `--bg`, en het glas vertaalt daardoor vooral de inhoud die er onder
+zit). Het onderliggende kleurenpalet blijft de 12-stapsschaal van Radix
+Themes, met de hand in platte CSS (geen React/npm),
 met de vaste betekenis per stap: 1 paginablad · 2 subtiel blad · 3 vulling ·
 4 hover · 5 actief · 6 zachte rand · 7 rand/ring · 8 hover-rand **en de
 focusring** · 9 volvlak · 10 volvlak-hover · 11 secundaire tekst ·
 12 primaire tekst.
 
 **Glas versus vlak — nooit stapelen.** De `.glass`-klasse (blur + lichtrand +
-specular-`::before`) staat alleen op drijvend chrome dat direct op de gloed
-zit. Inhoudspanelen (`.card`, invoervelden, de editor) blijven bewust
+specular-`::before`) staat alleen op drijvend chrome (kop, tabbalk, dialoog,
+statusregel, opschoonpaneel, documentchips, sleepzone). Inhoudspanelen
+(`.card`, invoervelden, de editor) blijven bewust
 **ondoorzichtig**: twee doorzichtige lagen op elkaar (bv. een glazen knop
 binnen een al glazen dialoog) laat de leesbaarheid instorten — exact de
 reden dat knoppen zelf geen `backdrop-filter` hebben, alleen een niet-
@@ -779,9 +821,8 @@ kantelen van betekenis tussen de modi — zonder die omkering leest het niet als
 
 **Toegankelijkheid is geen ander thema, maar dezelfde schakelaar.**
 `prefers-reduced-transparency: reduce` maakt elk `.glass`-element ondoorzichtig
-(geen blur, geen specular) en verbergt de achtergrondgloed helemaal — die
-bestaat immers alleen om door glas heen gezien te worden. Ook de blur op
-`.overlay` (zie hieronder) gaat er dan uit. `prefers-reduced-motion: reduce`
+(geen blur, geen specular). Ook de blur op `.overlay` (zie hieronder) gaat er
+dan uit. `prefers-reduced-motion: reduce`
 zet alle transitie-/animatieduur op nagenoeg 0 (één globale regel), inclusief
 de vloeiende tabbalk-indicator en de specular-highlight hieronder.
 
@@ -873,17 +914,20 @@ enige dikte, niet een plat vlak met alleen een hoogtelicht.
   weggeschreven bestand nooit als geldige staat gelezen kan worden.
 
 ## Tests
-`.venv/bin/python -m pytest tests/ -q` — 200 karakteriseringstests die het gedrag
+`.venv/bin/python -m pytest tests/ -q` — 204 karakteriseringstests die het gedrag
 vastleggen in plaats van het te beschrijven: `detect_source`-precedentie, ELI→CELEX,
 de geconsolideerde-CELEX-afhandeling (datum behouden, preambule invoegen, en de vier
 terugvalpaden als dat niet lukt), de versie-terugvalladder (nieuwste versie op of vóór de
 gevraagde datum, nooit een latere, en een notitie die niet beweert dat een bestaande versie
 niet bestaat), de chunking-ladder (ook zonder witregels en met één te
-lang woord), de PDF-reflow, de Formex-parser, de settings-semantiek (leeg wist terug naar
-standaard), de batch-zip (eigen naam en eigen `attachments/`-map per document), de
-wiskunde-modus (paginasortering + paginagrens bij het rasteren, de stream-orchestratie:
-`\n\n`-join, voortgang per pagina, opgeteld tokengebruik, stil annuleren, en de
-streaming-endpoint) en de Nederlandse foutmeldingen. Enkele tests pinnen de front-end vast
+lang woord), de PDF-reflow, de Formex-parser, de EPUB-parser (koppen, interne links →
+wikilinks met de juiste terugvallen, de nav/inhoudsopgave overslaan, afbeeldingen weglaten,
+en de terugval naar MarkItDown bij een ongeldige structuur), de settings-semantiek (leeg
+wist terug naar standaard), de batch-zip (eigen naam en eigen `attachments/`-map per
+document), de wiskunde-modus (paginasortering + paginagrens bij het rasteren, de
+stream-orchestratie: `\n\n`-join, voortgang per pagina, opgeteld tokengebruik, stil
+annuleren, en de streaming-endpoint) en de Nederlandse foutmeldingen. Enkele tests pinnen
+de front-end vast
 waar Python niet bij de JS kan: de id's die `app.js` per conventie opbouwt
 (`#bulk-<kind>-text`, `#ocr-mode` enz.) moeten in `index.html` bestaan, en het CELEX-patroon
 mag maar één keer in `app.js` voorkomen. Ze raken geen netwerk. Verander je de structuur, dan hoeven alleen de

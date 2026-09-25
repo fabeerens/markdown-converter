@@ -7,11 +7,11 @@
    per stap — zie hieronder), maar het materiaal zelf is niet vlak: het
    navigatie-"chrome" (kop, tabbalk, dialoog, statusregel, documentchips,
    sleepzone) is vertaald glas — `backdrop-filter`, een lichtrand boven en
-   een zachte specular highlight — dat over een zacht gekleurde achtergrond-
-   gloed (`body::before`) drijft. Inhoudspanelen (kaarten, invoervelden, de
-   editor) blijven bewust ondoorzichtig: nooit twee doorzichtige lagen op
-   elkaar stapelen (leesbaarheid + prestaties), en tekst-zware vlakken lezen
-   beter op een vast vlak dan door blur heen.
+   een zachte specular highlight — dat over de gewone paginakleur drijft.
+   Inhoudspanelen (kaarten, invoervelden, de editor) blijven bewust
+   ondoorzichtig: nooit twee doorzichtige lagen op elkaar stapelen
+   (leesbaarheid + prestaties), en tekst-zware vlakken lezen beter op een
+   vast vlak dan door blur heen.
 
      1 paginablad · 2 subtiel blad · 3 vulling · 4 hover · 5 actief/geselecteerd
      6 zachte rand · 7 randen en 1px-ringen · 8 hover-rand + focusring
@@ -20,8 +20,7 @@
 
    Dark/light volgt de systeeminstelling via prefers-color-scheme; er is
    bewust geen knop, want de gebruiker heeft dat op OS-niveau al gekozen.
-   `prefers-reduced-transparency` maakt het glas ondoorzichtig; de gloed
-   verdwijnt dan ook (die bestaat alleen om door glas heen gezien te worden).
+   `prefers-reduced-transparency` maakt het glas ondoorzichtig.
    ========================================================================== */
 
 /* --------------------------------------------------------------------------
@@ -83,8 +82,8 @@
      een dunne, donkerder rand onderaan (de dikte van het "glas" zelf — waar
      het materiaal het licht weer loslaat), een dunne randlijn rondom, en een
      zachte drijf-schaduw. In licht is de omtrekrand zelf donker (anders
-     onzichtbaar op een lichte gloed); de bovenrand blijft in beide standen
-     wit-achtig, want die simuleert een lichtbron. */
+     onzichtbaar op een lichte achtergrond); de bovenrand blijft in beide
+     standen wit-achtig, want die simuleert een lichtbron. */
   --glass-tint: #ffffffb3;
   --glass-rim-top: #ffffffcc;
   --glass-rim-bottom: #00000012;
@@ -179,10 +178,10 @@
     --card-ring: 0 0 0 1px var(--gray-a6);
 
     /* In donker is het glas zelf een licht-getint, doorschijnend vlak op een
-       donkere gloed — de bovenrand blijft wit-achtig (lichtbron-highlight),
-       de ronde rand wordt licht i.p.v. donker, anders verdwijnt hij tegen de
-       donkere achtergrond. De onderrand blijft hier wél donker (dieper in de
-       schaduw), voor hetzelfde "dikte"-effect als in licht. */
+       donkere achtergrond — de bovenrand blijft wit-achtig (lichtbron-
+       highlight), de ronde rand wordt licht i.p.v. donker, anders verdwijnt
+       hij tegen de donkere achtergrond. De onderrand blijft hier wél donker
+       (dieper in de schaduw), voor hetzelfde "dikte"-effect als in licht. */
     --glass-tint: #ffffff14;
     --glass-rim-top: #ffffff40;
     --glass-rim-bottom: #00000040;
@@ -206,18 +205,6 @@ body {
   -webkit-font-smoothing: antialiased;
   position: relative;
 }
-
-/* De gloed waar het glas doorheen kijkt. Vast (blijft staan tijdens scrollen,
-   zodat het glas dat erover drijft altijd iets te vertalen heeft), ver
-   achter alle inhoud, en zacht genoeg om nooit met tekst te concurreren. */
-body::before {
-  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
-  background:
-    radial-gradient(560px 420px at 8% -6%, var(--accent-a5), transparent 60%),
-    radial-gradient(520px 420px at 96% 8%, var(--green-a6), transparent 60%),
-    radial-gradient(640px 520px at 50% 108%, var(--accent-a4), transparent 65%);
-}
-@media (prefers-reduced-transparency: reduce) { body::before { display: none; } }
 
 /* Geregistreerd als `<percentage>` zodat ze animeerbaar zijn (een gewone
    custom property springt instant van waarde naar waarde; met `@property`

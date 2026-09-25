@@ -1657,6 +1657,118 @@ def test_pdf_upload_reports_the_engine_in_the_source():
     assert doc.kind == "document"
 
 
+def test_epub_upload_uses_its_own_parser_not_markitdown():
+    from mdconv.sources import from_file
+    doc = from_file(_minimal_epub(), "boek.epub")
+    assert doc.source == "epub • boek.epub"
+    assert "# Hoofdstuk 1: Het begin" in doc.markdown
+    assert "# Hoofdstuk 2: Het vervolg" in doc.markdown
+
+
+def test_epub_internal_links_become_obsidian_wikilinks_to_the_target_heading():
+    """De kern van de vraag: interne EPUB-links (tussen hoofdstukken, een
+    voetnootverwijzing, de inhoudsopgave) zijn na het samenvoegen tot één
+    Markdown-bestand kapotte relatieve paden — MarkItDown laat ze zo staan.
+    Deze eigen parser zet ze om in Obsidian-wikilinks naar de kop waar ze
+    naar verwijzen, wat na het samenvoegen wél blijft werken."""
+    from mdconv.sources.files import _convert_epub
+    markdown = _convert_epub(_minimal_epub())
+
+    # Link met anker naar een kop in een ander hoofdstuk → wikilink naar die kop,
+    # met de oorspronkelijke linktekst als alias.
+    assert "[[#2.1 Een subsectie|sectie 2.1]]" in markdown
+    # Link zonder anker (naar het hele hoofdstuk) → wikilink naar de titel-kop
+    # van dat hoofdstuk.
+    assert "[[#Hoofdstuk 1: Het begin|het begin]]" in markdown
+    # Externe link blijft een gewone Markdown-link, geen wikilink.
+    assert "[een externe link](https://example.com)" in markdown
+    # De inhoudsopgave (linear="no" in de spine) komt niet als apart "hoofdstuk" mee.
+    assert markdown.count("# Hoofdstuk 1") == 1
+
+
+def test_epub_drops_images_instead_of_leaving_a_dead_reference():
+    """Een <img> verwijst naar een pad binnen de zip — zonder een
+    bijlage-mechanisme (zoals bij PDF-afbeeldingen) zou dat een kapotte
+    `![alt](pad/in/de/zip.jpg)` opleveren. Beter weggelaten dan kapot."""
+    from mdconv.sources.files import _convert_epub
+    markdown = _convert_epub(_minimal_epub())
+    assert "cover.jpg" not in markdown
+    assert "omslag" not in markdown  # ook de alt-tekst komt niet los mee
+
+
+def test_epub_falls_back_to_markitdown_when_the_structure_is_invalid():
+    from mdconv.sources.files import convert
+    markdown, engine = convert(b"dit is geen geldige epub/zip", "kapot.epub")
+    assert engine == "MarkItDown"
+
+
+def _minimal_epub() -> bytes:
+    """Een handgeschreven, geldige minimale EPUB met twee hoofdstukken, een
+    (in de spine als linear="no" gemarkeerde) navigatiepagina, een externe
+    link, een interne link met anker, een interne link zonder anker en een
+    losse afbeelding."""
+    import io
+    import zipfile
+
+    container_xml = """<?xml version="1.0"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>"""
+
+    content_opf = """<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:title>Testboek</dc:title>
+  </metadata>
+  <manifest>
+    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
+    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
+    <item id="ch2" href="chapter2.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine>
+    <itemref idref="nav" linear="no"/>
+    <itemref idref="ch1"/>
+    <itemref idref="ch2"/>
+  </spine>
+</package>"""
+
+    nav_xhtml = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
+<body><nav epub:type="toc"><ol>
+  <li><a href="chapter1.xhtml">Hoofdstuk 1</a></li>
+  <li><a href="chapter2.xhtml">Hoofdstuk 2</a></li>
+</ol></nav></body></html>"""
+
+    chapter1 = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<body>
+<h1>Hoofdstuk 1: Het begin</h1>
+<p>Dit is de inleiding. Zie ook <a href="chapter2.xhtml#sectie21">sectie 2.1</a> voor meer details,
+en <a href="https://example.com">een externe link</a> blijft gewoon behouden.</p>
+</body></html>"""
+
+    chapter2 = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<body>
+<h1>Hoofdstuk 2: Het vervolg</h1>
+<h2 id="sectie21">2.1 Een subsectie</h2>
+<p>Terug naar <a href="chapter1.xhtml">het begin</a>.</p>
+<img src="images/cover.jpg" alt="omslag"/>
+</body></html>"""
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("mimetype", "application/epub+zip")
+        z.writestr("META-INF/container.xml", container_xml)
+        z.writestr("OEBPS/content.opf", content_opf)
+        z.writestr("OEBPS/nav.xhtml", nav_xhtml)
+        z.writestr("OEBPS/chapter1.xhtml", chapter1)
+        z.writestr("OEBPS/chapter2.xhtml", chapter2)
+    return buf.getvalue()
+
+
 def test_warn_if_unmapped_glyphs_flags_the_replacement_character():
     """Een `�` in de tekst betekent dat de extractie een glyph niet naar
     tekens kon terugvertalen — vaak een typografische ligatuur ("fi", "ft",
