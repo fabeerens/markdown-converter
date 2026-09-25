@@ -1,5 +1,5 @@
 {
- "commit": "bc0b431+wijzigingen",
+ "commit": "9f4683d+wijzigingen",
  "documenten": {
   "02002L0058-20091219": {
    "melding": null,
@@ -19,7 +19,7 @@
    "oorzaak": null,
    "route": "wetgeving",
    "sectie": "geconsolideerd",
-   "sha256": "252d1d777ba815cab7424115d015d74bd7854fab851062e39c725cf335b85245",
+   "sha256": "31c59f9f275ac0bc48c8e86f2f55b00949291bc3a3fce16fc0afc640281fb66a",
    "status": "ok",
    "tekens": 149346,
    "waarschuwingen": [
@@ -94,7 +94,7 @@
    "oorzaak": null,
    "route": "wetgeving",
    "sectie": "geconsolideerd",
-   "sha256": "03445b019db7af6e72e2ddda71656c2d8da91c2a116cfbaf8d9bfe822e6a75ec",
+   "sha256": "cfc83a827e4d1b53a1274bfe42ead18c4c174d8ee68e5271f63672bab39b21a1",
    "status": "ok",
    "tekens": 355699,
    "waarschuwingen": [
@@ -197,7 +197,7 @@
    "oorzaak": null,
    "route": "wetgeving",
    "sectie": "geconsolideerd",
-   "sha256": "81ad560df08d9cb71aa6d217ddaa10374cd21ec1a5d34aaf0a06c92ed50e797d",
+   "sha256": "9a1dfc6dfbedb2dbfa3f2bb469e3dcb697a3e1cb29be5e39263379c674291b3a",
    "status": "ok",
    "tekens": 743987,
    "waarschuwingen": [
@@ -314,7 +314,7 @@
    "oorzaak": null,
    "route": "wetgeving",
    "sectie": "geconsolideerd",
-   "sha256": "754a71c0bf1472df52484cd0b445976166d8ef5893f3276abc259b2e7826a323",
+   "sha256": "7790b83a95a2f8075f3224b4664bddb9ca696c7ff5b3fbaead8a5d7870a5bc05",
    "status": "ok",
    "tekens": 307002,
    "waarschuwingen": [
@@ -3672,6 +3672,6 @@
    ]
   }
  },
- "gemeten": "2026-09-24 13:31",
+ "gemeten": "2026-09-25 20:43",
  "taal": "NL"
 }

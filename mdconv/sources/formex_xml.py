@@ -1103,6 +1103,12 @@ class FormexOmzetter:
                     self.u.blok(ws(self.inline(sub)))
                 self.notenblok()
             elif tag in ("ANNEX", "CONS.ANNEX"):
+                # De noten van de wettekst horen bij de wettekst. Een geconsolideerde
+                # handeling heeft geen FINAL, dus zonder dit blok bleven ze wachten tot
+                # het einde van de eerste bijlage en kwamen ze daar, hernummerd door
+                # `nieuwe_nootreeks()`, tussen de bijlagenoten terecht (T1-F3, kb
+                # WP-20: 02010L0013, 02015L2366 en 02018L1972 stonden daarop in review/).
+                self.notenblok()
                 self.u.blok("---")
                 self.bijlage(kind)
             elif tag == "GR.ANNOTATION":
@@ -2083,6 +2089,12 @@ class FormexOmzetter:
 
     def bijlage(self, root) -> None:
         self.bijlagen += 1
+        if self.noten:
+            # Zelfcontrole: een noot die hier nog wacht, zou onder de reeks van de
+            # bijlage een tweede `(1)` krijgen. Elke aanroeper schrijft het blok
+            # eerst (`handeling()`, `omzetten()`); dit is de grens die dat bewaakt.
+            raise _xml_fout(f"{len(self.noten)} noot(en) van de tekst vóór deze bijlage zijn nog niet "
+                            "geschreven; ze zouden met de bijlagenoten dubbel genummerd raken")
         self.nieuwe_nootreeks()      # de tabelnoten van een bijlage tellen opnieuw
         titel = root.find("TITLE")
         ti = self.kop_tekst(titel.find("TI")) if titel is not None and titel.find("TI") is not None else "BIJLAGE"

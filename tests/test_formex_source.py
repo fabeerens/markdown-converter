@@ -2070,3 +2070,34 @@ def test_a_note_reference_that_repeats_its_note_gets_no_second_definition():
 def test_a_note_reference_that_carries_other_text_is_refused():
     with pytest.raises(ConversionError, match="niet gelijk is aan de noot waarnaar ze verwijst"):
         formex_xml.omzetten(_met_nootverwijzing(b"<P>Een andere tekst.</P>"))
+
+
+def _cons_act_zonder_final_met_bijlage() -> bytes:
+    """Een geconsolideerde tekst zonder FINAL, met een noot in de wettekst en een bijlage met
+    een eigen noot: de vorm van 02010L0013, 02015L2366 en 02018L1972 (kb WP-20, T1-F3)."""
+    act = _cons_act(met_noot=True)
+    act = act.replace(b"<FINAL><P>Gedaan te Brussel.</P></FINAL>", b"")
+    bijlage = (b"<CONS.ANNEX><TITLE><TI><P>BIJLAGE I</P></TI></TITLE><CONTENTS>"
+               b'<P>Tekst van de bijlage.<NOTE NOTE.ID="E0901" TYPE="FOOTNOTE">'
+               b"<P>Een noot van de bijlage.</P></NOTE></P></CONTENTS></CONS.ANNEX>")
+    return act.replace(b"</CONS.DOC>", bijlage + b"</CONS.DOC>")
+
+
+def test_notenblok_van_de_wettekst_komt_voor_de_eerste_bijlage():
+    """Zonder FINAL bleef het notenblok van de wettekst wachten tot het einde van bijlage I en
+    kwam het daar, hernummerd, tussen de bijlagenoten: twee keer `(1)` in één blok."""
+    markdown = formex_xml.omzetten(formex_zip(act=_cons_act_zonder_final_met_bijlage()))[0]
+    wettekst = markdown.index("Deze verordening stelt regels vast.")
+    noot_wet = markdown.index(f"(1){NBSP}{NBSP}Een noot van de wettekst.")
+    bijlage = markdown.index("## BIJLAGE")
+    noot_bijlage = markdown.index(f"(1){NBSP}{NBSP}Een noot van de bijlage.")
+    assert wettekst < noot_wet < bijlage < noot_bijlage
+    assert markdown.count(f"(1){NBSP}{NBSP}") == 2
+
+
+def test_een_bijlage_met_wachtende_noten_is_een_weigering():
+    """De grens die de volgorde bewaakt: `bijlage()` begint alleen met een leeg notenblok."""
+    o = formex_xml.FormexOmzetter()
+    o.noten.append((1, "wachtende noot"))
+    with pytest.raises(ConversionError, match="nog niet geschreven"):
+        o.bijlage(formex_xml.ET.fromstring(b"<CONS.ANNEX><TITLE><TI><P>BIJLAGE I</P></TI></TITLE></CONS.ANNEX>"))
