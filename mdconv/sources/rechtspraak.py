@@ -255,10 +255,17 @@ class _Lezer:
             elif naam == "emphasis":
                 self.opmaak_weggelaten += 1
                 delen.append(self._ruw(kind))
-            elif naam in ("nr", "superscript"):
-                # `<title><nr>1</nr>De procedure</title>` levert `1De procedure`,
-                # precies zoals de bron het aan elkaar zet; H6 in `preclean.py`
-                # maakt daar `1. De procedure` van.
+            elif naam == "nr":
+                # `<title><nr>1</nr>De procedure</title>`: de bron zet nummer en
+                # titel aaneen, en tot WP-20 kwam dat als `1De procedure` in raw.
+                # Dat plakte ook waar geen kop bedoeld is: `193016 PW` (een
+                # zaaknummer) en `4smaadschrift` (T2-F17, kb WP-20). Nu staat er
+                # een spatie tussen; H6 in `preclean.py` maakt van `1 De procedure`
+                # `1. De procedure` als de titel met een hoofdletter begint, en
+                # laat `19 3016 PW` en `4 smaadschrift` staan.
+                nummer = self._ruw(kind)
+                delen.append(nummer + " " if nummer and not (kind.tail or "")[:1].isspace() else nummer)
+            elif naam == "superscript":
                 delen.append(self._ruw(kind))
             elif naam in ("para", "parablock", "paragroup"):
                 # Een tabelcel draagt haar tekst in alinea's; die horen bij de cel.

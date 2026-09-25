@@ -98,9 +98,9 @@ def test_fetch_levert_de_rawvorm_die_het_profiel_kent(monkeypatch):
 
     # De H1 is de paginatitel, letterlijk - inclusief de spatie vóór de komma.
     assert regels[0] == "# ECLI:NL:HR:2026:1 Hoge Raad , 09-01-2026 / 25/00001"
-    # De genummerde sectie komt als `### 1De procedure`; H6 in preclean maakt
-    # daar `### 1. De procedure` van.
-    assert "### 1De procedure" in regels
+    # De genummerde sectie komt als `### 1 De procedure` (nummer en titel met een
+    # spatie ertussen, WP-20); H6 in preclean maakt daar `### 1. De procedure` van.
+    assert "### 1 De procedure" in regels
     # De overweging draagt haar bronnummer, zonder verzonnen punt erachter.
     assert "1.1 Het verloop blijkt uit de stukken.[^1]" in markdown
     # De nootrelatie blijft heel: marker én definitie.
@@ -121,7 +121,7 @@ def test_fetch_levert_de_rawvorm_die_het_profiel_kent(monkeypatch):
     assert herkomst.extra["zaaknummer"] == "25/00001"
     assert herkomst.extra["instantie"] == "Hoge Raad"
     assert herkomst.extra["inhoudsindicatie"] == "Korte samenvatting."
-    assert {"kop": "1De procedure", "niveau": 3, "rol": "procesverloop"} in herkomst.extra["secties"]
+    assert {"kop": "1 De procedure", "niveau": 3, "rol": "procesverloop"} in herkomst.extra["secties"]
 
     # Het bronbewijs draagt de bytes die werkelijk zijn opgehaald.
     assert len(documents) == 1
