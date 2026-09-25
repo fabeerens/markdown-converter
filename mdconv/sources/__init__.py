@@ -165,6 +165,23 @@ def from_link(query: str, lang: str = "NL") -> Document:
             resultaat = _national_source(query).fetch(query)
         else:
             resultaat = eurlex.fetch_and_convert(query, lang)
+    return _als_document(resultaat, documents, query, lang)
+
+
+def from_hudoc_file(data: bytes, record: dict, records: list[dict], **herkomst) -> Document:
+    """Een lokaal gedownload HUDOC-Word-bestand met zijn record, als document.
+
+    Hetzelfde als `from_link()` voor een EHRM-vraag, alleen zonder netwerk: dezelfde
+    omzetting (`hudoc.omzetten_record()`), hetzelfde bronbewijs en dezelfde herkomst. Waarom
+    deze route bestaat en wat ze in de herkomst anders zet, staat bij `hudoc.uit_bestand()`.
+    """
+    with capture_source_documents() as documents:
+        resultaat = hudoc.uit_bestand(data, record, records, **herkomst)
+    return _als_document(resultaat, documents, resultaat[2].requested_url, "EN")
+
+
+def _als_document(resultaat, documents: list[dict], query: str, lang: str) -> Document:
+    """Het gedeelde slot van de online en de lokale route: bronbewijs aan de herkomst."""
     markdown, note, herkomst = _uitpakken(resultaat)
     if documents:
         main = next((part for part in reversed(documents) if part["role"] != "preamble"), documents[0])

@@ -13,6 +13,13 @@ een resultaat, `select` moet komma-gescheiden en in kleine letters, en hij weige
 (403) verzoeken die er niet uitzien als die van een browser of die te snel komen. Dat
 laatste is een storing en geen "niet gevonden", en wordt ook zo gemeld.
 
+Sinds september 2026 staat HUDOC achter een botcontrole van Cloudflare die de Python-client
+tegenhoudt: 403, `server: cloudflare`, een pagina "Just a moment...". Hetzelfde verzoek met
+curl kreeg een 200, en twaalf vragen bleven over drie kwartier 403 (kennisbank, foutlog
+`Fouten_test_25_09.md`, T2-F5). Dat is geen verzoeklimiet en wordt ook niet zo gemeld. De
+controle wordt bewust niet omzeild; wie de bestanden zelf in de browser downloadt, zet ze om
+met `uit_bestand()` (opdrachtregel: `kb_fetch --hudoc-map`), door dezelfde code als hier.
+
 Eén ECLI wijst naar meerdere documenten: het origineel (`HEJUD`), de Franse versie
 (`HFJUD`), vertalingen en samenvattingen. Alleen het Engelse origineel wordt
 ondersteund; de sectienamen in het profiel zijn Engels.
@@ -20,6 +27,7 @@ ondersteund; de sectienamen in het profiel zijn Engels.
 
 from __future__ import annotations
 
+import datetime as dt
 import re
 import time
 
@@ -50,6 +58,15 @@ _SELECT = ("itemid,ecli,appno,docname,doctype,kpdate,originatingbody,languageiso
 _ORIGINEEL = "HEJUD"
 _FRANS = "HFJUD"
 
+# De botcontrole herkennen aan wat T2-F5 mat: de `server`-kop, of de titel van de
+# wachtpagina als een proxy die kop weghaalt.
+_BOTCONTROLE_BODY = b"Just a moment"
+_BOTCONTROLE = (
+    "HUDOC laat deze client niet toe: HTTP 403 van een Cloudflare-botcontrole (\"Just a "
+    "moment...\"). Dit is geen verzoeklimiet, dus later opnieuw proberen helpt niet. Download "
+    "het Word-bestand en het zoekresultaat in de browser en zet ze om met "
+    "`python -m mdconv.kb_fetch --hudoc-map <map> --uit <map>`.")
+
 
 def fetch(query: str, lang: str = "EN") -> tuple[str, str, Herkomst]:
     """Haal een EHRM-uitspraak op; geeft (markdown, bronvermelding, herkomst)."""
@@ -70,8 +87,18 @@ def fetch(query: str, lang: str = "EN") -> tuple[str, str, Herkomst]:
         rij = rijen[0]
         _controleer_soort(rij)
 
+    return omzetten_record(_haal_docx(rij["itemid"]), rij, requested_url=query)
+
+
+def omzetten_record(data: bytes, rij: dict, *, requested_url: str) -> tuple[str, str, Herkomst]:
+    """Het Word-bestand bij een HUDOC-record als (markdown, bronvermelding, herkomst).
+
+    Dit is alles wat `fetch()` doet nadat het record gekozen en het bestand binnen is, en
+    het is de enige plek waar dat gebeurt: de lokale route (`uit_bestand()`, bytes die de
+    gebruiker zelf in de browser heeft gedownload) gaat door precies deze regels, zodat de
+    twee routes op dezelfde bytes niet uit elkaar kunnen lopen.
+    """
     item_id = rij["itemid"]
-    data = _haal_docx(item_id)
     # `docname` kan eindigen op een notitie van HUDOC zelf (`[Extracts]`); die hoort
     # niet bij de zaaknaam en past niet in het herkomstlabel van de kennisbank, dat
     # geen vierkante haken toestaat. De volledige `docname` blijft in het zijbestand.
@@ -90,7 +117,7 @@ def fetch(query: str, lang: str = "EN") -> tuple[str, str, Herkomst]:
         title=titel,
         language="en",
         source_url=url,
-        requested_url=query,
+        requested_url=requested_url,
         koppen_bron=meta["koppen"],
         koppen_markdown=meta["koppen"],
         waarschuwingen=tuple(waarschuwingen),
@@ -112,6 +139,25 @@ def fetch(query: str, lang: str = "EN") -> tuple[str, str, Herkomst]:
         },
     )
     return markdown, f"HUDOC (EHRM) • {item_id} • {rij['ecli']}", herkomst
+
+
+def _docx_url(item_id: str) -> str:
+    return ("https://hudoc.echr.coe.int/app/conversion/docx/"
+            f"?library=ECHR&id={item_id}&filename={item_id}.docx")
+
+
+def _botcontrole(r) -> bool:
+    """Is dit de Cloudflare-controle en niet HUDOC zelf die weigert?
+
+    Alleen bij een 403: een 429 is wél een verzoeklimiet. `headers` en `content` zijn er
+    niet bij elk antwoord (de testvervangers hebben ze niet altijd), dus defensief lezen.
+    """
+    if r.status_code != 403:
+        return False
+    koppen = {str(k).lower(): str(v) for k, v in (getattr(r, "headers", None) or {}).items()}
+    if "cloudflare" in koppen.get("server", "").lower():
+        return True
+    return _BOTCONTROLE_BODY in (getattr(r, "content", None) or b"")[:65536]
 
 
 def _get(url: str, **kwargs):
@@ -141,6 +187,8 @@ def _zoek(query: str, length: int = 30) -> list[dict]:
         "facetquery": "",
     }
     r = _get("https://hudoc.echr.coe.int/app/query/results", params=params, timeout=_QUERY_TIMEOUT)
+    if _botcontrole(r):
+        raise ConversionError(_BOTCONTROLE)
     if r.status_code in (403, 429):
         raise ConversionError(
             f"HUDOC weigerde het zoekverzoek (HTTP {r.status_code}). Dat is een storing of een "
@@ -187,10 +235,10 @@ def _kies_origineel(rijen: list[dict], ecli: str) -> dict:
 
 
 def _haal_docx(item_id: str) -> bytes:
-    url = ("https://hudoc.echr.coe.int/app/conversion/docx/"
-           f"?library=ECHR&id={item_id}&filename={item_id}.docx")
-    r = _get(url, timeout=_DOCX_TIMEOUT)
+    r = _get(_docx_url(item_id), timeout=_DOCX_TIMEOUT)
     data = getattr(r, "content", None) or b""
+    if _botcontrole(r):
+        raise ConversionError(f"{item_id}: {_BOTCONTROLE}")
     if r.status_code in (403, 429):
         raise ConversionError(
             f"HUDOC weigerde het verzoek om {item_id} (HTTP {r.status_code}); probeer het over "
@@ -204,3 +252,64 @@ def _haal_docx(item_id: str) -> bytes:
             f"HUDOC levert voor {item_id} geen Word-bestand (HTTP {r.status_code}). Dat komt bij "
             "sommige uitspraken voor, ook recente, en er is geen terugval op HTML.")
     return data
+
+
+# --------------------------------------------------------------------------
+# De lokale route: bytes die de gebruiker zelf in de browser heeft gedownload
+# --------------------------------------------------------------------------
+
+HANDMATIG = ("Het Word-bestand en het HUDOC-record zijn handmatig in de browser gedownload en "
+             "niet door de converter opgehaald; fetched_at is de wijzigingstijd van het bestand.")
+
+
+def uit_bestand(data: bytes, rij: dict, alle: list[dict], *, bestand: str, downloadtijd: float,
+                records_bestand: str, records_sha256: str) -> tuple[str, str, Herkomst]:
+    """Een lokaal gedownload Word-bestand met zijn record, als (markdown, bron, herkomst).
+
+    **Waarom.** De botcontrole van T2-F5 houdt de converter buiten, niet de gebruiker. Die
+    downloadt het bestand van exact de URL die `_haal_docx()` vraagt, en het record uit
+    exact de zoek-API die `_zoek()` vraagt; vanaf daar is dit dezelfde omzetting
+    (`omzetten_record()`), met dezelfde weigeringen:
+
+    - `_controleer_soort()`: alleen het Engelse origineel (HEJUD), met dezelfde melding;
+    - `_kies_origineel()` over alle records van de map, zodat twee Engelse originelen
+      onder één ECLI ook hier een keuze van de gebruiker blijven en geen gok;
+    - een bestand dat niet met `PK` begint is geen Word-bestand, maar vrijwel zeker de
+      wachtpagina van Cloudflare of een foutpagina die de browser heeft bewaard.
+
+    **Herkomst eerlijk houden.** `source_url` blijft de HUDOC-pagina, want de bytes zijn die
+    van HUDOC; `requested_url` is de download-URL. Dat de converter ze niet zelf heeft
+    opgehaald staat als waarschuwing en onder `extra.handmatig` in het zijbestand. Dat is
+    een extra sleutel en geen nieuw veld in het bronbewijs, dus geen schemabump aan de
+    kennisbankkant (regel 1 van haar `AGENTS.md`). `fetched_at` is de wijzigingstijd van het
+    bestand: het moment dat de bytes binnenkwamen, en niet dat van de omzetting.
+    """
+    _controleer_soort(rij)
+    item_id = rij["itemid"]
+    ecli = (rij.get("ecli") or "").upper()
+    if not ECHR_ECLI_RE.fullmatch(ecli):
+        raise ConversionError(f"Het record van {item_id} draagt geen EHRM-ECLI ({rij.get('ecli')!r}).")
+    if _kies_origineel(alle, ecli) is not rij:
+        raise ConversionError(f"Voor {ecli} is een ander record dan {item_id} het Engelse origineel.")
+    if not data.startswith(b"PK"):
+        raise ConversionError(
+            f"{bestand} begint niet met PK en is dus geen Word-bestand; waarschijnlijk heeft de "
+            "browser de Cloudflare-controle of een foutpagina van HUDOC bewaard. Download het "
+            "opnieuw.")
+
+    markdown, note, herkomst = omzetten_record(data, rij, requested_url=_docx_url(item_id))
+    moment = dt.datetime.fromtimestamp(downloadtijd, dt.timezone.utc)
+    extra = dict(herkomst.extra)
+    extra["handmatig"] = {
+        "bestand": bestand,
+        "download_url": _docx_url(item_id),
+        "records": records_bestand,
+        "records_sha256": records_sha256,
+        "fetched_at_uit": "wijzigingstijd van het bestand",
+    }
+    return markdown, note, herkomst.met(
+        fetched_at=moment.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        geraadpleegd=dt.datetime.fromtimestamp(downloadtijd).date().isoformat(),
+        waarschuwingen=herkomst.waarschuwingen + (HANDMATIG,),
+        extra=extra,
+    )

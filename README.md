@@ -9,7 +9,7 @@ De interface heeft drie tabbladen:
 ### 1. Jurisprudentie
 Plak een ECLI of link; de tool herkent de bron automatisch:
 - **Hof van Justitie EU** — EU-ECLI (bv. `ECLI:EU:C:2025:645`). Via het **Cellar**-archief van de Publicatiebureau.
-- **EHRM (ECtHR)** — een HUDOC-link, item-id (bv. `001-210077`) of een EHRM-ECLI (bv. `ECLI:CE:ECHR:2021:0525JUD005817013`). Via de HUDOC-zoek-API en document-export. De taalkeuze bepaalt de versie/vertaling (Engels/Frans origineel, of een vertaling indien als HTML beschikbaar — anders terugval op het origineel).
+- **EHRM (ECtHR)** — een HUDOC-link, item-id (bv. `001-210077`) of een EHRM-ECLI (bv. `ECLI:CE:ECHR:2021:0525JUD005817013`). Via de HUDOC-zoek-API en het Word-bestand van het Hof; alleen het Engelse origineel (HEJUD). HUDOC houdt de converter sinds september 2026 tegen met een Cloudflare-botcontrole (HTTP 403, "Just a moment..."); dat wordt niet omzeild. Download de bestanden dan in de browser en zet ze om met `kb_fetch --hudoc-map` (zie hieronder).
 - **Nederlandse rechtspraak** — een ECLI (bv. `ECLI:NL:HR:2012:BQ9251`) of een rechtspraak.nl-link. Via de officiële Open Data API van de Rechtspraak.
 - **Duitse rechtspraak** — een Duitse ECLI (bv. `ECLI:DE:BGH:2019:240919BVIZB39.18.0`). Via rechtsprechung-im-internet.de (BGH, BVerfG, BVerwG, BFH, BAG, BSG, BPatG).
 - **Belgische rechtspraak** — een Belgische ECLI (bv. `ECLI:BE:CASS:2021:ARR.20211019.2N.25`). Via Juportal.
@@ -144,6 +144,25 @@ python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 .venv/bin/python app.py
 ```
+
+### Kennisbankbundels vanaf de opdrachtregel
+
+`mdconv.kb_fetch` zet dezelfde bundel op schijf als de download in de browser, voor de
+kennisbank in `~/Documents/kb`:
+
+```bash
+.venv/bin/python -m mdconv.kb_fetch --uit <map> 32022L2464 BWBR0002320 ECLI:EU:C:2019:801
+```
+
+Voor EHRM-arresten die je zelf uit HUDOC hebt gedownload (`<itemid>.docx` plus het
+zoekresultaat als `hudoc-records.json` in één map):
+
+```bash
+.venv/bin/python -m mdconv.kb_fetch --hudoc-map <map> --uit <map>
+```
+
+Een map die niet eenduidig is (een bestand zonder record of andersom, een dubbel itemid)
+wordt geweigerd voordat er iets wordt geschreven.
 
 ## Voorbeelden
 

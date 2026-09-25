@@ -29,12 +29,28 @@ terugvinden.
 Eén mislukte ophaal maakt de afloopcode 1, maar de rest gaat door: de gebruiker
 vervangt daarna het ene id in `set.txt` en draait alleen dat opnieuw. Dit script
 importeert niets uit de kennisbank (regel 1 van `AGENTS.md`).
+
+**HUDOC uit een lokale map.** Sinds september 2026 houdt een Cloudflare-botcontrole de
+Python-client van HUDOC tegen (T2-F5 in de foutlog van de kennisbank), en die wordt niet
+omzeild. De gebruiker downloadt dan zelf in de browser, per arrest `<itemid>.docx` van de
+DOCX-URL van `hudoc._haal_docx()` en één keer het zoekresultaat van `hudoc._zoek()` als
+`hudoc-records.json`, en zet die map om:
+
+    .venv/bin/python -m mdconv.kb_fetch --hudoc-map <map> --uit <map>
+
+Dat gaat door dezelfde omzetting als online (`hudoc.omzetten_record()`) en dezelfde
+bundel; `ophaal.json` krijgt per itemid een regel. Een map die niet klopt (een record
+zonder bestand, een bestand zonder record, een itemid dat twee keer voorkomt, een bestand
+dat niet met zijn `SHA256SUMS` klopt) wordt als geheel geweigerd voordat er iets op schijf
+komt; een fout in één document (geen `PK`, geen HEJUD) is een weigering van dat document.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import re
 import shutil
 import sys
 import time
@@ -172,6 +188,104 @@ def haal_op(vraag: str, uit: Path, lang: str) -> dict:
     return uitkomst
 
 
+HUDOC_RECORDS = "hudoc-records.json"
+_ITEM_ID = re.compile(r"00\d-\d{3,}")
+
+
+class MapGeweigerd(ValueError):
+    """Een HUDOC-map die als geheel niet klopt; `problemen` noemt ze allemaal tegelijk."""
+
+    def __init__(self, problemen: list[str]):
+        super().__init__("; ".join(problemen))
+        self.problemen = problemen
+
+
+def lees_hudoc_map(map_: Path) -> tuple[list[tuple[dict, Path]], list[dict], str]:
+    """Koppel elk record uit `hudoc-records.json` aan zijn `<itemid>.docx`.
+
+    Geeft (paren, alle records, sha256 van het recordbestand). Weigert de hele map bij
+    alles wat de koppeling onzeker maakt, want een bestand dat bij het verkeerde record
+    landt, landt onder de verkeerde ECLI in de kennisbank: een record zonder bestand of
+    andersom, een dubbel itemid, een itemid dat geen itemid is (het wordt een bestandsnaam),
+    en een bestand dat niet meer is wat `SHA256SUMS` zegt. Wat alleen één document raakt
+    (de soort, `PK`) weigert `hudoc.uit_bestand()` voor dat document.
+    """
+    pad = map_ / HUDOC_RECORDS
+    if not pad.is_file():
+        raise MapGeweigerd([f"{pad} ontbreekt; bewaar het HUDOC-zoekresultaat onder die naam"])
+    ruw = pad.read_bytes()
+    try:
+        resultaten = json.loads(ruw.decode("utf-8")).get("results")
+    except (UnicodeDecodeError, ValueError, AttributeError) as exc:
+        raise MapGeweigerd([f"{pad} is geen JSON van de HUDOC-zoek-API ({exc})"]) from exc
+    if not isinstance(resultaten, list) or not all(
+            isinstance(r, dict) and isinstance(r.get("columns"), dict) for r in resultaten):
+        raise MapGeweigerd([f"{pad} heeft niet de vorm {{\"results\": [{{\"columns\": …}}]}}"])
+    records = [r["columns"] for r in resultaten]
+    if not records:
+        # Een leeg zoekresultaat is een zoekopdracht die niets vond, geen map die klaar is.
+        raise MapGeweigerd([f"{pad} bevat geen enkel record"])
+
+    problemen = []
+    per_id: dict[str, dict] = {}
+    for record in records:
+        item_id = record.get("itemid")
+        if not isinstance(item_id, str) or not _ITEM_ID.fullmatch(item_id):
+            problemen.append(f"een record heeft geen geldig itemid ({item_id!r})")
+        elif item_id in per_id:
+            problemen.append(f"itemid {item_id} staat twee keer in {HUDOC_RECORDS}")
+        else:
+            per_id[item_id] = record
+    bestanden = {b.name[:-len(".docx")]: b for b in map_.iterdir()
+                 if b.is_file() and b.name.lower().endswith(".docx")}
+    for item_id in sorted(per_id.keys() - bestanden.keys()):
+        problemen.append(f"record {item_id} heeft geen bestand {item_id}.docx")
+    for naam in sorted(bestanden.keys() - per_id.keys()):
+        problemen.append(f"bestand {bestanden[naam].name} heeft geen record in {HUDOC_RECORDS}")
+
+    # De gebruiker legt bij het verzamelen een SHA256SUMS aan; staat een bestand erin, dan
+    # moet het nog precies dat bestand zijn. Wat er niet in staat, wordt niet geraden.
+    sommen = map_ / "SHA256SUMS"
+    if sommen.is_file():
+        for regel in sommen.read_text(encoding="utf-8").splitlines():
+            delen = regel.split(maxsplit=1)
+            if len(delen) != 2:
+                continue
+            naam = Path(delen[1].lstrip("*")).name
+            doel = map_ / naam
+            if naam.lower().endswith(".docx") and doel.is_file() \
+                    and hashlib.sha256(doel.read_bytes()).hexdigest() != delen[0].lower():
+                problemen.append(f"{naam} klopt niet met SHA256SUMS")
+    if problemen:
+        raise MapGeweigerd(problemen)
+    paren = [(per_id[i], bestanden[i]) for i in sorted(per_id)]
+    return paren, records, hashlib.sha256(ruw).hexdigest()
+
+
+def zet_hudoc_neer(record: dict, bestand: Path, records: list[dict], records_sha256: str,
+                   uit: Path) -> dict:
+    """Eén lokaal Word-bestand door dezelfde omzetting en bundel als een online vraag."""
+    from .errors import ConversionError
+
+    begin = time.perf_counter()
+    try:
+        document = sources.from_hudoc_file(
+            bestand.read_bytes(), record, records, bestand=bestand.name,
+            downloadtijd=bestand.stat().st_mtime, records_bestand=HUDOC_RECORDS,
+            records_sha256=records_sha256)
+        uitkomst = zet_neer(document, uit)
+    except ConversionError as exc:
+        uitkomst = {"pad_id": None, "profiel": None, "fetched_at": None, "sha256": None,
+                    "source_format": None, "status": "geweigerd", "melding": str(exc)}
+    except Exception as exc:  # noqa: BLE001 - de rest van de map moet doorgaan
+        uitkomst = {"pad_id": None, "profiel": None, "fetched_at": None, "sha256": None,
+                    "source_format": None, "status": "fout",
+                    "melding": f"{type(exc).__name__}: {exc}"}
+    uitkomst.update(lang="EN", ecli=record.get("ecli"), bestand=bestand.name, handmatig=True,
+                    seconden=round(time.perf_counter() - begin, 1))
+    return uitkomst
+
+
 def schrijf_ophaal(pad: Path, nieuw: dict[str, dict]) -> dict[str, dict]:
     """Voeg de uitkomsten toe aan `ophaal.json`; wat er al stond en niet opnieuw is
     opgehaald blijft staan, zodat één vervangen id niet de hele koppeling wist."""
@@ -187,10 +301,16 @@ def main(argv: list[str] | None = None) -> int:
         description="Zet kennisbankbundels op schijf, zoals de browserdownload ze levert.")
     parser.add_argument("vragen", nargs="*", help="CELEX-nummers, BWB-nummers, ECLI's of links")
     parser.add_argument("--lijst", type=Path, help="TSV met de vragen in de eerste kolom (holdout/set.txt)")
+    parser.add_argument("--hudoc-map", type=Path,
+                        help=f"map met zelf gedownloade <itemid>.docx en {HUDOC_RECORDS} (EHRM)")
     parser.add_argument("--uit", type=Path, required=True, help="de map waar raw/ en ophaal.json komen")
     parser.add_argument("--lang", default="NL", help="taal voor EUR-Lex en HUDOC (standaard NL)")
     parser.add_argument("--werkers", type=int, default=1, help=f"tegelijk ophalen, hoogstens {_MAX_WERKERS}")
     args = parser.parse_args(argv)
+    if args.hudoc_map is not None:
+        if args.vragen or args.lijst:
+            parser.error("--hudoc-map gaat niet samen met vragen of --lijst")
+        return _main_hudoc_map(args.hudoc_map.expanduser(), args.uit.expanduser())
 
     vragen = list(args.vragen)
     if args.lijst:
@@ -225,6 +345,35 @@ def main(argv: list[str] | None = None) -> int:
     if mislukt:
         print(f"Mislukt ({len(mislukt)}): {', '.join(mislukt)}. Vervang het id in de lijst en haal "
               "alleen dat opnieuw op; ophaal.json houdt de rest.")
+    return 1 if mislukt else 0
+
+
+def _main_hudoc_map(map_: Path, uit: Path) -> int:
+    begin = time.perf_counter()
+    try:
+        paren, records, records_sha256 = lees_hudoc_map(map_)
+    except MapGeweigerd as exc:
+        print(f"GEWEIGERD  {map_}: de map is niet eenduidig; er is niets geschreven.")
+        for probleem in exc.problemen:
+            print(f"           - {probleem}")
+        return 1
+    uit.mkdir(parents=True, exist_ok=True)
+    uitkomsten = {record["itemid"]: zet_hudoc_neer(record, bestand, records, records_sha256, uit)
+                  for record, bestand in paren}
+    for item_id, r in uitkomsten.items():
+        if r["status"] == "ok":
+            print(f"ok         {item_id:12} → {r['profiel']}/{r['pad_id']}  ({r['source_format']}, {r['seconden']} s)")
+            if r.get("opgeruimd"):
+                print(f"           weesbestanden verwijderd: {', '.join(r['opgeruimd'])}")
+        else:
+            print(f"{r['status'].upper():10} {item_id:12} {r['melding']}")
+    schrijf_ophaal(uit / "ophaal.json", uitkomsten)
+    mislukt = [i for i, r in uitkomsten.items() if r["status"] != "ok"]
+    print(f"\n{len(paren) - len(mislukt)} van {len(paren)} bundels geschreven onder {uit} uit de "
+          f"handmatig gedownloade bestanden in {map_}, in {time.perf_counter() - begin:.0f} s; "
+          f"koppeling in {uit / 'ophaal.json'}.")
+    if mislukt:
+        print(f"Mislukt ({len(mislukt)}): {', '.join(mislukt)}.")
     return 1 if mislukt else 0
 
 

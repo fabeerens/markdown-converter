@@ -40,7 +40,7 @@ verandert zit aan de achterkant.
 
 - **Tests zijn karakteriseringstests**: ze leggen het *bestaande* gedrag vast.
   Verandert er gedrag, dan verander je de test bewust en zeg je dat in de
-  commit. Draai `.venv/bin/python -m pytest tests/ -q` (nu 531 tests, stand na kb WP-13) vóór
+  commit. Draai `.venv/bin/python -m pytest tests/ -q` (nu 552 tests, stand na de lokale HUDOC-route) vóór
   je klaar bent.
 - **Raak je een Formex-omzetter** (`formex_xml.py`, `formex_hof.py`,
   `xml_gedeeld.py` of de Formex-tak van `eurlex.py`), **draai dan de meetlat**:
@@ -56,6 +56,35 @@ verandert zit aan de achterkant.
 - **Geen buildstap, geen Node.** De UI is platte HTML, CSS en JS.
 - **Eén onderwerp per commit**, boodschap in het Nederlands en in de gebiedende
   wijs, met de reden erbij.
+
+## Kennisbankbundels op schijf (`mdconv.kb_fetch`)
+
+Dezelfde bundel als de browserdownload, zonder browser:
+
+```bash
+.venv/bin/python -m mdconv.kb_fetch --uit <map> 32022L2464 ECLI:NL:HR:2023:1216
+.venv/bin/python -m mdconv.kb_fetch --uit <map> --lijst ~/Documents/kb/holdout/set.txt
+```
+
+**HUDOC (EHRM) uit een lokale map.** HUDOC houdt de Python-client tegen met een
+Cloudflare-botcontrole (403, "Just a moment..."; T2-F5 in de foutlog van de kennisbank).
+Die wordt **niet** omzeild: geen curl-terugval, geen andere client, geen TLS-truc. De
+gebruiker downloadt zelf in de browser, per arrest `<itemid>.docx` van
+`https://hudoc.echr.coe.int/app/conversion/docx/?library=ECHR&id=<itemid>&filename=<itemid>.docx`
+en één keer het zoekresultaat (`/app/query/results`, `select` = `hudoc._SELECT`) als
+`hudoc-records.json`, en zet de map om:
+
+```bash
+.venv/bin/python -m mdconv.kb_fetch --hudoc-map <map> --uit <map>
+```
+
+Dat is dezelfde omzetting als online (`hudoc.omzetten_record()`), met dezelfde weigeringen
+(`_controleer_soort`, `_kies_origineel`, `PK`). Een map die niet eenduidig is (record zonder
+bestand of andersom, dubbel itemid, `SHA256SUMS` die niet klopt) wordt als geheel geweigerd
+en er komt niets op schijf. `ophaal.json` krijgt per itemid een regel; het zijbestand zegt
+onder `extra.handmatig` en in `waarschuwingen` dat de bytes handmatig zijn gedownload.
+`tests/test_hudoc_lokaal.py` houdt vast dat de bundel op dezelfde bytes gelijk is aan die
+van de online route.
 
 ## Schrijfstijl
 
