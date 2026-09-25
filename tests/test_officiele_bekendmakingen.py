@@ -187,6 +187,15 @@ def test_nootref_herhaalt_de_marker_van_de_noot_waar_hij_naar_wijst():
     assert any("nootref" in w for w in herkomst.waarschuwingen)
 
 
+def test_dossierref_houdt_zijn_tekst_zoals_extref():
+    """Twee noten van kst-36764-3 verwijzen met `dossierref` naar Kamerstukken 36 378."""
+    xml = XML.replace(b"<noot.al>Zie de memorie.</noot.al>",
+                      b'<noot.al>Kamerstukken II <dossierref dossier="36378">36 378</dossierref>, nr. 3.</noot.al>')
+    markdown, _, _ = ob.converteer(xml, METADATA, "kst-34851-4")
+
+    assert "[^2]: Kamerstukken II 36 378, nr. 3." in markdown.split("\n")
+
+
 @pytest.mark.parametrize("nootref, reden", [
     (b'<nootref refid="bestaat-niet"/>', "geen noot in dit stuk"),
     (b"<nootref/>", "geen noot in dit stuk"),

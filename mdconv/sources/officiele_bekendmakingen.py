@@ -250,6 +250,12 @@ class _Lezer:
             elif naam == "extref":
                 self.extrefs += 1
                 delen.append(self._ruw(kind))
+            elif naam == "dossierref":
+                # Een verwijzing naar een Kamerdossier, met het nummer als tekst:
+                # `<dossierref dossier="36378">36 378</dossierref>` in twee noten van
+                # kst-36764-3. Net als `extref`: de tekst blijft, het doel niet.
+                self.extrefs += 1
+                delen.append(self._ruw(kind))
             elif naam == "ondernummer":
                 # `Nr. <ondernummer>4</ondernummer>`: het nummer hoort bij zijn voorvoegsel.
                 delen.append(self._ruw(kind))
@@ -540,7 +546,7 @@ def _zelfcontrole(stuk, lezer: _Lezer, markdown: str) -> None:
     (`<voornaam>S.</voornaam><achternaam>Dekker</achternaam>`), en de omzetter zet er een
     spatie tussen; die spatie is opmaak.
     """
-    inline = {"nadruk", "extref"}
+    inline = {"nadruk", "extref", "dossierref"}
     delen: list[str] = []
 
     def loop(el) -> None:
