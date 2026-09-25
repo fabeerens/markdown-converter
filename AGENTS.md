@@ -40,7 +40,7 @@ verandert zit aan de achterkant.
 
 - **Tests zijn karakteriseringstests**: ze leggen het *bestaande* gedrag vast.
   Verandert er gedrag, dan verander je de test bewust en zeg je dat in de
-  commit. Draai `.venv/bin/python -m pytest tests/ -q` (nu 552 tests, stand na de lokale HUDOC-route) vóór
+  commit. Draai `.venv/bin/python -m pytest tests/ -q` (nu 575 tests, stand na kb WP-20) vóór
   je klaar bent.
 - **Raak je een Formex-omzetter** (`formex_xml.py`, `formex_hof.py`,
   `xml_gedeeld.py` of de Formex-tak van `eurlex.py`), **draai dan de meetlat**:
