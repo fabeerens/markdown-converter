@@ -2194,3 +2194,63 @@ def test_een_romeins_onderdeelnummer_met_deelnummer_draagt_dat_deelnummer_in_het
         b"<P>Tekst.</P></GR.SEQ>" for nr in (b"V.1", b"V.2"))
     _, eenheden, _, _ = formex_xml.omzetten(formex_zip(act=_act_met_bijlage(delen)))
     assert [e.anker for e in eenheden if e.anker.startswith("annex")] == ["annex-1", "annex-1-v-1", "annex-1-v-2"]
+
+
+# ---------------------------------------------------------------------------
+# kb WP-25: een handeling zonder artikelen (de aanbeveling)
+# ---------------------------------------------------------------------------
+
+AANBEVELING = b"""<ACT>
+<BIB.INSTANCE><PAGE.FIRST>1</PAGE.FIRST></BIB.INSTANCE>
+<TITLE><TI><P><HT TYPE="UC">Aanbeveling (EU) 2024/1101 van de Commissie</HT></P></TI></TITLE>
+<PREAMBLE><GR.CONSID><CONSID><NP><NO.P>(1)</NO.P><TXT>Een overweging.</TXT></NP></CONSID></GR.CONSID>
+<PREAMBLE.FINAL>HEEFT DE VOLGENDE AANBEVELING VASTGESTELD:</PREAMBLE.FINAL></PREAMBLE>
+<ENACTING.TERMS>%s</ENACTING.TERMS>
+<FINAL><P>Gedaan te Brussel, 11 april 2024.</P></FINAL>
+</ACT>"""
+
+DISPOSITIEF = (b'<GR.SEQ LEVEL="1"><TITLE><TI><NP><NO.P>1.</NO.P><TXT><HT TYPE="BOLD">TOEPASSINGSGEBIED</HT></TXT></NP></TI></TITLE>'
+               b'<P>Het doel is:</P>'
+               b'<LIST TYPE="ARAB"><ITEM><NP><NO.P>1.</NO.P><TXT>een routekaart;</TXT></NP></ITEM>'
+               b'<ITEM><NP><NO.P>2.</NO.P><TXT>de overgang.</TXT></NP></ITEM></LIST></GR.SEQ>'
+               b'<GR.SEQ LEVEL="1"><TITLE><TI><P><HT TYPE="BOLD">ROUTEKAART</HT></P></TI></TITLE>'
+               b'<NP><NO.P>3.</NO.P><TXT>De lidstaten wordt verzocht:</TXT><P>'
+               b'<LIST TYPE="alpha"><ITEM><NP><NO.P>a)</NO.P><TXT>een plan;</TXT></NP></ITEM>'
+               b'<ITEM><NP><NO.P>b)</NO.P><TXT>een termijn.</TXT></NP></ITEM></LIST></P></NP>'
+               b'<NP><NO.P>4.</NO.P><TXT>De Commissie evalueert.</TXT></NP></GR.SEQ>')
+
+
+def test_aanbeveling_zonder_artikelen_schrijft_pt_punten():
+    """kb WP-25: geen `ARTICLE` maar `GR.SEQ`, `LIST` en losse `NP`. Een groepstitel
+    wordt een H2, elk punt `n.` plus drie harde spaties (ook uit een `LIST`), een
+    onderdeel `a) …`; de eenheden dragen `pt-<n>` en `pt-<n>-<letter>`."""
+    markdown, eenheden, _, _ = formex_xml.omzetten(formex_zip(act=AANBEVELING % DISPOSITIEF))
+    regels = [r for r in markdown.split("\n") if r]
+    start = regels.index("HEEFT DE VOLGENDE AANBEVELING VASTGESTELD:")
+    assert regels[start + 1:start + 10] == [
+        "## 1. TOEPASSINGSGEBIED",
+        "Het doel is:",
+        f"1.{NBSP}{NBSP}{NBSP}een routekaart;",
+        f"2.{NBSP}{NBSP}{NBSP}de overgang.",
+        "## ROUTEKAART",
+        f"3.{NBSP}{NBSP}{NBSP}De lidstaten wordt verzocht:",
+        "a) een plan;",
+        "b) een termijn.",
+        f"4.{NBSP}{NBSP}{NBSP}De Commissie evalueert.",
+    ]
+    assert [e.anker for e in eenheden if e.anker.startswith("pt-")] == ["pt-1", "pt-2", "pt-3", "pt-3-a", "pt-3-b", "pt-4"]
+    assert not any(r.startswith("### ") for r in regels)
+
+
+@pytest.mark.parametrize("bepalingen, melding", [
+    (b'<NP><NO.P>(1)</NO.P><TXT>Een punt tussen haakjes.</TXT></NP>', r"markering '\(1\)' is niet gemeten"),
+    (b'<NP><NO.P>1.1.</NO.P><TXT>Een geleed punt.</TXT></NP>', "markering '1.1.' is niet gemeten"),
+    (b'<GR.SEQ LEVEL="1"><NP><NO.P>1.</NO.P><TXT>Een groep zonder titel.</TXT></NP></GR.SEQ>', "zonder titel"),
+    (b'<ARTICLE IDENTIFIER="1"><TI.ART>Artikel 1</TI.ART><ALINEA>Een artikel.</ALINEA></ARTICLE>'
+     b'<NP><NO.P>2.</NO.P><TXT>Een los punt naast een artikel.</TXT></NP>', "bepalingen:NP"),
+])
+def test_aanbeveling_weigert_wat_het_profiel_niet_leest(bepalingen, melding):
+    """Een markering die het eurlex-profiel niet kent, een groep zonder titel, en een
+    genummerd punt naast artikelen blijven een weigering: geen gok welk anker dat wordt."""
+    with pytest.raises(ConversionError, match=melding):
+        formex_xml.omzetten(formex_zip(act=AANBEVELING % bepalingen))

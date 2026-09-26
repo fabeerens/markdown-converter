@@ -891,13 +891,7 @@ class FormexOmzetter:
 
         telling = Counter(e.soort for e in self.u.eenheden)
 
-        def eigen_artikelen(el, in_citaat: bool = False) -> int:
-            """Tel alleen artikelen van de handeling, niet de zeven geciteerde uit 32026R1744."""
-            citaat = in_citaat or el.tag == "QUOT.S"
-            eigen = int(el.tag == "ARTICLE" and not citaat)
-            return eigen + sum(eigen_artikelen(kind, citaat) for kind in el)
-
-        artikelen = sum(eigen_artikelen(root) for _, root in onderdelen)
+        artikelen = sum(self.eigen_artikelen(root) for _, root in onderdelen)
 
         def structurele_leden(el, in_citaat: bool = False) -> int:
             """Tel alleen leden van de handeling, niet negen geciteerde uit 2024/1689."""
@@ -1304,7 +1298,19 @@ class FormexOmzetter:
             return f"deel-{nr}", "deel", nr
         return "", None, nr
 
-    def bepalingen(self, el, pad: dict) -> None:
+    @staticmethod
+    def eigen_artikelen(el, in_citaat: bool = False) -> int:
+        """Tel alleen artikelen van de handeling, niet de zeven geciteerde uit 32026R1744."""
+        citaat = in_citaat or el.tag == "QUOT.S"
+        eigen = int(el.tag == "ARTICLE" and not citaat)
+        return eigen + sum(FormexOmzetter.eigen_artikelen(kind, citaat) for kind in el)
+
+    def bepalingen(self, el, pad: dict, wortel: bool = True) -> None:
+        if wortel and not self.eigen_artikelen(el):
+            # Een handeling zonder artikelen: de aanbeveling (kb WP-25). Tot dan was
+            # `bepalingen:GR.SEQ` de weigering van 29 van de 30 aanbevelingen 2022–2025.
+            self.dispositief(el, {"lijsten": 0})
+            return
         for kind in el:
             if kind.tag == "DIVISION":
                 titel = kind.find("TITLE")
@@ -1326,13 +1332,87 @@ class FormexOmzetter:
                     nieuw[sleutel] = nr
                 wrapper = ET.Element("x")
                 wrapper.extend([c for c in kind if c.tag != "TITLE"])
-                self.bepalingen(wrapper, nieuw)
+                self.bepalingen(wrapper, nieuw, wortel=False)
             elif kind.tag == "ARTICLE":
                 self.artikel(kind)
             elif kind.tag in METADATA:
                 continue
             else:
+                # Ook een genummerd punt naast artikelen: `pt-<n>` is alleen voor een
+                # handeling zonder artikelen afgesproken (conventions.md §4), en de
+                # kennisbank weigert die menging aan haar kant net zo.
                 self.onbekend("bepalingen", kind)
+
+    DISPOSITIEFPUNT = re.compile(r"\d{1,3}[.)]")
+
+    def dispositief(self, el, teller: dict) -> None:
+        """De wettekst van een handeling zonder artikelen: de aanbeveling (kb WP-25).
+
+        Gemeten op de dertig aanbevelingen 2022–2025 van kb WP-13: 29 hebben geen
+        `ARTICLE`. Hun `ENACTING.TERMS` draagt genummerde punten, los (`NP`), in een
+        opsomming (`LIST`) of onder een groepstitel (`GR.SEQ`, soms genest), en soms
+        alleen alinea's. De raw-vorm is die welke het eurlex-profiel al leest
+        (`AGENTS.md` regel 3, `md-clean-eurlex/references/patronen.md` §9):
+
+        - een groepstitel wordt een H2 zonder anker (`## 1. TOEPASSINGSGEBIED`): een
+          `1.` met een gewone spatie zou als punt lezen en botsen met punt 1;
+        - elk punt is `4.` plus drie harde spaties plus de tekst, zoals een lid, ook
+          een punt uit een `LIST` (in een artikel blijft een `LIST`-punt de lijstvorm;
+          hier loopt de nummering door over groepen en lijsten heen, en de
+          NP-tak telt een tweede reeks alleen bij een herstart, zoals het profiel);
+        - een onderdeel `a)` onder een punt zoals in een artikel;
+        - het anker is `pt-<n>`, `pt-<n>-<letter>`, tweede reeks `pt-al2-<n>`.
+
+        Een markering die het profiel niet kent (`(1)`, `1.1.`, `I.`: vijf van de
+        dertig) is een weigering, geen gok; een groep zonder titel of met een
+        `NO.GR.SEQ` is niet gemeten en ook een weigering.
+        """
+        for kind in el:
+            if kind.tag == "GR.SEQ":
+                titel = kind.find("TITLE")
+                if titel is None or kind.find("NO.GR.SEQ") is not None:
+                    raise _xml_fout("een groep (GR.SEQ) in het dispositief zonder titel of met een "
+                                    "NO.GR.SEQ is niet gemeten")
+                np = titel.find(".//NP")
+                onder_de_kop: list = []
+                if np is not None and np.find("NO.P") is not None:
+                    nr = ws(self.kop_tekst(np.find("NO.P")))
+                    rest = ws(self.kop_tekst(np.find("TXT"))) if np.find("TXT") is not None else ""
+                    ti = f"{nr} {rest}".strip()
+                    onder_de_kop = [k for k in np if k.tag not in ("NO.P", "TXT")]
+                else:
+                    ti = ws(self.kop_tekst(titel))
+                if not ti:
+                    raise _xml_fout("een groep (GR.SEQ) in het dispositief zonder koptekst is niet gemeten")
+                self.u.blok(f"## {ti}")
+                for aanwijzing in onder_de_kop:
+                    self.inhoud(aanwijzing, basis="", teller={"lijsten": 0})
+                wrapper = ET.Element("x")
+                wrapper.extend([c for c in kind if c.tag != "TITLE"])
+                self.dispositief(wrapper, teller)
+            elif kind.tag == "NP":
+                self.dispositiefpunt(kind, teller)
+            elif kind.tag == "LIST" and (kind.get("TYPE") or "").upper() not in ONGENUMMERD:
+                for item in kind.findall("ITEM"):
+                    np = item.find("NP")
+                    if np is None or len(item) != 1:
+                        raise _xml_fout("een opsomming in het dispositief waarvan een onderdeel geen "
+                                        "genummerd punt (NP) is, is niet gemeten")
+                    self.dispositiefpunt(np, teller)
+            elif kind.tag in ("P", "ALINEA", "LIST", "DLIST"):
+                self.inhoud(kind, basis="pt", teller=teller)
+            elif kind.tag in METADATA:
+                continue
+            else:
+                self.onbekend("dispositief", kind)
+
+    def dispositiefpunt(self, np, teller: dict) -> None:
+        """Eén genummerd punt van het dispositief, via de NP-tak van `inhoud()`."""
+        nr = ws(self.inline(np.find("NO.P"))) if np.find("NO.P") is not None else ""
+        if not self.DISPOSITIEFPUNT.fullmatch(nr):
+            raise _xml_fout(f"een punt in het dispositief met markering {nr!r} is niet gemeten; "
+                            "alleen `1.` en `1)` (het eurlex-profiel leest `(1)`, `1.1.` en `I.` niet)")
+        self.inhoud(np, basis="pt", teller=teller)
 
     def dubbele_divisie(self, anker: str, nr: str, volgnummer: int, kop: str) -> tuple[str, str]:
         """Een tweede hoofdstuk, afdeling of titel met hetzelfde nummer op hetzelfde niveau.

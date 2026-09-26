@@ -3,6 +3,19 @@
 Nieuwste bovenaan. De inhoudelijke uitleg staat in `CLAUDE.md`; hier alleen wat er
 veranderde en waarom.
 
+## 26 september 2026 — een handeling zonder artikelen: de aanbeveling (kb WP-25)
+
+- **Formex (`formex_xml.py`)**: een `ENACTING.TERMS` zonder eigen `ARTICLE` gaat door
+  `dispositief()` in plaats van te weigeren op `bepalingen:GR.SEQ`. Een groepstitel wordt een H2
+  zonder eenheid (`## 1. TOEPASSINGSGEBIED EN DOELSTELLINGEN`), elk punt — los of uit een
+  `LIST` — `n.` plus drie harde spaties via de NP-tak van `inhoud()` met basis `pt`
+  (eenheden `pt-<n>`, onderdelen `pt-<n>-<letter>`, een herstart `pt-al2-<n>`), de vorm die
+  het eurlex-profiel leest (`md-clean-eurlex/references/patronen.md` §9). Een markering die
+  dat profiel niet kent (`(1)`, `1.1.`, `I.` als punt), een groep zonder titel of met een
+  `NO.GR.SEQ`, en een genummerd punt naast artikelen blijven een weigering. Gemeten op de 30
+  aanbevelingen van kb WP-13 plus 32024H1101: 28 omgezet, 3 geweigerd (twee keer `(1)`, één
+  `TOC.HD`); meetlat ongewijzigd. Tests: 582.
+
 ## 25 september 2026 — elf klassen uit de drie tests van de kennisbank (kb WP-20)
 
 Per klasse één commit; de meting staat in `~/Documents/kb/foutlog/2026-09-25-WP-20-converter.md`.
