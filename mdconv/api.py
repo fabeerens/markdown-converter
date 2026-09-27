@@ -41,7 +41,14 @@ def _ai_switch():
 
 
 def _ai_on() -> bool:
-    return features.ai_enabled(current_app.config["AI_LOCKED_OFF"])
+    # AI_LOCKED_OFF is vastgelegd bij het opstarten (zie create_app): als AI
+    # toen al uitstond, bestaat ai_bp niet eens en komt deze functie niet
+    # aan de orde. Is dat niet zo, dan is `features.ai_enabled()` de live
+    # bron van waarheid — de schakelaar in de instellingen schrijft daar
+    # rechtstreeks in, dus dit werkt zonder herstart door.
+    if current_app.config["AI_LOCKED_OFF"]:
+        return False
+    return features.ai_enabled()
 
 # Grens voor een bestand dat via een link wordt gedownload. De upload-grens
 # staat in create_app (MAX_CONTENT_LENGTH).
@@ -123,14 +130,30 @@ def config():
 
 @ai_bp.get("/api/settings")
 def get_settings():
-    """Huidige instellingen plus de standaardwaarden (voor de reset-knoppen)."""
-    return jsonify(cleanup.settings_payload())
+    """Huidige instellingen plus de standaardwaarden (voor de reset-knoppen).
+
+    `ai_enabled` komt niet uit `settings.json` maar rechtstreeks uit
+    `.env`/`os.environ` (zie `mdconv/features.py`) — één bron van waarheid
+    voor die ene schakelaar.
+    """
+    payload = cleanup.settings_payload()
+    payload["ai_enabled"] = features.ai_enabled()
+    return jsonify(payload)
 
 
 @ai_bp.post("/api/settings")
 def post_settings():
-    """Instellingen bijwerken; een leeg veld zet terug naar de standaardwaarde."""
-    return jsonify(cleanup.update_settings(_payload()))
+    """Instellingen bijwerken; een leeg veld zet terug naar de standaardwaarde.
+
+    `ai_enabled` gaat niet naar `settings.json` (zoals de rest) maar schrijft
+    `MDCONV_AI` in `.env` — zie `features.set_ai_enabled()`.
+    """
+    data = _payload()
+    if "ai_enabled" in data:
+        features.set_ai_enabled(bool(data.pop("ai_enabled")))
+    payload = cleanup.update_settings(data)
+    payload["ai_enabled"] = features.ai_enabled()
+    return jsonify(payload)
 
 
 # --------------------------------------------------------------------------

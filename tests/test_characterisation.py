@@ -2677,6 +2677,18 @@ def _page(app, monkeypatch):
     return app.test_client().get("/").get_data(as_text=True)
 
 
+@pytest.fixture
+def isolated_ai_env(tmp_path, monkeypatch):
+    """Laat de schakelaar "AI-functies" naar een tijdelijke `.env` schrijven
+    i.p.v. het echte projectbestand, en isoleert MDCONV_AI in de omgeving —
+    zodat een test hem niet per ongeluk laat staan voor de volgende."""
+    from mdconv import features
+
+    monkeypatch.setattr(features, "_ENV_DIR", str(tmp_path))
+    monkeypatch.delenv("MDCONV_AI", raising=False)
+    return features
+
+
 def test_ai_lock_follows_the_environment(monkeypatch):
     from mdconv.features import ai_locked_off
 
@@ -2689,7 +2701,7 @@ def test_ai_lock_follows_the_environment(monkeypatch):
     assert ai_locked_off() is False
 
 
-def test_locked_off_the_ai_and_settings_routes_do_not_exist(isolated_settings):
+def test_locked_off_the_ai_and_settings_routes_do_not_exist():
     from mdconv import create_app
 
     client = create_app(ai_enabled=False).test_client()
@@ -2698,10 +2710,13 @@ def test_locked_off_the_ai_and_settings_routes_do_not_exist(isolated_settings):
         assert r.status_code == 404, url
 
 
-def test_locked_off_even_a_stored_switch_cannot_turn_ai_on(isolated_settings, monkeypatch):
+def test_locked_off_ignores_any_env_value(isolated_ai_env, monkeypatch):
+    """De expliciete `ai_enabled=False` bij het opstarten (zie create_app) wint
+    altijd — ook als MDCONV_AI op dat moment "on" zou zeggen. Dat is precies
+    de garantie voor een installatie die vóór het opstarten is vergrendeld."""
     from mdconv import create_app
 
-    isolated_settings.update_settings({"ai_enabled": True})
+    monkeypatch.setenv("MDCONV_AI", "on")
     app = create_app(ai_enabled=False)
     assert app.test_client().get("/api/config").get_json()["ai_enabled"] is False
     html = _page(app, monkeypatch)
@@ -2717,7 +2732,7 @@ def test_with_ai_the_ai_routes_exist(isolated_settings):
         assert r.status_code != 404, url
 
 
-def test_switch_off_hides_ai_routes_but_keeps_settings(isolated_settings):
+def test_switch_off_hides_ai_routes_but_keeps_settings(isolated_settings, isolated_ai_env):
     from mdconv import create_app
 
     client = create_app(ai_enabled=True).test_client()
@@ -2730,16 +2745,38 @@ def test_switch_off_hides_ai_routes_but_keeps_settings(isolated_settings):
     assert client.post("/api/clean/cancel", json={}).status_code == 200
 
 
-def test_switch_only_stores_off(isolated_settings):
-    import json
+def test_switch_writes_env_and_only_stores_off(isolated_ai_env):
+    """De schakelaar schrijft in `.env` (niet in settings.json): uitzetten een
+    expliciete `MDCONV_AI=off`-regel, aanzetten verwijdert die weer (leeg =
+    standaard). Werkt meteen door in os.environ van dit proces."""
+    features = isolated_ai_env
 
-    isolated_settings.update_settings({"ai_enabled": False})
-    assert json.load(open(isolated_settings._store.path))["ai_enabled"] is False
-    isolated_settings.update_settings({"ai_enabled": True})
-    assert "ai_enabled" not in json.load(open(isolated_settings._store.path))
+    features.set_ai_enabled(False)
+    assert "MDCONV_AI=off" in open(features._env_path(), encoding="utf-8").read()
+    assert os.environ["MDCONV_AI"] == "off"
+
+    features.set_ai_enabled(True)
+    assert "MDCONV_AI" not in open(features._env_path(), encoding="utf-8").read()
+    assert "MDCONV_AI" not in os.environ
 
 
-def test_without_ai_the_normal_conversion_still_works(isolated_settings):
+def test_switch_preserves_other_env_lines(isolated_ai_env):
+    """Andere regels in .env (bv. OPENROUTER_API_KEY, commentaar) blijven
+    ongemoeid — de schakelaar raakt alleen zijn eigen MDCONV_AI-regel aan."""
+    features = isolated_ai_env
+    path = features._env_path()
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("OPENROUTER_API_KEY=sk-or-test\n# commentaar\nMDCONV_AI=off\n")
+
+    features.set_ai_enabled(True)
+
+    content = open(path, encoding="utf-8").read()
+    assert "OPENROUTER_API_KEY=sk-or-test" in content
+    assert "# commentaar" in content
+    assert "MDCONV_AI" not in content
+
+
+def test_without_ai_the_normal_conversion_still_works():
     from mdconv import create_app
 
     client = create_app(ai_enabled=False).test_client()
@@ -2752,7 +2789,7 @@ def test_without_ai_the_normal_conversion_still_works(isolated_settings):
     assert "CELEX" in r.get_json()["error"]
 
 
-def test_without_ai_config_reports_no_ai(isolated_settings):
+def test_without_ai_config_reports_no_ai():
     from mdconv import create_app
 
     cfg = create_app(ai_enabled=False).test_client().get("/api/config").get_json()
@@ -2762,12 +2799,12 @@ def test_without_ai_config_reports_no_ai(isolated_settings):
     assert cfg["models"] == [] and cfg["ocr_models"] == []
 
 
-def test_page_per_ai_mode(isolated_settings, monkeypatch):
+def test_page_per_ai_mode(isolated_ai_env, monkeypatch):
     from mdconv import create_app
 
     locked = _page(create_app(ai_enabled=False), monkeypatch)
     on = _page(create_app(ai_enabled=True), monkeypatch)
-    isolated_settings.update_settings({"ai_enabled": False})
+    isolated_ai_env.set_ai_enabled(False)
     switched_off = _page(create_app(ai_enabled=True), monkeypatch)
 
     assert 'data-ai="off"' in locked and 'data-ai="on"' in on and 'data-ai="off"' in switched_off

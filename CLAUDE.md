@@ -498,22 +498,35 @@ accountregistratie namens de gebruiker):
   gewone conversie (incl. lijsten plakken, batch-download) blijft. **Bewust een schakelaar in
   main, geen aparte branch** waar de code uit is gesloopt: de AI-code verandert vaak en zo'n
   branch zou bij elke wijziging conflicteren.
-- **Twee lagen, met rangorde:**
-  1. `MDCONV_AI=off` (env; ook `0`/`false`/`no`/`uit`/`nee`) is een **harde vergrendeling**
-     (`features.ai_locked_off()`, bij `create_app` vastgelegd als
-     `app.config["AI_LOCKED_OFF"]`). Dan wordt blueprint `ai_bp` niet eens geregistreerd en
-     is het ⚙-paneel helemaal weg — een gebruiker kan AI dan niet zelf weer aanzetten. Dat is
-     de garantie voor een installatie binnen een organisatie; niet afzwakken.
-  2. Anders beslist de schakelaar **"AI-functies"** in het instellingenpaneel
-     (`#settings-ai` → `ai_enabled` in `settings.json`, `config.get_ai_enabled()`, standaard
-     aan; alleen "uit" wordt opgeslagen). `ai_bp.before_request` geeft dan 404 op alle
-     AI-routes, behálve `/api/settings` — anders kun je hem niet weer aanzetten.
-  `features.ai_enabled(locked_off)` combineert beide; `api._ai_on()` is de enige plek die dat
-  per verzoek vraagt.
+- **Eén bron van waarheid: `MDCONV_AI` in `.env`.** Geen aparte `ai_enabled` meer in
+  `settings.json` — dat zou een tweede plek zijn die uit elkaar kan lopen met `.env`. Twee
+  manieren om diezelfde variabele te zetten, met een bewuste rangorde:
+  1. **Vóór het opstarten**, handmatig in `.env` (env; ook `0`/`false`/`no`/`uit`/`nee`).
+     `create_app` legt dat één keer vast als `app.config["AI_LOCKED_OFF"]`
+     (`features.ai_locked_off()`). Stond AI toen al uit, dan registreert `create_app` blueprint
+     `ai_bp` niet eens — het ⚙-paneel is dan helemaal weg, en er is geen route om AI via de UI
+     weer aan te zetten. Dat is de garantie voor een installatie binnen een organisatie: alleen
+     door `.env` zelf aan te passen en de server te herstarten komt AI terug. **Niet afzwakken.**
+  2. **Tijdens het draaien**, met de schakelaar **"AI-functies"** in het instellingenpaneel
+     (`#settings-ai`, alleen zichtbaar als AI niet al zo vergrendeld was). Die schrijft
+     rechtstreeks in `.env` (`features.set_ai_enabled()`) én meteen in `os.environ` van dit
+     proces — nodig omdat `serve.sh` `.env` alleen bij het opstarten in de omgeving laadt, dus
+     een bestandswijziging alleen zou pas bij een herstart doorwerken. Uitzetten schrijft een
+     expliciete `MDCONV_AI=off`-regel; aanzetten **verwijdert** die regel weer (leeg =
+     standaard = aan, dezelfde conventie als de rest van `settings.json`). Andere regels in
+     `.env` (bv. `OPENROUTER_API_KEY`) blijven ongemoeid. `ai_bp.before_request` geeft dan 404
+     op alle AI-routes, behálve `/api/settings` — anders kun je hem niet weer aanzetten.
+  `features.ai_enabled()` leest dit **live** (geen cache) — dat is wat de schakelaar zonder
+  herstart laat doorwerken. `api._ai_on()` combineert dat met de vastgelegde
+  `AI_LOCKED_OFF`-vlag (die wint als hij `True` is) en is de enige plek die dat per verzoek
+  vraagt.
 - Alle routes die een model aanroepen, plus `/api/settings`, staan op **`ai_bp`**. **Een nieuwe
   AI-route hoort op `ai_bp`, niet op `bp`.** De `ConversionError`-handler is daarom app-breed
   (`app_errorhandler`), anders krijgt `ai_bp` geen nette JSON-fouten.
-- `/api/config` meldt `ai_enabled` en `ai_locked`.
+- `/api/config` meldt `ai_enabled` en `ai_locked`. `GET /api/settings` voegt `ai_enabled` toe
+  aan `cleanup.settings_payload()` (dat zelf niets van `.env` afweet); `POST /api/settings`
+  haalt `ai_enabled` uit de payload en stuurt die apart naar `features.set_ai_enabled()`
+  vóórdat de rest naar `cleanup.update_settings()` gaat.
 - `index.html` krijgt twee vlaggen: `ai` (laat met `{% if ai %}` de AI-markup weg:
   opschoonpaneel, `#ocr-opts`, de AI-secties van het instellingenpaneel, de Obsidian-zin in de
   hint) en `settings` (⚙-knop + dialoog, weg bij vergrendeling). `<body data-ai>` geeft de
@@ -525,9 +538,12 @@ accountregistratie namens de gebruiker):
 - **Omschakelen herlaadt de pagina** (de markup is server-side), en opgehaalde documenten
   leven alleen in de browser — `saveSettings()` vraagt daarom eerst om bevestiging als er
   documenten open staan.
-- Tests pinnen per modus (vergrendeld / aan / via de schakelaar uit) vast welke elementen er
-  wel en niet zijn en welke routes 404 geven, en dat een opgeslagen "aan" de vergrendeling
-  niet kan opheffen.
+- Tests isoleren `.env` naar een tmp-map (`isolated_ai_env`, monkeypatcht
+  `features._ENV_DIR` + `MDCONV_AI` in de omgeving) — nooit het echte projectbestand
+  aanraken. Ze pinnen per modus (vergrendeld / aan / via de schakelaar uit) vast welke
+  elementen er wel en niet zijn, welke routes 404 geven, dat een expliciete vergrendeling bij
+  het opstarten wint over elke `.env`-waarde, en dat de schakelaar alleen zijn eigen
+  `MDCONV_AI`-regel wegschrijft/verwijdert.
 
 ## AI-opschoning (`mdconv/cleanup/`)
 

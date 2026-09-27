@@ -23,7 +23,6 @@ get_prompt = config.get_prompt
 settings_payload = config.settings_payload
 update_settings = config.update_settings
 is_available = config.is_available
-get_ai_enabled = config.get_ai_enabled
 cancel_request = _cancel.request
 Usage = openrouter.Usage
 Progress = openrouter.Progress

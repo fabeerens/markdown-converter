@@ -126,8 +126,12 @@ aanroept: opschonen, vertalen, "Opmaken voor Obsidian" en de wiskunde-modus. De
 AI-instellingen verdwijnen dan ook; alleen de schakelaar blijft staan, zodat je AI later
 weer aan kunt zetten. Omschakelen herlaadt de pagina.
 
+De schakelaar zet direct `MDCONV_AI=off` in `.env` (en verwijdert die regel weer als je
+'m aanzet) — er is geen aparte instelling die uit de pas kan lopen met dat bestand.
+
 Wil je een installatie die AI **vast** uit heeft staan, zonder dat een gebruiker het weer
-aan kan zetten (bijvoorbeeld voor gebruik binnen een organisatie), zet dan in `.env`:
+aan kan zetten (bijvoorbeeld voor gebruik binnen een organisatie), zet dan zelf, vóórdat
+je de server start, in `.env`:
 
 ```bash
 MDCONV_AI=off
