@@ -16,13 +16,39 @@ import zipfile
 from urllib.parse import unquote, urlparse
 
 import requests
-from flask import Blueprint, Response, current_app, jsonify, render_template, request, send_file
+from flask import (
+    Blueprint, Response, abort, current_app, jsonify, render_template, request, send_file,
+)
 
-from . import attachments, cleanup, net, ocr, sources, version
+from . import attachments, cleanup, features, net, ocr, sources, version
 from .errors import ConversionError
 from .sources import pdf_images
 
 bp = Blueprint("api", __name__)
+# Alles wat een taalmodel aanroept (plus de instellingen daarvoor). Wordt
+# alleen geregistreerd als AI niet vergrendeld is — zie create_app en
+# mdconv/features.py. Staat de schakelaar in de instellingen uit, dan bestaan
+# de AI-routes óók niet (404); alleen /api/settings blijft, om hem weer aan
+# te kunnen zetten.
+ai_bp = Blueprint("ai", __name__)
+_SETTINGS_ENDPOINTS = {"ai.get_settings", "ai.post_settings"}
+
+
+@ai_bp.before_request
+def _ai_switch():
+    if request.endpoint not in _SETTINGS_ENDPOINTS and not _ai_on():
+        abort(404)
+
+
+def _ai_on() -> bool:
+    # AI_LOCKED_OFF is vastgelegd bij het opstarten (zie create_app): als AI
+    # toen al uitstond, bestaat ai_bp niet eens en komt deze functie niet
+    # aan de orde. Is dat niet zo, dan is `features.ai_enabled()` de live
+    # bron van waarheid — de schakelaar in de instellingen schrijft daar
+    # rechtstreeks in, dus dit werkt zonder herstart door.
+    if current_app.config["AI_LOCKED_OFF"]:
+        return False
+    return features.ai_enabled()
 
 # Grens voor een bestand dat via een link wordt gedownload. De upload-grens
 # staat in create_app (MAX_CONTENT_LENGTH).
@@ -42,7 +68,7 @@ _CT_EXT = {
 }
 
 
-@bp.errorhandler(ConversionError)
+@bp.app_errorhandler(ConversionError)
 def _handle_conversion_error(e: ConversionError):
     return jsonify(error=e.message), e.status
 
@@ -65,13 +91,30 @@ def index():
     app_version, build, installed_at = version.current()
     return render_template(
         "index.html", version=app_version, build=build, installed_at=installed_at,
+        ai=_ai_on(),
+        # Het ⚙-paneel: weg als AI vergrendeld is, anders altijd (met in elk
+        # geval de schakelaar "AI-functies").
+        settings=not current_app.config["AI_LOCKED_OFF"],
     )
 
 
 @bp.get("/api/config")
 def config():
     """Wat de UI moet weten bij het laden: is er een sleutel, en welke modellen."""
+    if not _ai_on():
+        return jsonify(
+            ai_enabled=False,
+            ai_locked=current_app.config["AI_LOCKED_OFF"],
+            llm_available=False,
+            models=[],
+            ocr_models=[],
+            profiles=[],
+            extract_images_available=pdf_images.available(),
+            ocr_available=False,
+        )
     return jsonify(
+        ai_enabled=True,
+        ai_locked=False,
         llm_available=cleanup.is_available(),
         models=cleanup.get_model_choices(),
         ocr_models=cleanup.get_ocr_models(),
@@ -85,16 +128,32 @@ def config():
     )
 
 
-@bp.get("/api/settings")
+@ai_bp.get("/api/settings")
 def get_settings():
-    """Huidige instellingen plus de standaardwaarden (voor de reset-knoppen)."""
-    return jsonify(cleanup.settings_payload())
+    """Huidige instellingen plus de standaardwaarden (voor de reset-knoppen).
+
+    `ai_enabled` komt niet uit `settings.json` maar rechtstreeks uit
+    `.env`/`os.environ` (zie `mdconv/features.py`) — één bron van waarheid
+    voor die ene schakelaar.
+    """
+    payload = cleanup.settings_payload()
+    payload["ai_enabled"] = features.ai_enabled()
+    return jsonify(payload)
 
 
-@bp.post("/api/settings")
+@ai_bp.post("/api/settings")
 def post_settings():
-    """Instellingen bijwerken; een leeg veld zet terug naar de standaardwaarde."""
-    return jsonify(cleanup.update_settings(_payload()))
+    """Instellingen bijwerken; een leeg veld zet terug naar de standaardwaarde.
+
+    `ai_enabled` gaat niet naar `settings.json` (zoals de rest) maar schrijft
+    `MDCONV_AI` in `.env` — zie `features.set_ai_enabled()`.
+    """
+    data = _payload()
+    if "ai_enabled" in data:
+        features.set_ai_enabled(bool(data.pop("ai_enabled")))
+    payload = cleanup.update_settings(data)
+    payload["ai_enabled"] = features.ai_enabled()
+    return jsonify(payload)
 
 
 # --------------------------------------------------------------------------
@@ -234,7 +293,7 @@ def _ocr_stream_response(pdf_bytes: bytes, model, request_id):
     return response
 
 
-@bp.post("/api/convert/file/ocr")
+@ai_bp.post("/api/convert/file/ocr")
 def convert_file_ocr():
     """Een geüploade PDF via de wiskunde-modus omzetten (streaming)."""
     if "file" not in request.files:
@@ -251,7 +310,7 @@ def convert_file_ocr():
     return _ocr_stream_response(data, model, request_id)
 
 
-@bp.post("/api/convert/file-url/ocr")
+@ai_bp.post("/api/convert/file-url/ocr")
 def convert_file_url_ocr():
     """Een PDF achter een link via de wiskunde-modus omzetten (streaming).
 
@@ -286,7 +345,7 @@ def convert_file_url_ocr():
 # AI-opschoning
 # --------------------------------------------------------------------------
 
-@bp.post("/api/estimate")
+@ai_bp.post("/api/estimate")
 def estimate():
     """Delen, tokens en kosten voor het opschonen van de meegestuurde markdown."""
     data = _payload()
@@ -297,7 +356,7 @@ def estimate():
     ))
 
 
-@bp.post("/api/clean")
+@ai_bp.post("/api/clean")
 def clean():
     """De markdown door het gekozen model halen."""
     data = _payload()
@@ -326,7 +385,7 @@ def _frame(kind: str, payload: dict) -> str:
     return f"\x00CLEAN_{kind}\x00{json.dumps(payload, ensure_ascii=False)}\x00"
 
 
-@bp.post("/api/clean/stream")
+@ai_bp.post("/api/clean/stream")
 def clean_stream():
     """Als /api/clean, maar streamt de opgeschoonde tekst terwijl die binnenkomt.
 
@@ -375,7 +434,7 @@ def clean_stream():
     return response
 
 
-@bp.post("/api/clean/cancel")
+@ai_bp.post("/api/clean/cancel")
 def clean_cancel():
     """Markeer een lopend streaming-verzoek (zelfde `request_id`) als geannuleerd
     — zowel /api/clean/stream als de wiskunde-modus (/api/convert/file/ocr),

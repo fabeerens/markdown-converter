@@ -492,6 +492,59 @@ accountregistratie namens de gebruiker):
   toestemming), dan een duidelijke foutmelding met het advies handmatig te plakken — nooit
   een stille misser.
 
+## Versie zonder AI (`mdconv/features.py`)
+
+- "Zonder AI" = geen opschonen, vertalen, Obsidian, wiskunde-modus of AI-instellingen. De
+  gewone conversie (incl. lijsten plakken, batch-download) blijft. **Bewust een schakelaar in
+  main, geen aparte branch** waar de code uit is gesloopt: de AI-code verandert vaak en zo'n
+  branch zou bij elke wijziging conflicteren.
+- **Eén bron van waarheid: `MDCONV_AI` in `.env`.** Geen aparte `ai_enabled` meer in
+  `settings.json` — dat zou een tweede plek zijn die uit elkaar kan lopen met `.env`. Twee
+  manieren om diezelfde variabele te zetten, met een bewuste rangorde:
+  1. **Vóór het opstarten**, handmatig in `.env` (env; ook `0`/`false`/`no`/`uit`/`nee`).
+     `create_app` legt dat één keer vast als `app.config["AI_LOCKED_OFF"]`
+     (`features.ai_locked_off()`). Stond AI toen al uit, dan registreert `create_app` blueprint
+     `ai_bp` niet eens — het ⚙-paneel is dan helemaal weg, en er is geen route om AI via de UI
+     weer aan te zetten. Dat is de garantie voor een installatie binnen een organisatie: alleen
+     door `.env` zelf aan te passen en de server te herstarten komt AI terug. **Niet afzwakken.**
+  2. **Tijdens het draaien**, met de schakelaar **"AI-functies"** in het instellingenpaneel
+     (`#settings-ai`, alleen zichtbaar als AI niet al zo vergrendeld was). Die schrijft
+     rechtstreeks in `.env` (`features.set_ai_enabled()`) én meteen in `os.environ` van dit
+     proces — nodig omdat `serve.sh` `.env` alleen bij het opstarten in de omgeving laadt, dus
+     een bestandswijziging alleen zou pas bij een herstart doorwerken. Uitzetten schrijft een
+     expliciete `MDCONV_AI=off`-regel; aanzetten **verwijdert** die regel weer (leeg =
+     standaard = aan, dezelfde conventie als de rest van `settings.json`). Andere regels in
+     `.env` (bv. `OPENROUTER_API_KEY`) blijven ongemoeid. `ai_bp.before_request` geeft dan 404
+     op alle AI-routes, behálve `/api/settings` — anders kun je hem niet weer aanzetten.
+  `features.ai_enabled()` leest dit **live** (geen cache) — dat is wat de schakelaar zonder
+  herstart laat doorwerken. `api._ai_on()` combineert dat met de vastgelegde
+  `AI_LOCKED_OFF`-vlag (die wint als hij `True` is) en is de enige plek die dat per verzoek
+  vraagt.
+- Alle routes die een model aanroepen, plus `/api/settings`, staan op **`ai_bp`**. **Een nieuwe
+  AI-route hoort op `ai_bp`, niet op `bp`.** De `ConversionError`-handler is daarom app-breed
+  (`app_errorhandler`), anders krijgt `ai_bp` geen nette JSON-fouten.
+- `/api/config` meldt `ai_enabled` en `ai_locked`. `GET /api/settings` voegt `ai_enabled` toe
+  aan `cleanup.settings_payload()` (dat zelf niets van `.env` afweet); `POST /api/settings`
+  haalt `ai_enabled` uit de payload en stuurt die apart naar `features.set_ai_enabled()`
+  vóórdat de rest naar `cleanup.update_settings()` gaat.
+- `index.html` krijgt twee vlaggen: `ai` (laat met `{% if ai %}` de AI-markup weg:
+  opschoonpaneel, `#ocr-opts`, de AI-secties van het instellingenpaneel, de Obsidian-zin in de
+  hint) en `settings` (⚙-knop + dialoog, weg bij vergrendeling). `<body data-ai>` geeft de
+  eerste door aan `app.js` (`AI_ENABLED`); `SETTINGS_ENABLED` = bestaat `#open-settings`.
+  Zonder AI slaat de JS `initCleanControls()`, `fillAiSettings()`/`readAiSettings()` en het
+  AI-deel van `initSettings()`/`renderEditor()`/`loadConfig()` over. **Nieuwe JS die
+  AI-elementen aanraakt moet achter `AI_ENABLED` staan**, anders crasht de pagina zonder AI
+  op een `null`.
+- **Omschakelen herlaadt de pagina** (de markup is server-side), en opgehaalde documenten
+  leven alleen in de browser — `saveSettings()` vraagt daarom eerst om bevestiging als er
+  documenten open staan.
+- Tests isoleren `.env` naar een tmp-map (`isolated_ai_env`, monkeypatcht
+  `features._ENV_DIR` + `MDCONV_AI` in de omgeving) — nooit het echte projectbestand
+  aanraken. Ze pinnen per modus (vergrendeld / aan / via de schakelaar uit) vast welke
+  elementen er wel en niet zijn, welke routes 404 geven, dat een expliciete vergrendeling bij
+  het opstarten wint over elke `.env`-waarde, en dat de schakelaar alleen zijn eigen
+  `MDCONV_AI`-regel wegschrijft/verwijdert.
+
 ## AI-opschoning (`mdconv/cleanup/`)
 
 - Via **OpenRouter** (OpenAI-compatibele API), niet de Anthropic API. Plain `requests`.
@@ -841,15 +894,29 @@ het geselecteerde tabblad en zet dat om in een `transform: translateX()` +
 `width` op de indicator — compositor-vriendelijk, werkt vanzelf mee bij elke
 schermbreedte.
 
-Dark/light volgt `prefers-color-scheme`; er is bewust **geen** knop. Drie dingen
-kantelen van betekenis tussen de modi — zonder die omkering leest het niet als Radix:
-
-1. Een paneel is in donker **lichter** dan de pagina (`--gray-2` op `--gray-1`), in licht
-   wit-op-wit met alleen een haarlijn.
-2. Een invoerveld is in licht een translucent **wit** (opgetild vlak) en in donker een
-   translucent **zwart** (verzonken vlak).
-3. Stap 9 is identiek in beide modi, maar stap 10 beweegt tegengesteld (donkerder in
-   licht, lichter in donker) — daardoor werkt "hover = stap 10" zonder conditionele CSS.
+**Kleuren: huisstijl van Lex Digitalis** (lexdigitalis.nl, afgelezen uit hun eigen
+CSS-variabelen `--bs-primary`/`--bs-secondary`/`--wp--preset--color--*`). **Alleen licht** —
+de donkere modus is op verzoek verwijderd; ook bij een donker systeemthema blijft de pagina
+licht. De accentschaal (stap 1–12) is opgebouwd rond hun indigo **`#191585`** (stap 9, en
+`#14116a` = hun eigen hover = stap 10), met hun helderblauw **`#4271ff`** als stap 8 en dus
+als focusring. Oranje **`#f9a935`** (`--orange-9`) is het tweede accent: de hover van de
+hoofdknoppen en de voortgangsbalk. **Hoofdknoppen** (`.btn-solid`) zijn indigo met witte
+tekst en worden bij hover oranje met witte tekst — uitdrukkelijke wens van de gebruiker, net
+als op hun site (wit op oranje haalt maar ~2:1 contrast; bewust zo gekozen, niet
+"corrigeren"). **Het kopvlak** (`.app-header.glass`) is het indigo→blauw-verloop van hun hero
+met witte titel/ondertitel/⚙; twee classes zodat het de glas-achtergrond van `.glass`
+verslaat. De pagina is `#f5f8fb` (lichter dan hun `#edf3f7`).
+**Diagonale hoeken**: vlakken zijn alleen **linksboven en rechtsonder** afgerond, de andere
+twee hoeken recht (`--diag-3`/`--diag-4`/`--diag-5` = `R 0 R 0`). Geldt voor kop, tabbalk,
+kaarten, statusregel, opschoonpaneel, sleepzone, plakvak, lijst-tekstvak, editor en dialoog;
+de gutter heeft alleen linksboven. **Nooit op knoppen** — uitdrukkelijke wens van de
+gebruiker: `.btn` blijft pil, en dus ook de vier tab-knoppen (Jurisprudentie/Wetgeving/
+Documentupload/Tekst plakken, `.tab`) én de schuivende `.tabs-indicator` erachter, die de
+vorm van die knoppen volgt. Alleen de omringende `.tabs`-balk zelf is een vlak en dus
+diagonaal. Invoervelden, selects en documentchips blijven ook bewust pil/klein-rond — het is
+een vlakkenstijl, geen knoppenstijl. Lettertype: `Ubuntu` voorop in
+`--font-sans`, bewust **niet** van Google Fonts geladen (lokale tool, geen externe verzoeken)
+— alleen wie het geïnstalleerd heeft krijgt het.
 
 **Toegankelijkheid is geen ander thema, maar dezelfde schakelaar.**
 `prefers-reduced-transparency: reduce` maakt elk `.glass`-element ondoorzichtig
@@ -927,7 +994,7 @@ enige dikte, niet een plat vlak met alleen een hoogtelicht.
   (`mdconv/sources/pdf_images.py` — `pdfimages`/`pdfinfo`/`pdftoppm`). Lokaal (macOS via
   `run.sh`): `brew install poppler`.
 - Env-vars via compose: `OPENROUTER_API_KEY`, `LLM_MODEL`, `OPENROUTER_BASE_URL`, `OCR_MODEL`,
-  `OCR_DPI`. Code behandelt lege strings als "niet gezet" (`or DEFAULT`), zodat compose's
+  `OCR_DPI`, `MDCONV_AI` (zie "Versie zonder AI"). Code behandelt lege strings als "niet gezet" (`or DEFAULT`), zodat compose's
   `${VAR:-}` de defaults niet breekt.
 
 ## Versienummer (footer) — git-onafhankelijk
@@ -944,9 +1011,16 @@ enige dikte, niet een plat vlak met alleen een hoogtelicht.
 - `state.StateFile.write()` schrijft atomair (tmp + `os.replace`) en vergrendelt met
   `fcntl.flock`, zodat meerdere gunicorn-workers de teller niet dubbel ophogen en een half
   weggeschreven bestand nooit als geldige staat gelezen kan worden.
+- **`installed_at` staat vast op Europe/Amsterdam** (`datetime.now(_TZ)`, `_TZ =
+  ZoneInfo("Europe/Amsterdam")`), niet op de tijdzone van de host. Een kale
+  `datetime.now()` gaf op een server die zonder eigen `TZ`-instelling draait (de standaard
+  in Docker: UTC) twee uur het verkeerde tijdstip. `tzdata` (requirements.txt) levert de
+  tijdzonedatabase zelf mee, want een minimale Docker-image (`python:3.13-slim`) heeft
+  `/usr/share/zoneinfo` niet per se aan boord — zonder die dependency zou `ZoneInfo(...)`
+  daar een `ZoneInfoNotFoundError` geven in plaats van gewoon te werken.
 
 ## Tests
-`.venv/bin/python -m pytest tests/ -q` — 205 karakteriseringstests die het gedrag
+`.venv/bin/python -m pytest tests/ -q` — 214 karakteriseringstests die het gedrag
 vastleggen in plaats van het te beschrijven: `detect_source`-precedentie, ELI→CELEX,
 de geconsolideerde-CELEX-afhandeling (datum behouden, preambule invoegen, en de vier
 terugvalpaden als dat niet lukt), de versie-terugvalladder (nieuwste versie op of vóór de

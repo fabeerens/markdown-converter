@@ -254,7 +254,9 @@ def settings_payload() -> dict:
     Geen los `chunk_tokens`-veld meer: dat staat nu per item in `models`
     (zie `_clean_models`). `min_chunk_tokens`/`max_chunk_tokens` blijven wél
     top-level — dat zijn de grenzen die voor élk endpoint gelden, voor de
-    validatie van het invoerveld per rij.
+    validatie van het invoerveld per rij. Geen `ai_enabled` hier: die
+    schakelaar schrijft rechtstreeks in `.env`, niet in dit bestand — zie
+    `mdconv/features.py` en `api.get_settings()`/`post_settings()`.
     """
     return {
         "models": get_model_choices(),

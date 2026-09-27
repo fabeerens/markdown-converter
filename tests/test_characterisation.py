@@ -2647,3 +2647,175 @@ def test_pane_doc_has_ocr_controls():
         'id="settings-ocr-pages"',
     ):
         assert element in html, f"{element} ontbreekt in index.html"
+
+
+# ---------------------------------------------------------------------------
+# Versie zonder AI: MDCONV_AI=off (vergrendeld) of de schakelaar in de instellingen
+# ---------------------------------------------------------------------------
+
+_AI_ROUTES = [
+    ("post", "/api/estimate"),
+    ("post", "/api/clean"),
+    ("post", "/api/clean/stream"),
+    ("post", "/api/clean/cancel"),
+    ("post", "/api/convert/file/ocr"),
+    ("post", "/api/convert/file-url/ocr"),
+]
+_SETTINGS_ROUTES = [("get", "/api/settings"), ("post", "/api/settings")]
+
+# Wat er zonder AI nooit in de pagina mag staan, en wat er altijd moet blijven.
+_AI_ELEMENTS = ('id="clean-panel"', 'id="clean"', 'id="translate-nl"', 'id="obsidian"',
+                'id="ocr-mode"', 'id="settings-models"', 'id="prompt-generic"')
+_BASE_ELEMENTS = ('id="bulk-jur-text"', 'id="bulk-wet-text"', 'id="bulk-doc-text"',
+                  'id="paste-area"', 'id="drop"', 'id="download-all"')
+
+
+def _page(app, monkeypatch):
+    from mdconv import version
+
+    monkeypatch.setattr(version, "current", lambda: ("0.0.0", 1, "vandaag"))
+    return app.test_client().get("/").get_data(as_text=True)
+
+
+@pytest.fixture
+def isolated_ai_env(tmp_path, monkeypatch):
+    """Laat de schakelaar "AI-functies" naar een tijdelijke `.env` schrijven
+    i.p.v. het echte projectbestand, en isoleert MDCONV_AI in de omgeving —
+    zodat een test hem niet per ongeluk laat staan voor de volgende."""
+    from mdconv import features
+
+    monkeypatch.setattr(features, "_ENV_DIR", str(tmp_path))
+    monkeypatch.delenv("MDCONV_AI", raising=False)
+    return features
+
+
+def test_ai_lock_follows_the_environment(monkeypatch):
+    from mdconv.features import ai_locked_off
+
+    monkeypatch.delenv("MDCONV_AI", raising=False)
+    assert ai_locked_off() is False
+    for value in ("off", "0", "false", "Uit", " OFF "):
+        monkeypatch.setenv("MDCONV_AI", value)
+        assert ai_locked_off() is True, value
+    monkeypatch.setenv("MDCONV_AI", "on")
+    assert ai_locked_off() is False
+
+
+def test_locked_off_the_ai_and_settings_routes_do_not_exist():
+    from mdconv import create_app
+
+    client = create_app(ai_enabled=False).test_client()
+    for method, url in _AI_ROUTES + _SETTINGS_ROUTES:
+        r = getattr(client, method)(url, json={})
+        assert r.status_code == 404, url
+
+
+def test_locked_off_ignores_any_env_value(isolated_ai_env, monkeypatch):
+    """De expliciete `ai_enabled=False` bij het opstarten (zie create_app) wint
+    altijd — ook als MDCONV_AI op dat moment "on" zou zeggen. Dat is precies
+    de garantie voor een installatie die vóór het opstarten is vergrendeld."""
+    from mdconv import create_app
+
+    monkeypatch.setenv("MDCONV_AI", "on")
+    app = create_app(ai_enabled=False)
+    assert app.test_client().get("/api/config").get_json()["ai_enabled"] is False
+    html = _page(app, monkeypatch)
+    assert 'id="open-settings"' not in html and 'id="settings-ai"' not in html
+
+
+def test_with_ai_the_ai_routes_exist(isolated_settings):
+    from mdconv import create_app
+
+    client = create_app(ai_enabled=True).test_client()
+    for method, url in _AI_ROUTES + _SETTINGS_ROUTES:
+        r = getattr(client, method)(url, json={})
+        assert r.status_code != 404, url
+
+
+def test_switch_off_hides_ai_routes_but_keeps_settings(isolated_settings, isolated_ai_env):
+    from mdconv import create_app
+
+    client = create_app(ai_enabled=True).test_client()
+    assert client.post("/api/settings", json={"ai_enabled": False}).get_json()["ai_enabled"] is False
+    for method, url in _AI_ROUTES:
+        assert getattr(client, method)(url, json={}).status_code == 404, url
+    assert client.get("/api/config").get_json()["ai_enabled"] is False
+    # Terug aanzetten kan, want /api/settings blijft bestaan.
+    assert client.post("/api/settings", json={"ai_enabled": True}).get_json()["ai_enabled"] is True
+    assert client.post("/api/clean/cancel", json={}).status_code == 200
+
+
+def test_switch_writes_env_and_only_stores_off(isolated_ai_env):
+    """De schakelaar schrijft in `.env` (niet in settings.json): uitzetten een
+    expliciete `MDCONV_AI=off`-regel, aanzetten verwijdert die weer (leeg =
+    standaard). Werkt meteen door in os.environ van dit proces."""
+    features = isolated_ai_env
+
+    features.set_ai_enabled(False)
+    assert "MDCONV_AI=off" in open(features._env_path(), encoding="utf-8").read()
+    assert os.environ["MDCONV_AI"] == "off"
+
+    features.set_ai_enabled(True)
+    assert "MDCONV_AI" not in open(features._env_path(), encoding="utf-8").read()
+    assert "MDCONV_AI" not in os.environ
+
+
+def test_switch_preserves_other_env_lines(isolated_ai_env):
+    """Andere regels in .env (bv. OPENROUTER_API_KEY, commentaar) blijven
+    ongemoeid — de schakelaar raakt alleen zijn eigen MDCONV_AI-regel aan."""
+    features = isolated_ai_env
+    path = features._env_path()
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("OPENROUTER_API_KEY=sk-or-test\n# commentaar\nMDCONV_AI=off\n")
+
+    features.set_ai_enabled(True)
+
+    content = open(path, encoding="utf-8").read()
+    assert "OPENROUTER_API_KEY=sk-or-test" in content
+    assert "# commentaar" in content
+    assert "MDCONV_AI" not in content
+
+
+def test_without_ai_the_normal_conversion_still_works():
+    from mdconv import create_app
+
+    client = create_app(ai_enabled=False).test_client()
+    r = client.post("/api/convert/text", json={"text": "Hallo wereld."})
+    assert r.status_code == 200
+    assert r.get_json()["markdown"] == "Hallo wereld.\n"
+    # Foutmeldingen blijven netjes JSON, ook nu de errorhandler app-breed is.
+    r = client.post("/api/convert/link", json={"query": ""})
+    assert r.status_code == 400
+    assert "CELEX" in r.get_json()["error"]
+
+
+def test_without_ai_config_reports_no_ai():
+    from mdconv import create_app
+
+    cfg = create_app(ai_enabled=False).test_client().get("/api/config").get_json()
+    assert cfg["ai_enabled"] is False and cfg["ai_locked"] is True
+    assert cfg["llm_available"] is False
+    assert cfg["ocr_available"] is False
+    assert cfg["models"] == [] and cfg["ocr_models"] == []
+
+
+def test_page_per_ai_mode(isolated_ai_env, monkeypatch):
+    from mdconv import create_app
+
+    locked = _page(create_app(ai_enabled=False), monkeypatch)
+    on = _page(create_app(ai_enabled=True), monkeypatch)
+    isolated_ai_env.set_ai_enabled(False)
+    switched_off = _page(create_app(ai_enabled=True), monkeypatch)
+
+    assert 'data-ai="off"' in locked and 'data-ai="on"' in on and 'data-ai="off"' in switched_off
+    for element in _AI_ELEMENTS:
+        assert element in on, element
+        assert element not in locked, element
+        assert element not in switched_off, element
+    # Vergrendeld: geen instellingen. Via de schakelaar uit: alleen de schakelaar.
+    assert 'id="open-settings"' not in locked and 'id="settings"' not in locked
+    assert 'id="open-settings"' in switched_off and 'id="settings-ai"' in switched_off
+    assert 'id="settings-ai" checked' in on and 'id="settings-ai" checked' not in switched_off
+    for html in (locked, on, switched_off):
+        for element in _BASE_ELEMENTS:
+            assert element in html, element

@@ -4,9 +4,7 @@ services:
     container_name: markdown-converter
     restart: unless-stopped
     ports:
-      - "127.0.0.1:3007:5001"
-    env_file:
-      - .env
+      - "3007:5001"
     volumes:
       # Bewaart het build-nummer + installatiedatum (footer) tussen rebuilds
       # in. Zonder deze volume zou elke `docker compose build` de teller

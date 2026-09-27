@@ -36,8 +36,8 @@ bewerken, opschonen met AI (elk document met zijn eigen profiel/model) en los te
 Mislukt een van de documenten (bv. een ongeldige ECLI), dan blijft de rest gewoon beschikbaar;
 de status onder de knop toont wat wel en niet is gelukt.
 
-De tool volgt automatisch de **licht/donker-instelling van je systeem** — er is geen knop,
-je hoeft niets te kiezen.
+De kleuren volgen de huisstijl van [Lex Digitalis](https://www.lexdigitalis.nl): een lichte
+pagina met blauwe en oranje accenten. Er is geen donkere modus.
 
 Uitvoer kun je kopiëren of downloaden als `.md`. Links naast de tekst staan **regelnummers**
 (altijd zichtbaar) — handig om een bepaalde regel terug te vinden of ernaar te verwijzen.
@@ -118,6 +118,30 @@ OPENROUTER_API_KEY=sk-or-...
 ```
 
 (sleutel aanmaken op <https://openrouter.ai/keys>). Een ander standaardmodel of endpoint kies je optioneel met `LLM_MODEL` / `OPENROUTER_BASE_URL` in `.env` (de dropdown in de UI overschrijft dit per keer). Zonder sleutel blijft het opschoon-paneel uitgeschakeld; de rest van de tool werkt gewoon.
+
+### Versie zonder AI
+
+In **Instellingen (⚙)** zet de schakelaar **AI-functies** alles uit wat een taalmodel
+aanroept: opschonen, vertalen, "Opmaken voor Obsidian" en de wiskunde-modus. De
+AI-instellingen verdwijnen dan ook; alleen de schakelaar blijft staan, zodat je AI later
+weer aan kunt zetten. Omschakelen herlaadt de pagina.
+
+De schakelaar zet direct `MDCONV_AI=off` in `.env` (en verwijdert die regel weer als je
+'m aanzet) — er is geen aparte instelling die uit de pas kan lopen met dat bestand.
+
+Wil je een installatie die AI **vast** uit heeft staan, zonder dat een gebruiker het weer
+aan kan zetten (bijvoorbeeld voor gebruik binnen een organisatie), zet dan zelf, vóórdat
+je de server start, in `.env`:
+
+```bash
+MDCONV_AI=off
+```
+
+Dan verdwijnen opschonen, vertalen, "Opmaken voor Obsidian", de wiskunde-modus en het
+hele instellingenpaneel (dus ook de schakelaar) uit de interface, en bestaan de bijbehorende API-routes niet meer
+(404). De gewone conversie naar markdown blijft volledig werken, net als lijsten
+plakken, meerdere documenten en "Alles downloaden". Het blijft dezelfde codebase als
+`main`, dus bijwerken is gewoon `git pull`.
 
 ## Starten
 

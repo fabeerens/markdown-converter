@@ -6,14 +6,16 @@
   <title>Markdown converter</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
 </head>
-<body>
+<body data-ai="{{ 'on' if ai else 'off' }}">
   <header class="app-header glass">
     <div class="titles">
       <h1>Markdown converter</h1>
       <p>Zet jurisprudentie, wetgeving of documenten om naar markdown.</p>
     </div>
+    {% if settings %}
     <button type="button" class="btn btn-ghost btn-icon" id="open-settings"
             title="Instellingen" aria-label="Instellingen">⚙</button>
+    {% endif %}
   </header>
 
   <main class="wrap">
@@ -110,6 +112,7 @@
           <input type="checkbox" id="extract-images">
           <span>Voor PDF's: losse ingesloten afbeeldingen meenemen als bijlagen</span>
         </label>
+        {% if ai %}
         <div class="ocr-opts" id="ocr-opts" hidden>
           <label class="checkbox" id="ocr-mode-wrap">
             <input type="checkbox" id="ocr-mode">
@@ -119,6 +122,7 @@
           </label>
           <select class="select" id="ocr-model" aria-label="Model voor de wiskunde-modus" hidden></select>
         </div>
+        {% endif %}
         <div class="or">of plak een of meer links naar bestanden</div>
         <div class="seg" role="group" aria-label="Invoervorm">
           <button type="button" class="seg-btn" id="mode-doc-rows" aria-pressed="true">Losse regels</button>
@@ -168,8 +172,8 @@
       <p class="hint">
         Plak <strong>kale tekst</strong> (bv. uit een PDF-viewer) of <strong>verrijkte tekst</strong>
         met koppen, vetgedrukt of lijsten (bv. uit Word of een webpagina) — opmaak uit het
-        klembord wordt zo veel mogelijk overgenomen. Staat er een ECLI in de tekst, dan wordt
-        die herkend als rechtspraak (met de Obsidian-optie erbij).
+        klembord wordt zo veel mogelijk overgenomen.{% if ai %} Staat er een ECLI in de tekst, dan wordt
+        die herkend als rechtspraak (met de Obsidian-optie erbij).{% endif %}
       </p>
     </section>
 
@@ -179,6 +183,7 @@
     <section id="output" aria-label="Resultaat" hidden>
       <div class="doc-tabs" id="doc-tabs" aria-label="Opgehaalde documenten" hidden></div>
 
+      {% if ai %}
       <div class="clean-panel glass" id="clean-panel">
         <div class="clean-info">
           <strong id="clean-title">Opschonen met AI</strong>
@@ -199,6 +204,7 @@
           <button type="button" class="btn btn-solid" id="clean">Opschonen</button>
         </div>
       </div>
+      {% endif %}
 
       <div class="out-bar">
         <span class="src" id="src"></span>
@@ -216,6 +222,7 @@
     </section>
   </main>
 
+  {% if settings %}
   <!-- Instellingen -->
   <div class="overlay" id="settings" role="dialog" aria-modal="true" aria-labelledby="settings-title">
     <div class="dialog glass">
@@ -223,14 +230,23 @@
         <div style="flex:1">
           <h2 id="settings-title">Instellingen</h2>
           <p class="sub">
-            Geldt voor alle volgende conversies op deze installatie. Laat een veld leeg
-            om terug te vallen op de standaardwaarde.
+            Geldt voor alle volgende conversies op deze installatie.{% if ai %} Laat een veld
+            leeg om terug te vallen op de standaardwaarde.{% endif %}
           </p>
         </div>
         <button type="button" class="btn btn-ghost btn-icon" id="settings-close"
                 aria-label="Sluiten">✕</button>
       </div>
 
+      <section>
+        <label class="checkbox">
+          <input type="checkbox" id="settings-ai" {% if ai %}checked{% endif %}>
+          <span><strong>AI-functies</strong> — opschonen, vertalen, opmaken voor Obsidian
+            en de wiskunde-modus. Uit = alleen de gewone omzetting naar markdown.</span>
+        </label>
+      </section>
+
+      {% if ai %}
       <section>
         <h3>AI-endpoints <button type="button" class="reset" id="reset-models">Standaardlijst</button></h3>
         <p class="hint" style="margin:0 0 8px">
@@ -285,6 +301,7 @@
         <label class="visually-hidden" for="prompt-ocr">Prompt voor de wiskunde-transcriptie</label>
         <textarea id="prompt-ocr"></textarea>
       </section>
+      {% endif %}
 
       <div class="dialog-actions">
         <span class="msg" id="settings-msg"></span>
@@ -293,6 +310,8 @@
       </div>
     </div>
   </div>
+
+  {% endif %}
 
   <footer class="app-footer">
     Markdown converter · v{{ version }} (build {{ build }}) · geïnstalleerd op {{ installed_at }}
