@@ -3,12 +3,17 @@ services:
     build: .
     container_name: markdown-converter
     restart: unless-stopped
-    env_file:
-      - .env
     ports:
       - "127.0.0.1:3007:5001"
+    environment:
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - LLM_MODEL=${LLM_MODEL}
+      - OPENROUTER_BASE_URL=${OPENROUTER_BASE_URL}
+      - OCR_MODEL=${OCR_MODEL}
+      - OCR_DPI=${OCR_DPI}
+      - PISTE_JUDILIBRE_KEY=${PISTE_JUDILIBRE_KEY}
+      - PISTE_JUDILIBRE_SECRET=${PISTE_JUDILIBRE_SECRET}
+      - PISTE_JUDILIBRE_PROD_KEY=${PISTE_JUDILIBRE_PROD_KEY}
+      - PISTE_JUDILIBRE_PROD_SECRET=${PISTE_JUDILIBRE_PROD_SECRET}
     volumes:
-      # Bewaart het build-nummer + installatiedatum (footer) tussen rebuilds
-      # in. Zonder deze volume zou elke `docker compose build` de teller
-      # laten resetten naar build 1.
       - ./.deploy-state:/app/.deploy-state
