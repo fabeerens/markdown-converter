@@ -111,6 +111,12 @@
   --space-5: 24px; --space-6: 32px; --space-7: 40px; --space-8: 48px;
   --radius-1: 3px; --radius-2: 8px; --radius-3: 10px; --radius-4: 20px;
   --radius-5: 28px; --radius-pill: 999px;
+  /* Huisstijl: vlakken zijn aan twee diagonale hoeken afgerond (linksboven en
+     rechtsonder) en aan de andere twee recht. Volgorde van `border-radius`:
+     linksboven, rechtsboven, rechtsonder, linksonder. */
+  --diag-3: var(--radius-3) 0 var(--radius-3) 0;
+  --diag-4: var(--radius-4) 0 var(--radius-4) 0;
+  --diag-5: var(--radius-5) 0 var(--radius-5) 0;
 
   /* Ubuntu is het lettertype van lexdigitalis.nl. Bewust niet van Google
      Fonts geladen (de tool draait lokaal, zonder externe verzoeken): wie het
@@ -240,7 +246,7 @@ body {
   max-width: calc(1040px - 2 * var(--space-4));
   margin: var(--space-5) auto 0;
   padding: var(--space-4) var(--space-5);
-  border-radius: var(--radius-5);
+  border-radius: var(--diag-5);
   /* Een Liquid Glass-navigatiebalk blijft zwevend zichtbaar terwijl de
      inhoud erdoorheen scrolt, i.p.v. gewoon met de pagina mee te scrollen. */
   position: sticky; top: var(--space-3); z-index: 30;
@@ -348,11 +354,14 @@ body {
    het meest "liquid" moment in de hele opmaak. */
 .tabs {
   display: flex; gap: 2px; padding: 3px;
-  border-radius: var(--radius-pill);
+  border-radius: var(--diag-4);
   margin-bottom: var(--space-5);
 }
 .tabs-indicator {
   position: absolute; top: 3px; left: 0; bottom: 3px; z-index: 0;
+  /* Pil, geen diagonale hoeken: dit volgt de vorm van de tab-knoppen
+     eronder (ook pil, op verzoek — de diagonale stijl geldt voor vlakken,
+     niet voor knoppen). */
   width: 0; border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--accent-9) 22%, var(--glass-tint) 78%);
   box-shadow: inset 0 1px 0 0 var(--glass-rim-top), inset 0 0 0 1px var(--accent-a6);
@@ -367,6 +376,8 @@ body {
   display: inline-flex; align-items: center; justify-content: center;
   background: none; border: 0; cursor: pointer;
   color: var(--muted); font: var(--fw-medium) var(--fs-2)/1 var(--font-sans);
+  /* Pil, net als de andere knoppen (.btn) — op verzoek geen diagonale hoeken
+     bij knoppen, inclusief deze vier tab-knoppen. */
   border-radius: var(--radius-pill);
   transition: color var(--dur-fast) var(--ease-standard),
               transform var(--dur-fast) var(--ease-standard);
@@ -380,7 +391,7 @@ body {
    -------------------------------------------------------------------------- */
 .card {
   background: var(--panel);
-  border-radius: var(--radius-4);
+  border-radius: var(--diag-4);
   box-shadow: var(--card-ring);
   padding: var(--space-4);
 }
@@ -474,7 +485,7 @@ body {
   padding: var(--space-3);
   background: var(--surface); background-clip: content-box;
   box-shadow: inset 0 0 0 1px var(--border);
-  border: 0; border-radius: var(--radius-3);
+  border: 0; border-radius: var(--diag-3);
   color: var(--text); font: var(--fw-regular) 12.5px/1.7 var(--font-mono);
 }
 .bulk textarea::placeholder { color: var(--gray-a9); }
@@ -528,7 +539,7 @@ body {
   display: none; align-items: flex-start; gap: var(--space-3);
   margin: var(--space-4) 0;
   padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-4);
+  border-radius: var(--diag-4);
   font-size: var(--fs-2); line-height: var(--lh-2);
 }
 /* Keyframes i.p.v. een transition: een transition kan niet animeren vanaf
@@ -599,7 +610,7 @@ body {
   /* Licht getint glas (accentkleur) i.p.v. neutraal — dit paneel is altijd
      AI-opschoning, dus mag er als zodanig uitzien. */
   background: color-mix(in srgb, var(--accent-9) 10%, var(--glass-tint) 90%);
-  border-radius: var(--radius-4);
+  border-radius: var(--diag-4);
 }
 .clean-panel.show { display: flex; animation: panel-in var(--dur-standard) var(--ease-standard); }
 .clean-info { flex: 1 1 260px; min-width: 0; }
@@ -653,7 +664,7 @@ body {
   height: 480px; min-height: 200px;
   resize: vertical; overflow: hidden;
   background: var(--panel);
-  border-radius: var(--radius-4);
+  border-radius: var(--diag-4);
   box-shadow: var(--card-ring);
 }
 .gutter {
@@ -661,7 +672,7 @@ body {
   text-align: right; user-select: none;
   background: var(--gray-a2);
   border-right: 1px solid var(--border-subtle);
-  border-radius: var(--radius-4) 0 0 var(--radius-4);
+  border-radius: var(--radius-4) 0 0 0;
   color: var(--gray-9); font: var(--editor-font);
   font-variant-numeric: tabular-nums;
 }
@@ -705,7 +716,7 @@ body {
 .drop {
   display: flex; flex-direction: column; align-items: center; gap: var(--space-1);
   padding: var(--space-8) var(--space-4);
-  border-radius: var(--radius-4);
+  border-radius: var(--diag-4);
   cursor: pointer; text-align: center;
   transition: background-color var(--dur-fast) var(--ease-standard),
               box-shadow var(--dur-fast) var(--ease-standard);
@@ -734,7 +745,7 @@ body {
   padding: var(--space-3) var(--space-4);
   background: var(--surface); background-clip: content-box;
   box-shadow: inset 0 0 0 1px var(--border);
-  border-radius: var(--radius-3);
+  border-radius: var(--diag-3);
   color: var(--text); font: var(--fw-regular) var(--fs-2)/var(--lh-3) var(--font-sans);
 }
 .paste-area:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -1px; }
@@ -768,7 +779,7 @@ body {
   /* Glas (achtergrond/blur/rand/specular) komt van .glass; hier alleen wat
      dialoogspecifiek is: maat, binnenruimte en het ankerpunt voor de
      intro-animatie (boven, waar hij ook vandaan "komt"). */
-  border-radius: var(--radius-5);
+  border-radius: var(--diag-5);
   padding: var(--space-5);
   transform-origin: top center;
 }

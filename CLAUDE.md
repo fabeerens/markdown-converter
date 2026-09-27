@@ -889,7 +889,16 @@ tekst en worden bij hover oranje met witte tekst — uitdrukkelijke wens van de 
 als op hun site (wit op oranje haalt maar ~2:1 contrast; bewust zo gekozen, niet
 "corrigeren"). **Het kopvlak** (`.app-header.glass`) is het indigo→blauw-verloop van hun hero
 met witte titel/ondertitel/⚙; twee classes zodat het de glas-achtergrond van `.glass`
-verslaat. De pagina is `#f5f8fb` (lichter dan hun `#edf3f7`). Lettertype: `Ubuntu` voorop in
+verslaat. De pagina is `#f5f8fb` (lichter dan hun `#edf3f7`).
+**Diagonale hoeken**: vlakken zijn alleen **linksboven en rechtsonder** afgerond, de andere
+twee hoeken recht (`--diag-3`/`--diag-4`/`--diag-5` = `R 0 R 0`). Geldt voor kop, tabbalk,
+kaarten, statusregel, opschoonpaneel, sleepzone, plakvak, lijst-tekstvak, editor en dialoog;
+de gutter heeft alleen linksboven. **Nooit op knoppen** — uitdrukkelijke wens van de
+gebruiker: `.btn` blijft pil, en dus ook de vier tab-knoppen (Jurisprudentie/Wetgeving/
+Documentupload/Tekst plakken, `.tab`) én de schuivende `.tabs-indicator` erachter, die de
+vorm van die knoppen volgt. Alleen de omringende `.tabs`-balk zelf is een vlak en dus
+diagonaal. Invoervelden, selects en documentchips blijven ook bewust pil/klein-rond — het is
+een vlakkenstijl, geen knoppenstijl. Lettertype: `Ubuntu` voorop in
 `--font-sans`, bewust **niet** van Google Fonts geladen (lokale tool, geen externe verzoeken)
 — alleen wie het geïnstalleerd heeft krijgt het.
 
