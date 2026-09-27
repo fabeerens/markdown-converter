@@ -18,13 +18,16 @@
      9 volvlak (knop, indicator, aangevinkt) · 10 volvlak-hover
      11 secundaire tekst · 12 primaire tekst
 
-   Dark/light volgt de systeeminstelling via prefers-color-scheme; er is
-   bewust geen knop, want de gebruiker heeft dat op OS-niveau al gekozen.
+   Kleuren: de huisstijl van Lex Digitalis (lexdigitalis.nl) — indigo
+   #191585 als accent (stap 9), helderblauw #4271ff als focusring (stap 8),
+   oranje #f9a935 voor de hoofdknoppen en de voortgangsbalk, op een lichte,
+   iets blauwgetinte pagina (#f5f8fb, afgeleid van hun #edf3f7). Bewust
+   alleen licht: er is geen donkere variant meer.
    `prefers-reduced-transparency` maakt het glas ondoorzichtig.
    ========================================================================== */
 
 /* --------------------------------------------------------------------------
-   Licht (slate + blue)
+   Licht (slate + Lex Digitalis-indigo en -oranje)
    -------------------------------------------------------------------------- */
 :root {
   color-scheme: light;
@@ -38,14 +41,18 @@
   --gray-a5: #0009321f; --gray-a6: #00002f26; --gray-a7: #00062e32;
   --gray-a8: #00083046; --gray-a9: #00051d74; --gray-a11: #0007149f;
 
-  --accent-1:  #fbfdff;  --accent-2:  #f4faff;  --accent-3:  #e6f4fe;
-  --accent-4:  #d5efff;  --accent-5:  #c2e5ff;  --accent-6:  #acd8fc;
-  --accent-7:  #8ec8f6;  --accent-8:  #5eb1ef;  --accent-9:  #0090ff;
-  --accent-10: #0588f0;  --accent-11: #0d74ce;  --accent-12: #113264;
+  --accent-1:  #fbfbfe;  --accent-2:  #f5f6fd;  --accent-3:  #ecedfb;
+  --accent-4:  #e1e3f8;  --accent-5:  #d4d7f4;  --accent-6:  #c3c6ee;
+  --accent-7:  #aaaee5;  --accent-8:  #4271ff;  --accent-9:  #191585;
+  --accent-10: #14116a;  --accent-11: #1f1b9c;  --accent-12: #100d4a;
 
-  --accent-a2: #008cff0b; --accent-a3: #008ff519; --accent-a4: #009eff2a;
-  --accent-a5: #0093ff3d; --accent-a6: #0088f653; --accent-a7: #0083eb74;
-  --accent-a8: #0084e6a1; --accent-a11: #0b74cef2;
+  --accent-a2: #1915850a; --accent-a3: #19158514; --accent-a4: #1915851f;
+  --accent-a5: #1915852b; --accent-a6: #1915853c; --accent-a7: #19158555;
+  --accent-a8: #4271ffa6; --accent-a11: #191585ee;
+
+  /* Het tweede merkaccent: oranje, voor de hover van de hoofdknoppen en de
+     voortgangsbalk. */
+  --orange-9: #f9a935;
 
   --green-3: #e9f9ee; --green-6: #b4dfc4; --green-9: #30a46c;
   --green-a3: #00a43319; --green-a6: #00933b4b; --green-a11: #008a3ee6;
@@ -58,7 +65,7 @@
   /* Semantische aliassen. In licht is een paneel wit-op-wit: gescheiden door
      een haarlijn en schaduw, niet door een andere vulkleur. Een invoerveld is
      een licht opgetild vlak (translucent wit). */
-  --bg: var(--gray-1);
+  --bg: #f5f8fb;
   --panel: #ffffff;
   --surface: #ffffffd9;
   --border: var(--gray-a7);
@@ -105,7 +112,10 @@
   --radius-1: 3px; --radius-2: 8px; --radius-3: 10px; --radius-4: 20px;
   --radius-5: 28px; --radius-pill: 999px;
 
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+  /* Ubuntu is het lettertype van lexdigitalis.nl. Bewust niet van Google
+     Fonts geladen (de tool draait lokaal, zonder externe verzoeken): wie het
+     geïnstalleerd heeft krijgt het, anders de systeemletter. */
+  --font-sans: Ubuntu, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     "Helvetica Neue", system-ui, sans-serif, "Apple Color Emoji";
   --font-mono: Menlo, Consolas, "Bitstream Vera Sans Mono", monospace;
   --fs-1: 12px; --lh-1: 16px;
@@ -127,69 +137,6 @@
   --ease-standard: cubic-bezier(0.32, 0.72, 0, 1);
   --dur-fast: 120ms;
   --dur-standard: 220ms;
-}
-
-/* --------------------------------------------------------------------------
-   Donker (slate dark + blue dark)
-
-   Drie dingen kantelen van betekenis; zonder die omkering leest het niet als
-   Radix: een paneel is hier líchter dan de pagina, een invoerveld wordt een
-   verzonken (donkerder) vlak in plaats van een opgetild vlak, en stap 10
-   wordt lichter waar hij in licht juist donkerder werd.
-   -------------------------------------------------------------------------- */
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-
-    --gray-1:  #111113;  --gray-2:  #18191b;  --gray-3:  #212225;
-    --gray-4:  #272a2d;  --gray-5:  #2e3135;  --gray-6:  #363a3f;
-    --gray-7:  #43484e;  --gray-8:  #5a6169;  --gray-9:  #696e77;
-    --gray-10: #777b84;  --gray-11: #b0b4ba;  --gray-12: #edeef0;
-
-    --gray-a2: #d8f4f609; --gray-a3: #ddeaf814; --gray-a4: #d3edf81d;
-    --gray-a5: #d9edfe25; --gray-a6: #d6ebfd30; --gray-a7: #d9edff40;
-    --gray-a8: #d9edff5d; --gray-a9: #dfebfd6d; --gray-a11: #f1f7feb5;
-
-    --accent-1:  #0d1520;  --accent-2:  #111927;  --accent-3:  #0d2847;
-    --accent-4:  #003362;  --accent-5:  #004074;  --accent-6:  #104d87;
-    --accent-7:  #205d9e;  --accent-8:  #2870bd;  --accent-9:  #0090ff;
-    --accent-10: #3b9eff;  --accent-11: #70b8ff;  --accent-12: #c2e6ff;
-
-    --accent-a2: #1166fb18; --accent-a3: #0077ff3a; --accent-a4: #0075ff57;
-    --accent-a5: #0081fd6b; --accent-a6: #0f89fd7f; --accent-a7: #2a91fe98;
-    --accent-a8: #3094feb9; --accent-a11: #70b8ff;
-
-    --green-3: #132d21; --green-6: #20573e; --green-9: #30a46c;
-    --green-a3: #22ff991e; --green-a6: #44ffaa4b; --green-a11: #46fea5d4;
-
-    --red-3: #3b1219; --red-6: #72232d; --red-9: #e5484d;
-    --red-a3: #ff173f2d; --red-a6: #ff3e5668; --red-a11: #ff9592;
-
-    --black-a1: #00000033; --black-a2: #00000066; --black-a3: #0000008c;
-
-    --panel: var(--gray-2);
-    --surface: #00000040;
-    --accent-text: var(--accent-11);
-    --overlay: #00000099;
-
-    --shadow-2: 0 0 0 1px var(--gray-a6), 0 1px 3px var(--black-a2);
-    --shadow-6: 0 0 0 1px var(--gray-a6), 0 12px 60px var(--black-a3),
-                0 16px 64px var(--black-a2);
-    --card-ring: 0 0 0 1px var(--gray-a6);
-
-    /* In donker is het glas zelf een licht-getint, doorschijnend vlak op een
-       donkere achtergrond — de bovenrand blijft wit-achtig (lichtbron-
-       highlight), de ronde rand wordt licht i.p.v. donker, anders verdwijnt
-       hij tegen de donkere achtergrond. De onderrand blijft hier wél donker
-       (dieper in de schaduw), voor hetzelfde "dikte"-effect als in licht. */
-    --glass-tint: #ffffff14;
-    --glass-rim-top: #ffffff40;
-    --glass-rim-bottom: #00000040;
-    --glass-rim-edge: #ffffff1a;
-    --glass-specular-inner: #ffffff38;
-    --glass-specular-outer: #ffffff00;
-    --glass-shadow: 0 12px 40px -12px #00000080, 0 2px 10px -2px #00000066;
-  }
 }
 
 /* --------------------------------------------------------------------------
@@ -311,13 +258,23 @@ body {
     0 16px 40px -16px var(--gray-a7),
     0 4px 16px -4px var(--black-a2);
 }
+/* Het kopvlak in de huisstijl: het indigo→blauw-verloop van de hero op
+   lexdigitalis.nl. Twee classes, zodat dit de glas-achtergrond van `.glass`
+   verslaat; het glas-randlicht en de schaduw blijven. */
+.app-header.glass {
+  background: linear-gradient(110deg, var(--accent-9) 0%, #2a3fd6 60%, var(--accent-8) 100%);
+  color: #ffffff;
+}
 .app-header .titles { flex: 1; min-width: 0; }
+.app-header .btn-ghost { color: #ffffff; }
+.app-header .btn-ghost:hover:not(:disabled) { background: #ffffff26; color: #ffffff; }
 .app-header h1 {
   margin: 0; font-size: var(--fs-6); line-height: var(--lh-6);
   font-weight: var(--fw-bold); letter-spacing: -0.02em;
+  color: #ffffff;
 }
 .app-header p {
-  margin: var(--space-1) 0 0; color: var(--muted);
+  margin: var(--space-1) 0 0; color: #ffffffd9;
   font-size: var(--fs-2); line-height: var(--lh-2);
 }
 
@@ -351,8 +308,10 @@ body {
    niet alleen erna. */
 .btn:not(:disabled):active { transform: scale(.97); }
 
-.btn-solid { background: var(--accent); color: var(--accent-contrast); }
-.btn-solid:hover:not(:disabled) { background: var(--accent-hover); }
+/* Huisstijl: indigo met wit, bij hover oranje met wit (op verzoek, zoals de
+   knoppen op lexdigitalis.nl — wit op oranje heeft wel weinig contrast). */
+.btn-solid { background: var(--accent-9); color: #ffffff; font-weight: var(--fw-bold); }
+.btn-solid:hover:not(:disabled) { background: var(--orange-9); color: #ffffff; }
 .btn-solid:disabled { background: var(--gray-a3); color: var(--gray-a11); }
 
 .btn-soft { background: var(--accent-a3); color: var(--accent-text); }
@@ -472,11 +431,6 @@ body {
 }
 .select:hover { box-shadow: inset 0 0 0 1px var(--gray-a8); }
 .select:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -1px; }
-@media (prefers-color-scheme: dark) {
-  .select {
-    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg width='9' height='9' viewBox='0 0 9 9' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0.135 3.13a.5.5 0 0 1 .73-.68L4.5 6.06l3.635-3.61a.5.5 0 1 1 .73.68L4.5 7.44z' fill='%23b0b4ba'/%3E%3C/svg%3E");
-  }
-}
 
 /* Herhaalbare invoerrijen */
 .rows { display: flex; flex-direction: column; gap: var(--space-2); }
@@ -670,7 +624,7 @@ body {
 }
 .progress-fill {
   height: 100%; width: 0%;
-  background: var(--accent-9);
+  background: var(--orange-9);
   border-radius: var(--radius-pill);
   transition: width var(--dur-fast) linear;
 }

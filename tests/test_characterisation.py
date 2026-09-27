@@ -2650,12 +2650,10 @@ def test_pane_doc_has_ocr_controls():
 
 
 # ---------------------------------------------------------------------------
-# Versie zonder AI (MDCONV_AI=off)
+# Versie zonder AI: MDCONV_AI=off (vergrendeld) of de schakelaar in de instellingen
 # ---------------------------------------------------------------------------
 
 _AI_ROUTES = [
-    ("get", "/api/settings"),
-    ("post", "/api/settings"),
     ("post", "/api/estimate"),
     ("post", "/api/clean"),
     ("post", "/api/clean/stream"),
@@ -2663,39 +2661,85 @@ _AI_ROUTES = [
     ("post", "/api/convert/file/ocr"),
     ("post", "/api/convert/file-url/ocr"),
 ]
+_SETTINGS_ROUTES = [("get", "/api/settings"), ("post", "/api/settings")]
+
+# Wat er zonder AI nooit in de pagina mag staan, en wat er altijd moet blijven.
+_AI_ELEMENTS = ('id="clean-panel"', 'id="clean"', 'id="translate-nl"', 'id="obsidian"',
+                'id="ocr-mode"', 'id="settings-models"', 'id="prompt-generic"')
+_BASE_ELEMENTS = ('id="bulk-jur-text"', 'id="bulk-wet-text"', 'id="bulk-doc-text"',
+                  'id="paste-area"', 'id="drop"', 'id="download-all"')
 
 
-def test_ai_flag_follows_the_environment(monkeypatch):
-    from mdconv.features import ai_enabled
+def _page(app, monkeypatch):
+    from mdconv import version
+
+    monkeypatch.setattr(version, "current", lambda: ("0.0.0", 1, "vandaag"))
+    return app.test_client().get("/").get_data(as_text=True)
+
+
+def test_ai_lock_follows_the_environment(monkeypatch):
+    from mdconv.features import ai_locked_off
 
     monkeypatch.delenv("MDCONV_AI", raising=False)
-    assert ai_enabled() is True
+    assert ai_locked_off() is False
     for value in ("off", "0", "false", "Uit", " OFF "):
         monkeypatch.setenv("MDCONV_AI", value)
-        assert ai_enabled() is False, value
+        assert ai_locked_off() is True, value
     monkeypatch.setenv("MDCONV_AI", "on")
-    assert ai_enabled() is True
+    assert ai_locked_off() is False
 
 
-def test_without_ai_the_ai_routes_do_not_exist():
+def test_locked_off_the_ai_and_settings_routes_do_not_exist(isolated_settings):
     from mdconv import create_app
 
     client = create_app(ai_enabled=False).test_client()
-    for method, url in _AI_ROUTES:
+    for method, url in _AI_ROUTES + _SETTINGS_ROUTES:
         r = getattr(client, method)(url, json={})
         assert r.status_code == 404, url
 
 
-def test_with_ai_the_ai_routes_exist():
+def test_locked_off_even_a_stored_switch_cannot_turn_ai_on(isolated_settings, monkeypatch):
+    from mdconv import create_app
+
+    isolated_settings.update_settings({"ai_enabled": True})
+    app = create_app(ai_enabled=False)
+    assert app.test_client().get("/api/config").get_json()["ai_enabled"] is False
+    html = _page(app, monkeypatch)
+    assert 'id="open-settings"' not in html and 'id="settings-ai"' not in html
+
+
+def test_with_ai_the_ai_routes_exist(isolated_settings):
     from mdconv import create_app
 
     client = create_app(ai_enabled=True).test_client()
-    for method, url in _AI_ROUTES:
+    for method, url in _AI_ROUTES + _SETTINGS_ROUTES:
         r = getattr(client, method)(url, json={})
         assert r.status_code != 404, url
 
 
-def test_without_ai_the_normal_conversion_still_works():
+def test_switch_off_hides_ai_routes_but_keeps_settings(isolated_settings):
+    from mdconv import create_app
+
+    client = create_app(ai_enabled=True).test_client()
+    assert client.post("/api/settings", json={"ai_enabled": False}).get_json()["ai_enabled"] is False
+    for method, url in _AI_ROUTES:
+        assert getattr(client, method)(url, json={}).status_code == 404, url
+    assert client.get("/api/config").get_json()["ai_enabled"] is False
+    # Terug aanzetten kan, want /api/settings blijft bestaan.
+    assert client.post("/api/settings", json={"ai_enabled": True}).get_json()["ai_enabled"] is True
+    assert client.post("/api/clean/cancel", json={}).status_code == 200
+
+
+def test_switch_only_stores_off(isolated_settings):
+    import json
+
+    isolated_settings.update_settings({"ai_enabled": False})
+    assert json.load(open(isolated_settings._store.path))["ai_enabled"] is False
+    isolated_settings.update_settings({"ai_enabled": True})
+    assert "ai_enabled" not in json.load(open(isolated_settings._store.path))
+
+
+def test_without_ai_the_normal_conversion_still_works(isolated_settings):
     from mdconv import create_app
 
     client = create_app(ai_enabled=False).test_client()
@@ -2708,29 +2752,33 @@ def test_without_ai_the_normal_conversion_still_works():
     assert "CELEX" in r.get_json()["error"]
 
 
-def test_without_ai_config_reports_no_ai():
+def test_without_ai_config_reports_no_ai(isolated_settings):
     from mdconv import create_app
 
     cfg = create_app(ai_enabled=False).test_client().get("/api/config").get_json()
-    assert cfg["ai_enabled"] is False
+    assert cfg["ai_enabled"] is False and cfg["ai_locked"] is True
     assert cfg["llm_available"] is False
     assert cfg["ocr_available"] is False
     assert cfg["models"] == [] and cfg["ocr_models"] == []
 
 
-def test_without_ai_the_page_has_no_ai_controls(monkeypatch):
-    from mdconv import create_app, version
+def test_page_per_ai_mode(isolated_settings, monkeypatch):
+    from mdconv import create_app
 
-    monkeypatch.setattr(version, "current", lambda: ("0.0.0", 1, "vandaag"))
-    off = create_app(ai_enabled=False).test_client().get("/").get_data(as_text=True)
-    on = create_app(ai_enabled=True).test_client().get("/").get_data(as_text=True)
+    locked = _page(create_app(ai_enabled=False), monkeypatch)
+    on = _page(create_app(ai_enabled=True), monkeypatch)
+    isolated_settings.update_settings({"ai_enabled": False})
+    switched_off = _page(create_app(ai_enabled=True), monkeypatch)
 
-    assert 'data-ai="off"' in off and 'data-ai="on"' in on
-    for element in ('id="open-settings"', 'id="settings"', 'id="clean-panel"',
-                    'id="clean"', 'id="translate-nl"', 'id="obsidian"', 'id="ocr-mode"'):
-        assert element not in off, element
+    assert 'data-ai="off"' in locked and 'data-ai="on"' in on and 'data-ai="off"' in switched_off
+    for element in _AI_ELEMENTS:
         assert element in on, element
-    # De gewone invoer blijft, inclusief lijsten plakken.
-    for element in ('id="bulk-jur-text"', 'id="bulk-wet-text"', 'id="bulk-doc-text"',
-                    'id="paste-area"', 'id="drop"', 'id="download-all"'):
-        assert element in off, element
+        assert element not in locked, element
+        assert element not in switched_off, element
+    # Vergrendeld: geen instellingen. Via de schakelaar uit: alleen de schakelaar.
+    assert 'id="open-settings"' not in locked and 'id="settings"' not in locked
+    assert 'id="open-settings"' in switched_off and 'id="settings-ai"' in switched_off
+    assert 'id="settings-ai" checked' in on and 'id="settings-ai" checked' not in switched_off
+    for html in (locked, on, switched_off):
+        for element in _BASE_ELEMENTS:
+            assert element in html, element

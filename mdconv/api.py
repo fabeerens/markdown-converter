@@ -16,16 +16,32 @@ import zipfile
 from urllib.parse import unquote, urlparse
 
 import requests
-from flask import Blueprint, Response, current_app, jsonify, render_template, request, send_file
+from flask import (
+    Blueprint, Response, abort, current_app, jsonify, render_template, request, send_file,
+)
 
-from . import attachments, cleanup, net, ocr, sources, version
+from . import attachments, cleanup, features, net, ocr, sources, version
 from .errors import ConversionError
 from .sources import pdf_images
 
 bp = Blueprint("api", __name__)
 # Alles wat een taalmodel aanroept (plus de instellingen daarvoor). Wordt
-# alleen geregistreerd als AI aan staat — zie create_app en mdconv/features.py.
+# alleen geregistreerd als AI niet vergrendeld is — zie create_app en
+# mdconv/features.py. Staat de schakelaar in de instellingen uit, dan bestaan
+# de AI-routes óók niet (404); alleen /api/settings blijft, om hem weer aan
+# te kunnen zetten.
 ai_bp = Blueprint("ai", __name__)
+_SETTINGS_ENDPOINTS = {"ai.get_settings", "ai.post_settings"}
+
+
+@ai_bp.before_request
+def _ai_switch():
+    if request.endpoint not in _SETTINGS_ENDPOINTS and not _ai_on():
+        abort(404)
+
+
+def _ai_on() -> bool:
+    return features.ai_enabled(current_app.config["AI_LOCKED_OFF"])
 
 # Grens voor een bestand dat via een link wordt gedownload. De upload-grens
 # staat in create_app (MAX_CONTENT_LENGTH).
@@ -68,16 +84,20 @@ def index():
     app_version, build, installed_at = version.current()
     return render_template(
         "index.html", version=app_version, build=build, installed_at=installed_at,
-        ai=current_app.config["AI_ENABLED"],
+        ai=_ai_on(),
+        # Het ⚙-paneel: weg als AI vergrendeld is, anders altijd (met in elk
+        # geval de schakelaar "AI-functies").
+        settings=not current_app.config["AI_LOCKED_OFF"],
     )
 
 
 @bp.get("/api/config")
 def config():
     """Wat de UI moet weten bij het laden: is er een sleutel, en welke modellen."""
-    if not current_app.config["AI_ENABLED"]:
+    if not _ai_on():
         return jsonify(
             ai_enabled=False,
+            ai_locked=current_app.config["AI_LOCKED_OFF"],
             llm_available=False,
             models=[],
             ocr_models=[],
@@ -87,6 +107,7 @@ def config():
         )
     return jsonify(
         ai_enabled=True,
+        ai_locked=False,
         llm_available=cleanup.is_available(),
         models=cleanup.get_model_choices(),
         ocr_models=cleanup.get_ocr_models(),

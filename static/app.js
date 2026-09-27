@@ -19,6 +19,9 @@ const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
    aanraken. Synchroon uit de pagina, niet uit /api/config: init() heeft het
    meteen nodig, vóórdat dat verzoek terug is. */
 const AI_ENABLED = document.body.dataset.ai !== "off";
+/* Het ⚙-paneel ontbreekt als AI via MDCONV_AI=off vergrendeld is. Staat AI
+   alleen via de schakelaar uit, dan is het er wél, met alleen die schakelaar. */
+const SETTINGS_ENABLED = Boolean($("#open-settings"));
 
 /* --------------------------------------------------------------------------
    State
@@ -1597,6 +1600,18 @@ async function openSettings() {
     return;
   }
   const s = state.settings;
+  $("#settings-ai").checked = s.ai_enabled;
+  $("#settings-msg").textContent = "";
+  if (AI_ENABLED) fillAiSettings(s);
+
+  dialog.lastFocus = document.activeElement;
+  $("#settings").classList.add("show");
+  document.body.style.overflow = "hidden";
+  $("#settings-close").focus();
+}
+
+/** De AI-velden van het paneel — alleen aanwezig als AI aan staat. */
+function fillAiSettings(s) {
   renderModelRows(s.models);
   renderOcrModelRows(s.ocr_models);
   // Leeg tonen als het de standaardwaarde is (zelfde "leeg = standaard"-idee
@@ -1611,12 +1626,6 @@ async function openSettings() {
   $("#prompt-obsidian").value = s.prompts.obsidian;
   $("#prompt-translate_nl").value = s.prompts.translate_nl;
   $("#prompt-ocr").value = s.ocr_prompt;
-  $("#settings-msg").textContent = "";
-
-  dialog.lastFocus = document.activeElement;
-  $("#settings").classList.add("show");
-  document.body.style.overflow = "hidden";
-  $("#settings-close").focus();
 }
 
 function closeSettings() {
@@ -1645,34 +1654,29 @@ function trapFocus(e) {
 }
 
 async function saveSettings() {
-  const models = $$("#settings-models .row").map((row) => ({
-    id: row.querySelector(".mid").value.trim(),
-    label: row.querySelector(".mlabel").value.trim(),
-    chunk_tokens: parseInt(row.querySelector(".mchunk").value, 10) || null,
-  })).filter((m) => m.id);
-
-  const ocrModels = $$("#settings-ocr-models .row").map((row) => ({
-    id: row.querySelector(".omid").value.trim(),
-    label: row.querySelector(".omlabel").value.trim(),
-  })).filter((m) => m.id);
-  const ocrPages = parseInt($("#settings-ocr-pages").value, 10) || null;
+  const aiOn = $("#settings-ai").checked;
+  // De AI-onderdelen staan server-side wel of niet in de pagina (index.html),
+  // dus omschakelen = herladen. Opgehaalde documenten leven alleen in de
+  // browser en zouden dan verdwijnen: eerst vragen.
+  const reload = aiOn !== AI_ENABLED;
+  if (reload && state.docs.length &&
+      !confirm("De pagina wordt opnieuw geladen om AI aan of uit te zetten. "
+        + "Opgehaalde documenten die je niet hebt gedownload, gaan verloren. Doorgaan?")) {
+    return;
+  }
 
   const button = $("#settings-save");
   const msg = $("#settings-msg");
   button.disabled = true;
   try {
-    await postJSON("/api/settings", {
-      models,
-      ocr_models: ocrModels,
-      ocr_pages_per_request: ocrPages,
-      ocr_prompt: $("#prompt-ocr").value,
-      prompts: {
-        generic: $("#prompt-generic").value,
-        caselaw: $("#prompt-caselaw").value,
-        obsidian: $("#prompt-obsidian").value,
-        translate_nl: $("#prompt-translate_nl").value,
-      },
-    });
+    // Bij omschakelen alleen de schakelaar: de AI-velden meesturen zou de
+    // huidige standaardwaarden vastleggen in settings.json.
+    const aiFields = AI_ENABLED && !reload ? readAiSettings() : {};
+    await postJSON("/api/settings", { ai_enabled: aiOn, ...aiFields });
+    if (reload) {
+      location.reload();
+      return;
+    }
     await loadConfig();
     if (activeDoc() && state.llmAvailable) refreshEstimate();
     msg.className = "msg ok";
@@ -1686,17 +1690,39 @@ async function saveSettings() {
   }
 }
 
+/** De AI-velden van het paneel als payload voor /api/settings. */
+function readAiSettings() {
+  const models = $$("#settings-models .row").map((row) => ({
+    id: row.querySelector(".mid").value.trim(),
+    label: row.querySelector(".mlabel").value.trim(),
+    chunk_tokens: parseInt(row.querySelector(".mchunk").value, 10) || null,
+  })).filter((m) => m.id);
+
+  const ocrModels = $$("#settings-ocr-models .row").map((row) => ({
+    id: row.querySelector(".omid").value.trim(),
+    label: row.querySelector(".omlabel").value.trim(),
+  })).filter((m) => m.id);
+  const ocrPages = parseInt($("#settings-ocr-pages").value, 10) || null;
+
+  return {
+    models,
+    ocr_models: ocrModels,
+    ocr_pages_per_request: ocrPages,
+    ocr_prompt: $("#prompt-ocr").value,
+    prompts: {
+      generic: $("#prompt-generic").value,
+      caselaw: $("#prompt-caselaw").value,
+      obsidian: $("#prompt-obsidian").value,
+      translate_nl: $("#prompt-translate_nl").value,
+    },
+  };
+}
+
 function initSettings() {
   $("#open-settings").addEventListener("click", openSettings);
   $("#settings-close").addEventListener("click", closeSettings);
   $("#settings-cancel").addEventListener("click", closeSettings);
   $("#settings-save").addEventListener("click", saveSettings);
-  $("#settings-add-model").addEventListener("click", () => {
-    $("#settings-models").appendChild(modelRow()).querySelector("input").focus();
-  });
-  $("#settings-add-ocr-model").addEventListener("click", () => {
-    $("#settings-ocr-models").appendChild(ocrModelRow()).querySelector("input").focus();
-  });
 
   // Klik op de achtergrond sluit; klik in de dialoog niet.
   $("#settings").addEventListener("mousedown", (e) => {
@@ -1709,6 +1735,16 @@ function initSettings() {
     } else {
       trapFocus(e);
     }
+  });
+
+  // Staat AI uit, dan bevat het paneel alleen de schakelaar "AI-functies".
+  if (!AI_ENABLED) return;
+
+  $("#settings-add-model").addEventListener("click", () => {
+    $("#settings-models").appendChild(modelRow()).querySelector("input").focus();
+  });
+  $("#settings-add-ocr-model").addEventListener("click", () => {
+    $("#settings-ocr-models").appendChild(ocrModelRow()).querySelector("input").focus();
   });
 
   // Per veld terug naar de ingebouwde standaardwaarde — puur client-side, want
@@ -1806,10 +1842,8 @@ function initHeaderElevation() {
 function init() {
   initTabs();
   initEditor();
-  if (AI_ENABLED) {
-    initSettings();
-    initCleanControls();
-  }
+  if (SETTINGS_ENABLED) initSettings();
+  if (AI_ENABLED) initCleanControls();
   initUpload();
   initGlassSpecular();
   initHeaderElevation();

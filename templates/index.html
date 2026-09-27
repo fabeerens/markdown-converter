@@ -12,7 +12,7 @@
       <h1>Markdown converter</h1>
       <p>Zet jurisprudentie, wetgeving of documenten om naar markdown.</p>
     </div>
-    {% if ai %}
+    {% if settings %}
     <button type="button" class="btn btn-ghost btn-icon" id="open-settings"
             title="Instellingen" aria-label="Instellingen">⚙</button>
     {% endif %}
@@ -222,7 +222,7 @@
     </section>
   </main>
 
-  {% if ai %}
+  {% if settings %}
   <!-- Instellingen -->
   <div class="overlay" id="settings" role="dialog" aria-modal="true" aria-labelledby="settings-title">
     <div class="dialog glass">
@@ -230,14 +230,23 @@
         <div style="flex:1">
           <h2 id="settings-title">Instellingen</h2>
           <p class="sub">
-            Geldt voor alle volgende conversies op deze installatie. Laat een veld leeg
-            om terug te vallen op de standaardwaarde.
+            Geldt voor alle volgende conversies op deze installatie.{% if ai %} Laat een veld
+            leeg om terug te vallen op de standaardwaarde.{% endif %}
           </p>
         </div>
         <button type="button" class="btn btn-ghost btn-icon" id="settings-close"
                 aria-label="Sluiten">✕</button>
       </div>
 
+      <section>
+        <label class="checkbox">
+          <input type="checkbox" id="settings-ai" {% if ai %}checked{% endif %}>
+          <span><strong>AI-functies</strong> — opschonen, vertalen, opmaken voor Obsidian
+            en de wiskunde-modus. Uit = alleen de gewone omzetting naar markdown.</span>
+        </label>
+      </section>
+
+      {% if ai %}
       <section>
         <h3>AI-endpoints <button type="button" class="reset" id="reset-models">Standaardlijst</button></h3>
         <p class="hint" style="margin:0 0 8px">
@@ -292,6 +301,7 @@
         <label class="visually-hidden" for="prompt-ocr">Prompt voor de wiskunde-transcriptie</label>
         <textarea id="prompt-ocr"></textarea>
       </section>
+      {% endif %}
 
       <div class="dialog-actions">
         <span class="msg" id="settings-msg"></span>

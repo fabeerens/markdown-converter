@@ -19,7 +19,8 @@ _MAX_UPLOAD_BYTES = 32 * 1024 * 1024
 
 def create_app(ai_enabled: bool | None = None) -> Flask:
     """`ai_enabled=None` volgt de omgevingsvariabele `MDCONV_AI` (zie
-    `mdconv/features.py`); tests geven de waarde expliciet mee."""
+    `mdconv/features.py`); tests geven de waarde expliciet mee. `False`
+    vergrendelt AI op uit; `True` laat het aan de schakelaar in de instellingen."""
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     app = Flask(
         __name__,
@@ -32,13 +33,13 @@ def create_app(ai_enabled: bool | None = None) -> Flask:
     # en dit scheelt bytes bij grote markdown-antwoorden.
     app.json.sort_keys = False
 
-    from .features import ai_enabled as _ai_from_env
-    app.config["AI_ENABLED"] = _ai_from_env() if ai_enabled is None else ai_enabled
+    from .features import ai_locked_off
+    app.config["AI_LOCKED_OFF"] = ai_locked_off() if ai_enabled is None else not ai_enabled
 
     from .api import ai_bp, bp
     app.register_blueprint(bp)
-    # Zonder AI bestaan de AI-/OCR-/instellingenroutes simpelweg niet (404),
-    # in plaats van dat ze er zijn en een foutmelding geven.
-    if app.config["AI_ENABLED"]:
+    # Vergrendeld zonder AI bestaan de AI-/OCR-/instellingenroutes simpelweg
+    # niet (404). Anders zijn ze er, en bewaakt ai_bp zelf de schakelaar.
+    if not app.config["AI_LOCKED_OFF"]:
         app.register_blueprint(ai_bp)
     return app

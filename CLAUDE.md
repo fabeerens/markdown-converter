@@ -492,25 +492,42 @@ accountregistratie namens de gebruiker):
   toestemming), dan een duidelijke foutmelding met het advies handmatig te plakken — nooit
   een stille misser.
 
-## Versie zonder AI (`MDCONV_AI=off`, `mdconv/features.py`)
+## Versie zonder AI (`mdconv/features.py`)
 
-- Een installatie zonder taalmodel: geen opschonen, vertalen, Obsidian, wiskunde-modus of
-  instellingenpaneel. **Bewust een schakelaar in main, geen aparte branch** waar de code uit
-  is gesloopt: de AI-code verandert vaak en zo'n branch zou bij elke wijziging conflicteren.
-- `create_app(ai_enabled=None)` leest `features.ai_enabled()` (standaard aan; `off`/`0`/
-  `false`/`no`/`uit`/`nee` = uit) en zet `app.config["AI_ENABLED"]`. Alle routes die een
-  model aanroepen, plus `/api/settings`, staan op een **eigen blueprint `ai_bp`** in
-  `api.py`, die alleen dan wordt geregistreerd — uit = 404, niet een foutmelding.
-  **Een nieuwe AI-route hoort dus op `ai_bp`, niet op `bp`.** De `ConversionError`-handler is
-  daarom app-breed (`app_errorhandler`), anders krijgt `ai_bp` geen nette JSON-fouten.
-- `/api/config` meldt `ai_enabled: false` (en lege modellenlijsten).
-- `index.html` laat de AI-markup weg met `{% if ai %}` (instellingenknop en -dialoog,
-  opschoonpaneel, `#ocr-opts`, de Obsidian-zin in de hint) en zet `data-ai` op `<body>`.
-  `app.js` leest dat synchroon als `AI_ENABLED` en slaat dan `initSettings()`/
-  `initCleanControls()` en het AI-deel van `renderEditor()`/`loadConfig()` over.
-  **Nieuwe JS die AI-elementen aanraakt moet achter `AI_ENABLED` staan**, anders crasht de
-  pagina zonder AI op een `null`. Tests pinnen vast welke elementen er zonder AI wel en niet
-  zijn en dat de AI-routes dan 404 geven.
+- "Zonder AI" = geen opschonen, vertalen, Obsidian, wiskunde-modus of AI-instellingen. De
+  gewone conversie (incl. lijsten plakken, batch-download) blijft. **Bewust een schakelaar in
+  main, geen aparte branch** waar de code uit is gesloopt: de AI-code verandert vaak en zo'n
+  branch zou bij elke wijziging conflicteren.
+- **Twee lagen, met rangorde:**
+  1. `MDCONV_AI=off` (env; ook `0`/`false`/`no`/`uit`/`nee`) is een **harde vergrendeling**
+     (`features.ai_locked_off()`, bij `create_app` vastgelegd als
+     `app.config["AI_LOCKED_OFF"]`). Dan wordt blueprint `ai_bp` niet eens geregistreerd en
+     is het ⚙-paneel helemaal weg — een gebruiker kan AI dan niet zelf weer aanzetten. Dat is
+     de garantie voor een installatie binnen een organisatie; niet afzwakken.
+  2. Anders beslist de schakelaar **"AI-functies"** in het instellingenpaneel
+     (`#settings-ai` → `ai_enabled` in `settings.json`, `config.get_ai_enabled()`, standaard
+     aan; alleen "uit" wordt opgeslagen). `ai_bp.before_request` geeft dan 404 op alle
+     AI-routes, behálve `/api/settings` — anders kun je hem niet weer aanzetten.
+  `features.ai_enabled(locked_off)` combineert beide; `api._ai_on()` is de enige plek die dat
+  per verzoek vraagt.
+- Alle routes die een model aanroepen, plus `/api/settings`, staan op **`ai_bp`**. **Een nieuwe
+  AI-route hoort op `ai_bp`, niet op `bp`.** De `ConversionError`-handler is daarom app-breed
+  (`app_errorhandler`), anders krijgt `ai_bp` geen nette JSON-fouten.
+- `/api/config` meldt `ai_enabled` en `ai_locked`.
+- `index.html` krijgt twee vlaggen: `ai` (laat met `{% if ai %}` de AI-markup weg:
+  opschoonpaneel, `#ocr-opts`, de AI-secties van het instellingenpaneel, de Obsidian-zin in de
+  hint) en `settings` (⚙-knop + dialoog, weg bij vergrendeling). `<body data-ai>` geeft de
+  eerste door aan `app.js` (`AI_ENABLED`); `SETTINGS_ENABLED` = bestaat `#open-settings`.
+  Zonder AI slaat de JS `initCleanControls()`, `fillAiSettings()`/`readAiSettings()` en het
+  AI-deel van `initSettings()`/`renderEditor()`/`loadConfig()` over. **Nieuwe JS die
+  AI-elementen aanraakt moet achter `AI_ENABLED` staan**, anders crasht de pagina zonder AI
+  op een `null`.
+- **Omschakelen herlaadt de pagina** (de markup is server-side), en opgehaalde documenten
+  leven alleen in de browser — `saveSettings()` vraagt daarom eerst om bevestiging als er
+  documenten open staan.
+- Tests pinnen per modus (vergrendeld / aan / via de schakelaar uit) vast welke elementen er
+  wel en niet zijn en welke routes 404 geven, en dat een opgeslagen "aan" de vergrendeling
+  niet kan opheffen.
 
 ## AI-opschoning (`mdconv/cleanup/`)
 
@@ -861,15 +878,20 @@ het geselecteerde tabblad en zet dat om in een `transform: translateX()` +
 `width` op de indicator — compositor-vriendelijk, werkt vanzelf mee bij elke
 schermbreedte.
 
-Dark/light volgt `prefers-color-scheme`; er is bewust **geen** knop. Drie dingen
-kantelen van betekenis tussen de modi — zonder die omkering leest het niet als Radix:
-
-1. Een paneel is in donker **lichter** dan de pagina (`--gray-2` op `--gray-1`), in licht
-   wit-op-wit met alleen een haarlijn.
-2. Een invoerveld is in licht een translucent **wit** (opgetild vlak) en in donker een
-   translucent **zwart** (verzonken vlak).
-3. Stap 9 is identiek in beide modi, maar stap 10 beweegt tegengesteld (donkerder in
-   licht, lichter in donker) — daardoor werkt "hover = stap 10" zonder conditionele CSS.
+**Kleuren: huisstijl van Lex Digitalis** (lexdigitalis.nl, afgelezen uit hun eigen
+CSS-variabelen `--bs-primary`/`--bs-secondary`/`--wp--preset--color--*`). **Alleen licht** —
+de donkere modus is op verzoek verwijderd; ook bij een donker systeemthema blijft de pagina
+licht. De accentschaal (stap 1–12) is opgebouwd rond hun indigo **`#191585`** (stap 9, en
+`#14116a` = hun eigen hover = stap 10), met hun helderblauw **`#4271ff`** als stap 8 en dus
+als focusring. Oranje **`#f9a935`** (`--orange-9`) is het tweede accent: de hover van de
+hoofdknoppen en de voortgangsbalk. **Hoofdknoppen** (`.btn-solid`) zijn indigo met witte
+tekst en worden bij hover oranje met witte tekst — uitdrukkelijke wens van de gebruiker, net
+als op hun site (wit op oranje haalt maar ~2:1 contrast; bewust zo gekozen, niet
+"corrigeren"). **Het kopvlak** (`.app-header.glass`) is het indigo→blauw-verloop van hun hero
+met witte titel/ondertitel/⚙; twee classes zodat het de glas-achtergrond van `.glass`
+verslaat. De pagina is `#f5f8fb` (lichter dan hun `#edf3f7`). Lettertype: `Ubuntu` voorop in
+`--font-sans`, bewust **niet** van Google Fonts geladen (lokale tool, geen externe verzoeken)
+— alleen wie het geïnstalleerd heeft krijgt het.
 
 **Toegankelijkheid is geen ander thema, maar dezelfde schakelaar.**
 `prefers-reduced-transparency: reduce` maakt elk `.glass`-element ondoorzichtig
@@ -966,7 +988,7 @@ enige dikte, niet een plat vlak met alleen een hoogtelicht.
   weggeschreven bestand nooit als geldige staat gelezen kan worden.
 
 ## Tests
-`.venv/bin/python -m pytest tests/ -q` — 211 karakteriseringstests die het gedrag
+`.venv/bin/python -m pytest tests/ -q` — 214 karakteriseringstests die het gedrag
 vastleggen in plaats van het te beschrijven: `detect_source`-precedentie, ELI→CELEX,
 de geconsolideerde-CELEX-afhandeling (datum behouden, preambule invoegen, en de vier
 terugvalpaden als dat niet lukt), de versie-terugvalladder (nieuwste versie op of vóór de

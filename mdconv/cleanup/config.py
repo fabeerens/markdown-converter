@@ -226,6 +226,15 @@ def api_key() -> str | None:
     return os.environ.get("OPENROUTER_API_KEY") or None
 
 
+def get_ai_enabled() -> bool:
+    """De schakelaar "AI-functies" uit het instellingenpaneel (standaard aan).
+
+    Staat hier en niet in `mdconv/features.py`, omdat hij in hetzelfde
+    `settings.json` staat als de rest: één `StateFile`, één schrijver.
+    """
+    return _stored().get("ai_enabled") is not False
+
+
 def is_available() -> bool:
     """Is er een OpenRouter-sleutel geconfigureerd?"""
     return bool(api_key())
@@ -257,6 +266,7 @@ def settings_payload() -> dict:
     validatie van het invoerveld per rij.
     """
     return {
+        "ai_enabled": get_ai_enabled(),
         "models": get_model_choices(),
         "ocr_models": get_ocr_models(),
         "ocr_pages_per_request": get_ocr_pages_per_request(),
@@ -285,6 +295,13 @@ def update_settings(payload: dict) -> dict:
     """
 
     def change(data: dict) -> None:
+        if "ai_enabled" in payload:
+            # Alleen "uit" wordt bewaard; aan is de standaard.
+            if payload["ai_enabled"] is False:
+                data["ai_enabled"] = False
+            else:
+                data.pop("ai_enabled", None)
+
         if "models" in payload:
             cleaned = _clean_models(payload["models"])
             if cleaned:
