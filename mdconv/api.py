@@ -23,6 +23,9 @@ from .errors import ConversionError
 from .sources import pdf_images
 
 bp = Blueprint("api", __name__)
+# Alles wat een taalmodel aanroept (plus de instellingen daarvoor). Wordt
+# alleen geregistreerd als AI aan staat — zie create_app en mdconv/features.py.
+ai_bp = Blueprint("ai", __name__)
 
 # Grens voor een bestand dat via een link wordt gedownload. De upload-grens
 # staat in create_app (MAX_CONTENT_LENGTH).
@@ -42,7 +45,7 @@ _CT_EXT = {
 }
 
 
-@bp.errorhandler(ConversionError)
+@bp.app_errorhandler(ConversionError)
 def _handle_conversion_error(e: ConversionError):
     return jsonify(error=e.message), e.status
 
@@ -65,13 +68,25 @@ def index():
     app_version, build, installed_at = version.current()
     return render_template(
         "index.html", version=app_version, build=build, installed_at=installed_at,
+        ai=current_app.config["AI_ENABLED"],
     )
 
 
 @bp.get("/api/config")
 def config():
     """Wat de UI moet weten bij het laden: is er een sleutel, en welke modellen."""
+    if not current_app.config["AI_ENABLED"]:
+        return jsonify(
+            ai_enabled=False,
+            llm_available=False,
+            models=[],
+            ocr_models=[],
+            profiles=[],
+            extract_images_available=pdf_images.available(),
+            ocr_available=False,
+        )
     return jsonify(
+        ai_enabled=True,
         llm_available=cleanup.is_available(),
         models=cleanup.get_model_choices(),
         ocr_models=cleanup.get_ocr_models(),
@@ -85,13 +100,13 @@ def config():
     )
 
 
-@bp.get("/api/settings")
+@ai_bp.get("/api/settings")
 def get_settings():
     """Huidige instellingen plus de standaardwaarden (voor de reset-knoppen)."""
     return jsonify(cleanup.settings_payload())
 
 
-@bp.post("/api/settings")
+@ai_bp.post("/api/settings")
 def post_settings():
     """Instellingen bijwerken; een leeg veld zet terug naar de standaardwaarde."""
     return jsonify(cleanup.update_settings(_payload()))
@@ -234,7 +249,7 @@ def _ocr_stream_response(pdf_bytes: bytes, model, request_id):
     return response
 
 
-@bp.post("/api/convert/file/ocr")
+@ai_bp.post("/api/convert/file/ocr")
 def convert_file_ocr():
     """Een geüploade PDF via de wiskunde-modus omzetten (streaming)."""
     if "file" not in request.files:
@@ -251,7 +266,7 @@ def convert_file_ocr():
     return _ocr_stream_response(data, model, request_id)
 
 
-@bp.post("/api/convert/file-url/ocr")
+@ai_bp.post("/api/convert/file-url/ocr")
 def convert_file_url_ocr():
     """Een PDF achter een link via de wiskunde-modus omzetten (streaming).
 
@@ -286,7 +301,7 @@ def convert_file_url_ocr():
 # AI-opschoning
 # --------------------------------------------------------------------------
 
-@bp.post("/api/estimate")
+@ai_bp.post("/api/estimate")
 def estimate():
     """Delen, tokens en kosten voor het opschonen van de meegestuurde markdown."""
     data = _payload()
@@ -297,7 +312,7 @@ def estimate():
     ))
 
 
-@bp.post("/api/clean")
+@ai_bp.post("/api/clean")
 def clean():
     """De markdown door het gekozen model halen."""
     data = _payload()
@@ -326,7 +341,7 @@ def _frame(kind: str, payload: dict) -> str:
     return f"\x00CLEAN_{kind}\x00{json.dumps(payload, ensure_ascii=False)}\x00"
 
 
-@bp.post("/api/clean/stream")
+@ai_bp.post("/api/clean/stream")
 def clean_stream():
     """Als /api/clean, maar streamt de opgeschoonde tekst terwijl die binnenkomt.
 
@@ -375,7 +390,7 @@ def clean_stream():
     return response
 
 
-@bp.post("/api/clean/cancel")
+@ai_bp.post("/api/clean/cancel")
 def clean_cancel():
     """Markeer een lopend streaming-verzoek (zelfde `request_id`) als geannuleerd
     — zowel /api/clean/stream als de wiskunde-modus (/api/convert/file/ocr),

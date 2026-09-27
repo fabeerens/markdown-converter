@@ -492,6 +492,26 @@ accountregistratie namens de gebruiker):
   toestemming), dan een duidelijke foutmelding met het advies handmatig te plakken — nooit
   een stille misser.
 
+## Versie zonder AI (`MDCONV_AI=off`, `mdconv/features.py`)
+
+- Een installatie zonder taalmodel: geen opschonen, vertalen, Obsidian, wiskunde-modus of
+  instellingenpaneel. **Bewust een schakelaar in main, geen aparte branch** waar de code uit
+  is gesloopt: de AI-code verandert vaak en zo'n branch zou bij elke wijziging conflicteren.
+- `create_app(ai_enabled=None)` leest `features.ai_enabled()` (standaard aan; `off`/`0`/
+  `false`/`no`/`uit`/`nee` = uit) en zet `app.config["AI_ENABLED"]`. Alle routes die een
+  model aanroepen, plus `/api/settings`, staan op een **eigen blueprint `ai_bp`** in
+  `api.py`, die alleen dan wordt geregistreerd — uit = 404, niet een foutmelding.
+  **Een nieuwe AI-route hoort dus op `ai_bp`, niet op `bp`.** De `ConversionError`-handler is
+  daarom app-breed (`app_errorhandler`), anders krijgt `ai_bp` geen nette JSON-fouten.
+- `/api/config` meldt `ai_enabled: false` (en lege modellenlijsten).
+- `index.html` laat de AI-markup weg met `{% if ai %}` (instellingenknop en -dialoog,
+  opschoonpaneel, `#ocr-opts`, de Obsidian-zin in de hint) en zet `data-ai` op `<body>`.
+  `app.js` leest dat synchroon als `AI_ENABLED` en slaat dan `initSettings()`/
+  `initCleanControls()` en het AI-deel van `renderEditor()`/`loadConfig()` over.
+  **Nieuwe JS die AI-elementen aanraakt moet achter `AI_ENABLED` staan**, anders crasht de
+  pagina zonder AI op een `null`. Tests pinnen vast welke elementen er zonder AI wel en niet
+  zijn en dat de AI-routes dan 404 geven.
+
 ## AI-opschoning (`mdconv/cleanup/`)
 
 - Via **OpenRouter** (OpenAI-compatibele API), niet de Anthropic API. Plain `requests`.
@@ -927,7 +947,7 @@ enige dikte, niet een plat vlak met alleen een hoogtelicht.
   (`mdconv/sources/pdf_images.py` — `pdfimages`/`pdfinfo`/`pdftoppm`). Lokaal (macOS via
   `run.sh`): `brew install poppler`.
 - Env-vars via compose: `OPENROUTER_API_KEY`, `LLM_MODEL`, `OPENROUTER_BASE_URL`, `OCR_MODEL`,
-  `OCR_DPI`. Code behandelt lege strings als "niet gezet" (`or DEFAULT`), zodat compose's
+  `OCR_DPI`, `MDCONV_AI` (zie "Versie zonder AI"). Code behandelt lege strings als "niet gezet" (`or DEFAULT`), zodat compose's
   `${VAR:-}` de defaults niet breekt.
 
 ## Versienummer (footer) — git-onafhankelijk
@@ -946,7 +966,7 @@ enige dikte, niet een plat vlak met alleen een hoogtelicht.
   weggeschreven bestand nooit als geldige staat gelezen kan worden.
 
 ## Tests
-`.venv/bin/python -m pytest tests/ -q` — 205 karakteriseringstests die het gedrag
+`.venv/bin/python -m pytest tests/ -q` — 211 karakteriseringstests die het gedrag
 vastleggen in plaats van het te beschrijven: `detect_source`-precedentie, ELI→CELEX,
 de geconsolideerde-CELEX-afhandeling (datum behouden, preambule invoegen, en de vier
 terugvalpaden als dat niet lukt), de versie-terugvalladder (nieuwste versie op of vóór de

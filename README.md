@@ -119,6 +119,21 @@ OPENROUTER_API_KEY=sk-or-...
 
 (sleutel aanmaken op <https://openrouter.ai/keys>). Een ander standaardmodel of endpoint kies je optioneel met `LLM_MODEL` / `OPENROUTER_BASE_URL` in `.env` (de dropdown in de UI overschrijft dit per keer). Zonder sleutel blijft het opschoon-paneel uitgeschakeld; de rest van de tool werkt gewoon.
 
+### Versie zonder AI
+
+Wil je een installatie die helemaal geen taalmodel aanroept (bijvoorbeeld voor gebruik
+binnen een organisatie), zet dan in `.env`:
+
+```bash
+MDCONV_AI=off
+```
+
+Dan verdwijnen opschonen, vertalen, "Opmaken voor Obsidian", de wiskunde-modus en het
+instellingenpaneel uit de interface, en bestaan de bijbehorende API-routes niet meer
+(404). De gewone conversie naar markdown blijft volledig werken, net als lijsten
+plakken, meerdere documenten en "Alles downloaden". Het blijft dezelfde codebase als
+`main`, dus bijwerken is gewoon `git pull`.
+
 ## Starten
 
 **Dubbelklik in Finder op `Markdown converter.command`.**

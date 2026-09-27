@@ -13,6 +13,13 @@
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
+/* Draait deze installatie met AI (opschonen, vertalen, Obsidian, wiskunde-
+   modus, instellingen)? Met `MDCONV_AI=off` laat de server die markup weg uit
+   index.html (zie mdconv/features.py); dan mag de JS die elementen ook niet
+   aanraken. Synchroon uit de pagina, niet uit /api/config: init() heeft het
+   meteen nodig, vóórdat dat verzoek terug is. */
+const AI_ENABLED = document.body.dataset.ai !== "off";
+
 /* --------------------------------------------------------------------------
    State
    -------------------------------------------------------------------------- */
@@ -97,7 +104,7 @@ function addDoc({
     // daar zelf aangeven (`allowObsidian`, meegegeven vanuit die tabbladen).
     allowObsidian: kind === "caselaw" || Boolean(allowObsidian),
     obsidian: false,
-    model: $("#model").value || null,
+    model: $("#model")?.value || null,
     markdown,
     cleaned: false,
     translated: false,
@@ -849,6 +856,8 @@ function renderEditor() {
     ? `Download .zip (${doc.attachmentCount} afb.)`
     : "Download .md";
 
+  if (!AI_ENABLED) return;
+
   // "Opmaken voor Obsidian" staat altijd bij automatisch herkende rechtspraak,
   // en ook bij Documentupload/Tekst plakken — daar kán het een uitspraak zijn
   // die de tool niet automatisch als zodanig herkent (bv. handmatig gevonden
@@ -1483,6 +1492,7 @@ async function loadConfig() {
     // Alleen tonen als poppler-utils daadwerkelijk geïnstalleerd is (zie
     // pdf_images.available()) — anders een dode toggle die altijd faalt.
     $("#extract-images-wrap").hidden = !cfg.extract_images_available;
+    if (!AI_ENABLED) return;
     const select = $("#model");
     const previous = select.value;
     select.replaceChildren(
@@ -1796,7 +1806,10 @@ function initHeaderElevation() {
 function init() {
   initTabs();
   initEditor();
-  initSettings();
+  if (AI_ENABLED) {
+    initSettings();
+    initCleanControls();
+  }
   initUpload();
   initGlassSpecular();
   initHeaderElevation();
@@ -1819,12 +1832,20 @@ function init() {
     $("#paste-area").focus();
   });
 
-  $("#clean").addEventListener("click", cleanActiveDoc);
-  $("#translate-nl").addEventListener("click", translateActiveDoc);
-  $("#cancel-clean").addEventListener("click", cancelActiveClean);
   $("#copy").addEventListener("click", copyActive);
   $("#download").addEventListener("click", downloadActive);
   $("#download-all").addEventListener("click", downloadAll);
+
+  loadConfig();
+  renderDocTabs();
+  renderEditor();
+}
+
+/** Opschoonpaneel en wiskunde-modus — alleen als AI aan staat. */
+function initCleanControls() {
+  $("#clean").addEventListener("click", cleanActiveDoc);
+  $("#translate-nl").addEventListener("click", translateActiveDoc);
+  $("#cancel-clean").addEventListener("click", cancelActiveClean);
 
   $("#obsidian").addEventListener("change", (e) => {
     const doc = activeDoc();
@@ -1847,10 +1868,6 @@ function init() {
   $("#ocr-model").addEventListener("change", () => {
     localStorage.setItem("ocrModel", $("#ocr-model").value);
   });
-
-  loadConfig();
-  renderDocTabs();
-  renderEditor();
 }
 
 document.addEventListener("DOMContentLoaded", init);

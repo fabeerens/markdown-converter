@@ -2647,3 +2647,90 @@ def test_pane_doc_has_ocr_controls():
         'id="settings-ocr-pages"',
     ):
         assert element in html, f"{element} ontbreekt in index.html"
+
+
+# ---------------------------------------------------------------------------
+# Versie zonder AI (MDCONV_AI=off)
+# ---------------------------------------------------------------------------
+
+_AI_ROUTES = [
+    ("get", "/api/settings"),
+    ("post", "/api/settings"),
+    ("post", "/api/estimate"),
+    ("post", "/api/clean"),
+    ("post", "/api/clean/stream"),
+    ("post", "/api/clean/cancel"),
+    ("post", "/api/convert/file/ocr"),
+    ("post", "/api/convert/file-url/ocr"),
+]
+
+
+def test_ai_flag_follows_the_environment(monkeypatch):
+    from mdconv.features import ai_enabled
+
+    monkeypatch.delenv("MDCONV_AI", raising=False)
+    assert ai_enabled() is True
+    for value in ("off", "0", "false", "Uit", " OFF "):
+        monkeypatch.setenv("MDCONV_AI", value)
+        assert ai_enabled() is False, value
+    monkeypatch.setenv("MDCONV_AI", "on")
+    assert ai_enabled() is True
+
+
+def test_without_ai_the_ai_routes_do_not_exist():
+    from mdconv import create_app
+
+    client = create_app(ai_enabled=False).test_client()
+    for method, url in _AI_ROUTES:
+        r = getattr(client, method)(url, json={})
+        assert r.status_code == 404, url
+
+
+def test_with_ai_the_ai_routes_exist():
+    from mdconv import create_app
+
+    client = create_app(ai_enabled=True).test_client()
+    for method, url in _AI_ROUTES:
+        r = getattr(client, method)(url, json={})
+        assert r.status_code != 404, url
+
+
+def test_without_ai_the_normal_conversion_still_works():
+    from mdconv import create_app
+
+    client = create_app(ai_enabled=False).test_client()
+    r = client.post("/api/convert/text", json={"text": "Hallo wereld."})
+    assert r.status_code == 200
+    assert r.get_json()["markdown"] == "Hallo wereld.\n"
+    # Foutmeldingen blijven netjes JSON, ook nu de errorhandler app-breed is.
+    r = client.post("/api/convert/link", json={"query": ""})
+    assert r.status_code == 400
+    assert "CELEX" in r.get_json()["error"]
+
+
+def test_without_ai_config_reports_no_ai():
+    from mdconv import create_app
+
+    cfg = create_app(ai_enabled=False).test_client().get("/api/config").get_json()
+    assert cfg["ai_enabled"] is False
+    assert cfg["llm_available"] is False
+    assert cfg["ocr_available"] is False
+    assert cfg["models"] == [] and cfg["ocr_models"] == []
+
+
+def test_without_ai_the_page_has_no_ai_controls(monkeypatch):
+    from mdconv import create_app, version
+
+    monkeypatch.setattr(version, "current", lambda: ("0.0.0", 1, "vandaag"))
+    off = create_app(ai_enabled=False).test_client().get("/").get_data(as_text=True)
+    on = create_app(ai_enabled=True).test_client().get("/").get_data(as_text=True)
+
+    assert 'data-ai="off"' in off and 'data-ai="on"' in on
+    for element in ('id="open-settings"', 'id="settings"', 'id="clean-panel"',
+                    'id="clean"', 'id="translate-nl"', 'id="obsidian"', 'id="ocr-mode"'):
+        assert element not in off, element
+        assert element in on, element
+    # De gewone invoer blijft, inclusief lijsten plakken.
+    for element in ('id="bulk-jur-text"', 'id="bulk-wet-text"', 'id="bulk-doc-text"',
+                    'id="paste-area"', 'id="drop"', 'id="download-all"'):
+        assert element in off, element
