@@ -995,6 +995,13 @@ enige dikte, niet een plat vlak met alleen een hoogtelicht.
 - `state.StateFile.write()` schrijft atomair (tmp + `os.replace`) en vergrendelt met
   `fcntl.flock`, zodat meerdere gunicorn-workers de teller niet dubbel ophogen en een half
   weggeschreven bestand nooit als geldige staat gelezen kan worden.
+- **`installed_at` staat vast op Europe/Amsterdam** (`datetime.now(_TZ)`, `_TZ =
+  ZoneInfo("Europe/Amsterdam")`), niet op de tijdzone van de host. Een kale
+  `datetime.now()` gaf op een server die zonder eigen `TZ`-instelling draait (de standaard
+  in Docker: UTC) twee uur het verkeerde tijdstip. `tzdata` (requirements.txt) levert de
+  tijdzonedatabase zelf mee, want een minimale Docker-image (`python:3.13-slim`) heeft
+  `/usr/share/zoneinfo` niet per se aan boord — zonder die dependency zou `ZoneInfo(...)`
+  daar een `ZoneInfoNotFoundError` geven in plaats van gewoon te werken.
 
 ## Tests
 `.venv/bin/python -m pytest tests/ -q` — 214 karakteriseringstests die het gedrag
