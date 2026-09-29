@@ -363,8 +363,16 @@ def _fetch_hof(ident: str, lang: str, *, requested_url: str):
     naam, root = formex_hof.openen(data)
     eigen = formex_hof.metadata(root, naam)
     verwacht, ecli_uit_cellar = ident, None
+    gezocht = eigen["celex"]
     if not eigen["ecli"]:
-        ecli_uit_cellar = _ecli_uit_cellar(eigen["celex"])
+        ecli_uit_cellar = _ecli_uit_cellar(gezocht)
+        # Een arrest van vóór de aparte gerechtsletter (Lindqvist, `62001J0101`) noemt zich in
+        # de oude vorm; de Cellar koppelt de ECLI aan de nieuwe (`62001CJ0101`). Zonder deze
+        # tweede vraag weigerde de vraag op de ECLI, en landde het arrest onder de oude CELEX
+        # (T2-F14, kb WP-43; de fix van WP-20 dekte alleen Satamedia, al in de nieuwe vorm).
+        if ecli_uit_cellar is None and formex_hof._nieuw_celex(gezocht) != gezocht:
+            gezocht = formex_hof._nieuw_celex(gezocht)
+            ecli_uit_cellar = _ecli_uit_cellar(gezocht)
         if ecli_uit_cellar and ident.upper() == ecli_uit_cellar:
             verwacht = eigen["celex"]
     markdown, meta = formex_hof.omzetten(data, verwacht)
@@ -385,10 +393,12 @@ def _fetch_hof(ident: str, lang: str, *, requested_url: str):
     if ecli_herkomst == "cellar-metadata":
         waarschuwingen.append(
             f"De bron noemt geen ECLI; {meta['ecli']} komt uit de Cellar-metadata (cdm:case-law_ecli) "
-            f"van {meta['celex']}.")
+            f"van {gezocht}.")
     elif not meta["ecli"]:
         waarschuwingen.append(
             "De bron noemt geen ECLI; het CELEX-nummer is de identiteit van dit document.")
+    if meta.get("zaaknummers_melding"):
+        waarschuwingen.append(meta["zaaknummers_melding"])
     if meta["opmaak_weggelaten"]:
         waarschuwingen.append(
             f"{meta['opmaak_weggelaten']} keer vet of cursief niet overgenomen; de tekst blijft.")

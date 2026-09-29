@@ -156,6 +156,7 @@ def metadata(root: ET.Element, naam: str) -> dict:
     if not celex:
         raise _fout("het bibliografische blok noemt geen CELEX-nummer")
     zaken = [(n.text or "").strip() for n in bib.iter("NO.CASE") if (n.text or "").strip()]
+    zaken, zaken_melding = _gevoegde_zaken(root, zaken)
     taal = re.search(r"_([A-Z]{2})_\d+\.xml$", naam)
     kop = root.find("CURR.TITLE")
     paginakop = [_norm("".join(p.itertext())) for p in kop.iter("P")] if kop is not None else []
@@ -163,11 +164,45 @@ def metadata(root: ET.Element, naam: str) -> dict:
         "celex": celex,
         "ecli": ecli or None,
         "zaaknummers": zaken,
+        "zaaknummers_melding": zaken_melding,
         "auteur": (bib.findtext("AUTHOR") or "").strip() or None,
         "taal": taal.group(1).lower() if taal else None,
         "paginakop": [p for p in paginakop if p],
         "soort": _kort(root),
     }
+
+
+_ZAAK = re.compile(r"[CT][\u2011-]\d+/\d{2}")
+
+
+def _gevoegde_zaken(root: ET.Element, blok: list[str]) -> tuple[list[str], str | None]:
+    """De zaaknummers, ook als het bibliografische blok er maar één van de gevoegde zaken noemt.
+
+    Tele2 (ECLI:EU:C:2016:970) heeft in `BIB.JUDGMENT` alleen `C-203/15`; de eerste alinea van
+    `JUDGMENT.INIT` zegt `In de gevoegde zaken C‑203/15 en C‑698/15,` (T5-F9, kb WP-43). Die regel
+    telt alleen in de gemeten vorm: nummers gescheiden door `, ` en ` en `, en elk nummer uit het
+    blok staat erin. Een reeks (`C‑148/13 tot en met C‑150/13`) of een andere vorm laat het blok
+    staan. Het verschil met het blok wordt gemeld; de schrijfwijze is die van het blok (ASCII).
+    """
+    init = root.find("JUDGMENT.INIT")
+    eerste = init.find("P") if init is not None else None
+    if eerste is None:
+        return blok, None
+    m = re.fullmatch(r"In de gevoegde zaken[ \u00a0](.+),", _norm("".join(eerste.itertext())))
+    if not m:
+        return blok, None
+    # Tele2 schrijft `en\u00a0C‑698/15`: de scheiding mag een harde spatie zijn.
+    delen = re.split(r",[ \u00a0]|[ \u00a0]en[ \u00a0]", m.group(1))
+    if not all(_ZAAK.fullmatch(d) for d in delen):
+        return blok, None
+    tekst = [d.replace("\u2011", "-") for d in delen]
+    if len(set(tekst)) != len(tekst) or not set(z.replace("\u2011", "-") for z in blok) <= set(tekst):
+        return blok, None
+    if len(tekst) == len(blok):
+        return blok, None
+    samen = ", ".join(tekst[:-1]) + " en " + tekst[-1]
+    return tekst, (f"Het bibliografische blok noemt {', '.join(blok) or 'geen zaak'}; de uitspraak zelf "
+                   f"noemt de gevoegde zaken {samen} (JUDGMENT.INIT), en die zijn overgenomen.")
 
 
 # --------------------------------------------------------------------------
@@ -695,6 +730,16 @@ def _oud_celex(celex: str) -> str:
     oude vorm een eigen letter en wordt hier niet aangeraakt.
     """
     return re.sub(r"^(6\d{4})C([A-Z]\d{4}.*)$", r"\1\2", celex)
+
+
+def _nieuw_celex(celex: str) -> str:
+    """De omgekeerde van `_oud_celex()`, alleen voor een arrest van het Hof: `62001J0101` wordt `62001CJ0101`.
+
+    Lindqvist (2003) noemt zich in zijn Formex `62001J0101`, en de Cellar kent het werk alleen als
+    `62001CJ0101` (T2-F14, kb WP-43). Alleen de `J` zonder gerechtsletter ervoor: een andere oude
+    letter (`A` voor het Gerecht, `O`, `C`) is hier niet gemeten en blijft zoals ze is.
+    """
+    return re.sub(r"^(6\d{4})(J\d{4}.*)$", r"\1C\2", celex)
 
 
 def omzetten(data: bytes, verwacht: str | None = None) -> tuple[str, dict]:

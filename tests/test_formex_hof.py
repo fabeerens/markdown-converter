@@ -404,3 +404,71 @@ def test_zonder_bruikbare_cellar_ecli_blijft_de_celex_de_identiteit(monkeypatch,
     assert "De bron noemt geen ECLI; het CELEX-nummer is de identiteit van dit document." in h.waarschuwingen
     with pytest.raises(ConversionError, match="zonder ECLI"):
         from_link("ECLI:EU:C:2026:1")
+
+
+OUDE_VORM = ZONDER_ECLI.replace("<NO.CELEX>62026CJ0001</NO.CELEX>", "<NO.CELEX>62026J0001</NO.CELEX>")
+
+
+def test_een_oude_celex_zoekt_de_ecli_ook_onder_de_nieuwe_vorm(monkeypatch):
+    """Lindqvist (2003) noemt zich `62001J0101`; de Cellar kent de ECLI alleen onder `62001CJ0101`
+    (T2-F14, kb WP-43). De eerste vraag vindt niets, de tweede wel; de CELEX van de bron blijft."""
+    data = arrest_zip(OUDE_VORM)
+    gevraagd = []
+
+    def sparql(url, params):
+        gevraagd.append("62026CJ0001" if "62026CJ0001" in params["query"] else "62026J0001")
+        return SPARQL_ECLI if "62026CJ0001" in params["query"] else b'{"results": {"bindings": []}}'
+
+    _fake_met_sparql(monkeypatch, data, sparql)
+    for vraag in ("ECLI:EU:C:2026:1", "62026CJ0001"):
+        h = from_link(vraag).provenance
+        assert (h.ecli, h.celex, h.extra["ecli_herkomst"]) == ("ECLI:EU:C:2026:1", "62026J0001", "cellar-metadata")
+        assert ("De bron noemt geen ECLI; ECLI:EU:C:2026:1 komt uit de Cellar-metadata (cdm:case-law_ecli) "
+                "van 62026CJ0001.") in h.waarschuwingen
+    assert gevraagd[:2] == ["62026J0001", "62026CJ0001"]
+
+
+def test_nieuw_celex_raakt_alleen_een_arrest_van_het_hof_in_de_oude_vorm():
+    assert formex_hof._nieuw_celex("62001J0101") == "62001CJ0101"
+    for celex in ("62001CJ0101", "61999A0123", "62001O0101", "62007CJ0073"):
+        assert formex_hof._nieuw_celex(celex) == celex
+
+
+def _fake_met_sparql(monkeypatch, data, sparql):
+    class Antwoord:
+        def __init__(self, status, inhoud):
+            self.status_code, self.content, self.url = status, inhoud, ""
+            self.text, self.apparent_encoding = inhoud.decode("latin-1", errors="ignore"), "utf-8"
+
+        def json(self):
+            import json as _json
+            return _json.loads(self.content)
+
+    def get(url, headers=None, timeout=None, allow_redirects=None, params=None):
+        if "webapi/rdf/sparql" in url:
+            return Antwoord(200, sparql(url, params))
+        if "resource/ecli/" in url or "resource/celex/" in url:
+            return Antwoord(200, data)
+        return Antwoord(404, b"")
+
+    monkeypatch.setattr(eurlex.net, "documents", lambda: type("S", (), {"get": staticmethod(get)})())
+
+
+@pytest.mark.parametrize("init, zaken, melding", [
+    # Tele2 (T5-F9, kb WP-43): het blok noemt één zaak, de tekst twee, met een harde spatie na `en`.
+    (f"In de gevoegde zaken C‑1/26 en{NBSP}C‑2/26,", ["C-1/26", "C-2/26"],
+     "Het bibliografische blok noemt C-1/26; de uitspraak zelf noemt de gevoegde zaken C-1/26 en C-2/26 "
+     "(JUDGMENT.INIT), en die zijn overgenomen."),
+    ("In de gevoegde zaken C‑1/26, C‑2/26 en C‑3/26,", ["C-1/26", "C-2/26", "C-3/26"],
+     "de gevoegde zaken C-1/26, C-2/26 en C-3/26"),
+    # Niet de gemeten vorm, of het blok staat er niet in: het blok blijft, zonder melding.
+    ("In de gevoegde zaken C‑1/26 tot en met C‑3/26,", ["C-1/26"], None),
+    ("In de gevoegde zaken C‑2/26 en C‑3/26,", ["C-1/26"], None),
+    ("In zaak C‑1/26,", ["C-1/26"], None),
+])
+def test_gevoegde_zaken_komen_uit_de_eerste_alinea_als_het_blok_er_een_noemt(init, zaken, melding):
+    xml = ARREST.replace("<JUDGMENT.INIT><P>In zaak C‑1/26,</P></JUDGMENT.INIT>",
+                         f"<JUDGMENT.INIT><P>{init}</P></JUDGMENT.INIT>")
+    _, meta = formex_hof.omzetten(arrest_zip(xml), "62026CJ0001")
+    assert meta["zaaknummers"] == zaken
+    assert (meta["zaaknummers_melding"] is None) if melding is None else (melding in meta["zaaknummers_melding"])
