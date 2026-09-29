@@ -408,3 +408,85 @@ def test_een_startoverride_herstart_alleen_het_niveau_waarop_de_num_wordt_gebrui
 def test_wat_de_teller_niet_kan_bewijzen_weigert(body, reden):
     with pytest.raises(ConversionError, match=reden):
         hudoc_docx.omzetten(docx(p("CASE OF X v. Y") + body, numbering=NUMBERING_KOPPEN), "CASE OF X v. Y")
+
+
+# ---------- kb WP-43: vier HUDOC-vormen van Big Brother Watch, Podchasov, Centrum för Rättvisa en NOS ----------
+
+MC = 'xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"'
+
+
+def grieks_niveau(keuze: str = '<w:numFmt w:val="custom" w:format="α, β, γ, ..."/>') -> str:
+    """Niveau 6 (`JuHalpha`) zoals Word 2010 het schrijft: de eigen reeks in `mc:Choice`, decimaal als terugval."""
+    return (f'<w:lvl w:ilvl="6"><w:start w:val="1"/><mc:AlternateContent {MC}><mc:Choice Requires="w14">{keuze}'
+            '</mc:Choice><mc:Fallback><w:numFmt w:val="decimal"/></mc:Fallback></mc:AlternateContent>'
+            '<w:lvlText w:val="(%7)"/></w:lvl>')
+
+
+def numbering_grieks(keuze: str | None = None) -> str:
+    niveau = grieks_niveau() if keuze is None else grieks_niveau(keuze)
+    return NUMBERING_KOPPEN.replace('</w:abstractNum>', niveau + '</w:abstractNum>', 1)
+
+
+def test_een_eigen_griekse_reeks_uit_mc_choice_wordt_alfa_beta():
+    """Big Brother Watch (001-210077) en drie andere: niveau 6 heeft geen eigen `numFmt`, maar een
+    `mc:Choice` met `custom` en `α, β, γ, ...`; HUDOC toont `(α)`, `(β)`, niet de decimale terugval."""
+    body = "".join([
+        p("CASE OF X v. Y"),
+        genummerd("THE LAW", "JuHHead", "4", "0"),
+        genummerd("PRELIMINARY ISSUES", "JuHIRoman", "4", "1"),
+        genummerd("Locus standi", "JuHA", "4", "2"),
+        genummerd("The applicants", "JuHa0", "4", "4"),
+        genummerd("Preliminary issues", "JuHalpha", "4", "6"),
+        genummerd("Interception of the content", "JuHalpha", "4", "6"),
+        p(f"1.{NBSP}{NBSP}The case originated in an application.", "JuPara"),
+    ])
+    markdown, _ = hudoc_docx.omzetten(docx(body, numbering=numbering_grieks()), "CASE OF X v. Y")
+    koppen = [r for r in markdown.splitlines() if r.startswith("## ")]
+    assert koppen[-2:] == ["## (α) Preliminary issues", "## (β) Interception of the content"]
+
+
+@pytest.mark.parametrize("keuze, reden", [
+    ('<w:numFmt w:val="custom" w:format="001, 002, 003, ..."/>', "vorm 'custom:001, 002, 003, ...'"),
+    ('<w:numFmt w:val="hebrew1"/>', "vorm 'hebrew1'"),
+])
+def test_een_andere_eigen_reeks_blijft_een_weigering(keuze, reden):
+    body = p("CASE OF X v. Y") + genummerd("THE LAW", "JuHHead", "4", "0") + genummerd("A", "JuHalpha", "4", "6")
+    with pytest.raises(ConversionError, match=reden):
+        hudoc_docx.omzetten(docx(body, numbering=numbering_grieks(keuze)), "CASE OF X v. Y")
+
+
+def test_een_griekse_letter_uit_symbol_is_tekst():
+    """Centrum för Rättvisa (001-210078): `subsections (β) – (ι)`, de ι als `Symbol F069`."""
+    alinea = p(inhoud=f'<w:r><w:t xml:space="preserve">5.{NBSP}{NBSP}In subsections (β) – (</w:t></w:r>'
+                      '<w:r><w:sym w:font="Symbol" w:char="F069"/></w:r><w:r><w:t xml:space="preserve">) each.</w:t></w:r>',
+               stijl="JuPara")
+    markdown, _ = omzet(BODY + alinea)
+    assert "In subsections (β) – (ι) each." in markdown
+
+
+def test_een_inhoudsbesturingselement_in_een_alinea_draagt_zijn_tekst():
+    """Centrum för Rättvisa: `w:sdt` met `w:richText` om de soort mening en de namen van de rechters."""
+    sdt = ('<w:sdt><w:sdtPr><w:id w:val="1"/><w:richText/></w:sdtPr><w:sdtContent>'
+           '<w:r><w:t>j</w:t></w:r><w:r><w:t>oint concurring</w:t></w:r></w:sdtContent></w:sdt>')
+    alinea = p(inhoud=f'<w:r><w:t xml:space="preserve">The </w:t></w:r>{sdt}<w:r><w:t xml:space="preserve"> opinion.</w:t></w:r>',
+               stijl="JuPara")
+    markdown, _ = omzet(BODY + alinea)
+    assert "The joint concurring opinion." in markdown
+    plaatshouder = sdt.replace("<w:richText/>", "<w:richText/><w:showingPlcHdr/>")
+    with pytest.raises(ConversionError, match="plaatshouder"):
+        omzet(BODY + p(inhoud=plaatshouder, stijl="JuPara"))
+
+
+def test_een_lege_plaatshouderalinea_is_niets_en_met_tekst_een_weigering():
+    """Podchasov (001-230854) en NOS (001-249690): één lege `ECHRPlaceholder` (witte tekst)."""
+    markdown, _ = omzet(BODY + p(inhoud="", stijl="ECHRPlaceholder"))
+    assert markdown == omzet()[0]
+    with pytest.raises(ConversionError, match="ECHRPlaceholder"):
+        omzet(BODY + p("verborgen", "ECHRPlaceholder"))
+
+
+def test_jupara0_is_een_alinea_van_het_lichaam_met_randnummer():
+    """Centrum för Rättvisa: alinea 22 staat in `Jupara0` (`Ju para`), naast het gemeten `jupara0`."""
+    markdown, meta = omzet(BODY + p(f"22.{NBSP}{NBSP}The purposes are specified.", "Jupara0"))
+    assert "22. The purposes are specified." in markdown
+    assert meta["randnummers"] == omzet()[1]["randnummers"] + 1

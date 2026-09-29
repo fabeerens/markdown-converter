@@ -43,12 +43,16 @@ from ..errors import ConversionError
 from . import xml_gedeeld as xg
 
 W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+MC = "{http://schemas.openxmlformats.org/markup-compatibility/2006}"
 XML_SPACE = "{http://www.w3.org/XML/1998/namespace}space"
 NBSP = "\u00a0"
 
 # Symbolen in een symboollettertype: het teken is geen tekst maar een glyph.
 SYMBOOL_STERRETJE = ("Symbol", "F02A")
 SYMBOOL_BULLET = ("Wingdings", "F09F")
+# Een Griekse letter uit `Symbol` (Adobe-codering, 0x69 is ι). Centrum för Rättvisa (001-210078)
+# schrijft `subsections (β) – (ι)`: de β getypt, de ι als symbool (kb WP-43). Alleen wat gemeten is.
+SYMBOOL_TEKEN = {("Symbol", "F069"): "ι"}
 
 # Elementen die geen tekst dragen en dus overgeslagen mogen worden.
 STIL = {"pPr", "bookmarkStart", "bookmarkEnd", "proofErr", "permStart", "permEnd", "rPr",
@@ -187,7 +191,20 @@ class Docx:
             fmt, tekst, start = lvl.find(W + "numFmt"), lvl.find(W + "lvlText"), lvl.find(W + "start")
             if lvl.find(W + "lvlRestart") is not None:
                 uit["lvlRestart"] = True
-            return {"fmt": fmt.get(W + "val") if fmt is not None else None,
+            vorm = fmt.get(W + "val") if fmt is not None else None
+            if fmt is None:
+                # Word 2010 en later schrijft een eigen reeks in `mc:AlternateContent`: de
+                # `mc:Choice` (w14) is `custom` met `w:format="α, β, γ, ..."`, de `mc:Fallback`
+                # `decimal` voor Word 2007. HUDOC toont de keuze: de koppen van niveau 6
+                # (`JuHalpha`) zijn `(α)`, `(β)` in Big Brother Watch, Podchasov, Centrum för
+                # Rättvisa en NOS (T5-F8, kb WP-43). Een `lvl` zonder `numFmt` en zonder
+                # keuze blijft `None`, en dus een weigering.
+                keuze = lvl.find(f"{MC}AlternateContent/{MC}Choice/{W}numFmt")
+                if keuze is not None:
+                    vorm = keuze.get(W + "val")
+                    if vorm == "custom":
+                        vorm = f"custom:{keuze.get(W + 'format')}"
+            return {"fmt": vorm,
                     "text": tekst.get(W + "val") if tekst is not None else None,
                     "start": int(start.get(W + "val")) if start is not None
                     and (start.get(W + "val") or "").lstrip("-").isdigit() else 1}
@@ -316,6 +333,14 @@ def _romeins(n: int) -> str:
     return uit
 
 
+def _grieks(n: int) -> str:
+    """`α, β, γ, ...`: de kleine Griekse letters, zonder slot-sigma. Na ω is niet gemeten."""
+    letters = "αβγδεζηθικλμνξοπρστυφχψω"
+    if not 1 <= n <= len(letters):
+        raise ConversionError(f"een Griekse nummering voorbij ω ({n}) is niet gemeten")
+    return letters[n - 1]
+
+
 def _letter(n: int) -> str:
     uit = ""
     while n > 0:
@@ -334,6 +359,8 @@ _VORMEN = {
     "upperLetter": _letter,
     "lowerLetter": lambda n: _letter(n).lower(),
     "none": lambda n: "",
+    # Een eigen reeks uit `mc:Choice` (kb WP-43); een ander `w:format` is niet gemeten.
+    "custom:α, β, γ, ...": _grieks,
 }
 
 
@@ -489,6 +516,16 @@ class Lezer:
                     loop(kind)
                 elif n == "del":
                     raise _fout(self.docx.naam, "een bijgehouden verwijdering (w:del); het document is niet definitief")
+                elif n == "sdt":
+                    # Een inhoudsbesturingselement midden in een alinea: de tekst staat in
+                    # `w:sdtContent`, `w:sdtPr` is alleen de beschrijving. Centrum för Rättvisa
+                    # (001-210078) zet zo de soort van de afwijkende mening (`joint concurring`)
+                    # en de namen van de rechters (kb WP-43; zes keer, `w:richText`). Een element
+                    # dat zijn plaatshoudertekst toont (`w:showingPlcHdr`), is niet gemeten.
+                    if kind.find(f"{W}sdtPr/{W}showingPlcHdr") is not None:
+                        raise _fout(self.docx.naam, "een inhoudsbesturingselement dat zijn plaatshouder toont")
+                    for inhoud in kind.findall(W + "sdtContent"):
+                        loop(inhoud)
                 elif n in ("t", "sym", "br", "tab", "noBreakHyphen", "fldChar", "instrText",
                            "footnoteReference", "endnoteReference", "delText"):
                     onderdeel(kind)
@@ -538,6 +575,8 @@ class Lezer:
                 sleutel = (c.get(W + "font"), (c.get(W + "char") or "").upper())
                 if sleutel == SYMBOOL_STERRETJE:
                     delen.append("*")
+                elif sleutel in SYMBOOL_TEKEN:
+                    delen.append(SYMBOOL_TEKEN[sleutel])
                 elif sleutel == SYMBOOL_BULLET:
                     # Een lijstbullet uit het lettertype; HUDOC toont hem als U+F09F.
                     if "".join(delen).strip():
@@ -626,6 +665,8 @@ def _bron_tekst(alineas) -> list[str]:
                 delen.append(" ")
             elif n == "sym" and (el.get(W + "char") or "").upper() == "F02A":
                 delen.append("*")
+            elif n == "sym" and (el.get(W + "font"), (el.get(W + "char") or "").upper()) in SYMBOOL_TEKEN:
+                delen.append(SYMBOOL_TEKEN[(el.get(W + "font"), (el.get(W + "char") or "").upper())])
         uit.append("".join(delen))
     return uit
 

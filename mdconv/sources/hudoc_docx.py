@@ -61,12 +61,15 @@ ALINEA = {
     # López Ribalda (001-197098): `Title4` (`_Title_4`, op JuPara) is de regel met de
     # klachtnummers onder de titel, `(Applications nos. 1874/13 and 8567/13)`.
     "Title4",
+    # Centrum för Rättvisa (001-210078): `Jupara0` (`Ju para`, op Normal) is alinea 22 van het
+    # lichaam, met randnummer; dezelfde rol als `jupara0`, andere schrijfwijze (kb WP-43).
+    "Jupara0",
 }
 # `TOC6`: de inhoudsopgave van Hurbain (001-225814) gaat zes niveaus diep (kb WP-20).
 TOC = {"TOC1": 0, "TOC2": 1, "TOC3": 2, "TOC4": 3, "TOC5": 4, "TOC6": 5}
 # Alleen deze alinea's dragen een randnummer van het lichaam. Een citaat, een lijst en
 # een afwijkende mening houden hun nummering zoals de bron haar schrijft.
-RANDNUMMER = {"Normal", "JuPara", "JuParaLast", "jupara", "jupara0", "ECHRPara", "Default"}
+RANDNUMMER = {"Normal", "JuPara", "JuParaLast", "jupara", "jupara0", "Jupara0", "ECHRPara", "Default"}
 WEIGER_VOORVOEGSEL = ("Su",)
 
 
@@ -79,7 +82,16 @@ Docx = _docx.Docx
 _Lezer = _docx.Lezer
 
 
+# `ECHRPlaceholder` (`_Placeholder`, op `JuSigned`, witte tekst) is in Podchasov (001-230854) en
+# NOS (001-249690) één lege alinea onder de ondertekening (kb WP-43). Alleen leeg is ze niets;
+# met tekst zou witte, onzichtbare tekst zichtbaar worden, en dat blijft een weigering.
+LEEG_TOEGESTAAN = {"ECHRPlaceholder"}
+
+
 def _soort(docx, p, stijl: str) -> str | None:
+    if stijl in LEEG_TOEGESTAAN:
+        tekst = "".join(t.text or "" for t in p.iter(_docx.W + "t"))
+        return "alinea" if not tekst.strip() and p.find(f".//{_docx.W}sym") is None else None
     if stijl in KOP:
         return "kop"
     if stijl in TOC:
