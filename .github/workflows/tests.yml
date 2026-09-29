@@ -1,0 +1,36 @@
+name: tests
+
+# Op elke push naar sander en op elke pull request. De Python komt uit .python-version en de
+# pakketten uit requirements.lock (pip freeze van de werkende .venv), zodat CI dezelfde versies
+# draait als de Mac. De kennisbank is privé: de twee tests die haar gouden voorbeelden lezen slaan
+# hier over met hun reden (tests/kbwortel.py); lokaal bewijzen ze de rest.
+on:
+  push:
+    branches: [sander]
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+          cache: pip
+          cache-dependency-path: requirements.lock
+      - run: pip install -r requirements.lock
+      - run: python -m pytest tests/ -q -rs
+
+  image:
+    # De image bevat alleen wat de app draait: geen meetlat (88 MB), tests of lokale staat.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t markdown-converter .
+      - run: |
+          docker run --rm --entrypoint sh markdown-converter -c '
+            for d in meetlat tests .deploy-state; do
+              if [ -e "/app/$d" ]; then echo "/app/$d hoort niet in de image"; exit 1; fi
+            done
+            test -d /app/mdconv'
