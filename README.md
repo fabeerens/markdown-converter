@@ -14,7 +14,7 @@ Plak een ECLI of link; de tool herkent de bron automatisch:
 - **Duitse rechtspraak** — een Duitse ECLI (bv. `ECLI:DE:BGH:2019:240919BVIZB39.18.0`). Via rechtsprechung-im-internet.de (BGH, BVerfG, BVerwG, BFH, BAG, BSG, BPatG).
 - **Belgische rechtspraak** — een Belgische ECLI (bv. `ECLI:BE:CASS:2021:ARR.20211019.2N.25`). Via Juportal.
 - **Frans Conseil constitutionnel** — een ECLI van dat hof (bv. `ECLI:FR:CC:2021:2021.931.QPC`). Andere Franse gerechten (Cour de cassation, Conseil d'État) zitten achter een bot-blokkade en worden (nog) niet ondersteund — de tool legt dat uit in de foutmelding.
-- Spaanse en Oostenrijkse rechtspraak zijn onderzocht maar (nog) niet haalbaar zonder CAPTCHA-omzeiling resp. een onbetrouwbare zoekopdracht — zie `CLAUDE.md` voor de details.
+- Spaanse en Oostenrijkse rechtspraak zijn onderzocht maar (nog) niet haalbaar zonder CAPTCHA-omzeiling resp. een onbetrouwbare zoekopdracht — zie `docs/bronnen/buitenlandse-rechtspraak.md` voor de details.
 
 ### 2. Wetgeving
 - **EU-wetgeving** — CELEX-nummer (bv. `32016R0679`, de AVG), een link, of een ELI-link (bv. `https://eur-lex.europa.eu/eli/reg/2016/679/oj`). Officiële tekst uit het Cellar-archief (met terugval op de EUR-Lex portal).

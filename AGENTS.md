@@ -3,7 +3,8 @@
 Geldt voor elke agent die in deze map werkt (Claude Code, Codex, wie dan ook).
 **`CLAUDE.md` in deze map is de inhoudelijke documentatie: lees die eerst.** Ze
 beschrijft de architectuur, elke bronroute en de redenen achter de keuzes. Dit
-bestand zegt alleen hoe je hier werkt.
+bestand zegt alleen hoe je hier werkt. De uitleg per bron staat in `docs/` (tabel in
+`CLAUDE.md`).
 
 ## Wat dit is
 
