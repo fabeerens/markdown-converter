@@ -56,6 +56,19 @@ verandert zit aan de achterkant.
 - **Geen buildstap, geen Node.** De UI is platte HTML, CSS en JS.
 - **Eén onderwerp per commit**, boodschap in het Nederlands en in de gebiedende
   wijs, met de reden erbij.
+- **Pull vooraf, push achteraf; de agent pusht zelf.** Elk kb-WP begint met
+  `git pull` op `sander` en eindigt met `git push origin sander` (blijvende
+  toestemming van de gebruiker, besluit 6 van kb-plan 5, 29 september 2026).
+  **Deze fork is openbaar**, dus vóór elke push leest de agent de nieuwe commits:
+  `git diff --name-status origin/sander..sander` en
+  `git log -p --format=%B origin/sander..sander`, op `/Users/`, `.env`, sleutels en
+  tokens (`sk-`, `ghp_`, `gho_`, `github_pat_`, `API_KEY=`, `PRIVATE KEY`) en op
+  namen van opdrachtgevers of projecten. Vindt hij iets, dan pusht hij niet en meldt
+  hij het; bij de eerste push (kb WP-50) stond zo'n naam in één commentaar en één
+  boodschap, en die zijn vóór de push herschreven. Push alleen `sander`, nooit
+  `--tags` of `--all`: de lokale tag `sander-voor-wp50` bewaart de keten van vóór die
+  herschrijving. `upstream` (fabeerens) is er om losse fixes over te nemen; mergen
+  hoeft niet.
 
 ## Kennisbankbundels op schijf (`mdconv.kb_fetch`)
 
