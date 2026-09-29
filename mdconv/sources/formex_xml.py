@@ -2124,6 +2124,18 @@ class FormexOmzetter:
                     self.u.blok(tekst)
         gr = el.find("GR.NOTES")
         definities = list(gr.findall("NOTE")) if gr is not None else []
+        # De noten van `GR.NOTES` krijgen hun nummer vóór de rijen, in de volgorde van
+        # `GR.NOTES` (T4-F3, kb WP-42). Zo nummeren het Publicatieblad en de kb-lezer
+        # (`formex_source.nootnummers`, documentvolgorde; `GR.NOTES` staat in alle 88
+        # tabellen met noten in de meetlat en raw/source-evidence vóór `CORPUS`). Tot
+        # dan gaf `noot()` een tabelnoot het nummer van haar eerste verwijzing: in
+        # tabel 2 van bijlage I bij 32018R1724 werden 2024/1028 en 2024/1252 verwisseld.
+        if gr is not None and _voor(gr, el.find("CORPUS"), el):
+            for noot in definities:
+                sleutel = noot.get("NOTE.ID")
+                if sleutel and self.nootruimte + sleutel not in self.nootlabels:
+                    self.nootnummer += 1
+                    self.nootlabels[self.nootruimte + sleutel] = self.nootnummer
         rijen, koprijen = [], 0
         for row in el.iter():
             if row.tag == "TI.BLK":

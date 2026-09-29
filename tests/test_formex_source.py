@@ -2349,6 +2349,25 @@ def test_een_inhoudsopgave_met_kolomkoppen():
     assert not onbekend
 
 
+def test_tabelnoten_volgen_de_volgorde_van_gr_notes():
+    """T4-F3 (32018R1724, bijlage I, tabel 2): `GR.NOTES` heeft E0004 vóór E0005, maar de
+    eerste rij verwijst naar E0005. Het Publicatieblad en de kb-lezer nummeren in de volgorde
+    van `GR.NOTES`: E0004 is (1), ook al komt zijn verwijzing later."""
+    tabel = (b'<TBL COLS="2" NO.SEQ="0001"><GR.NOTES>'
+             b'<NOTE NOTE.ID="E0004" NUMBERING="ARAB" TYPE="FOOTNOTE"><P>Verordening (EU) 2024/1252.</P></NOTE>'
+             b'<NOTE NOTE.ID="E0005" NUMBERING="ARAB" TYPE="FOOTNOTE"><P>Verordening (EU) 2024/1028.</P></NOTE>'
+             b'</GR.NOTES><CORPUS>'
+             b'<ROW><CELL COL="1">N</CELL><CELL COL="2">Rij N<NOTE NOTE.REF="E0005"/></CELL></ROW>'
+             b'<ROW><CELL COL="1">AJ</CELL><CELL COL="2">Rij AJ<NOTE NOTE.REF="E0004"/></CELL></ROW>'
+             b'</CORPUS></TBL>')
+    markdown, _, _, _ = formex_xml.omzetten(formex_zip(act=_act_met_bijlage(tabel)))
+    regels = markdown.split("\n")
+    assert any("Rij N" in r and "(2)" in r for r in regels), markdown
+    assert any("Rij AJ" in r and "(1)" in r for r in regels), markdown
+    assert f"(1){NBSP}{NBSP}Verordening (EU) 2024/1252." in regels
+    assert f"(2){NBSP}{NBSP}Verordening (EU) 2024/1028." in regels
+
+
 def test_een_inhoudsopgave_voor_contents_in_een_bijlage():
     """De bijlage van 32022H2510 heeft `TITLE`, `TOC`, `CONTENTS` naast elkaar. Eén TOC vóór
     CONTENTS geeft dezelfde volgorde als een TOC aan het begin van CONTENTS; na CONTENTS
