@@ -54,7 +54,11 @@ METADATA = {"BIB.INSTANCE", "BIB.DOC", "BIB.DATA", "PUBLICATION.REF", "NO.DOC", 
             # bladzijdenummer van het Publicatieblad, net als PAGE.FIRST. De
             # adequaatheidsbesluiten voor Japan (32019D0419) en Korea (32022D0254)
             # weigerden erop (T1-F16, kb WP-20).
-            "ITEM.REF"}
+            "ITEM.REF",
+            # De kolomkoppen boven zo'n inhoudsopgave (`TOC/TOC.HD`): een lege kop voor de
+            # tekst en `Bladzijde` boven die paginaverwijzingen. Hoort bij de kolom die als
+            # metadata wegvalt; de bijlage van aanbeveling 32022H2510 weigerde erop (kb WP-42).
+            "TOC.HD"}
 INLINE_TEKST = {"DATE", "REF.DOC.OJ", "FT", "HT", "QUOT.S", "IE", "PERIOD", "REF.DOC", "ACRONYM",
                 "ADDR", "PL.DATE", "NO.CELEX", "UNIT", "EXPONENT", "INF", "SUP", "TERM", "DEFINITION",
                 # De ELI-verwijzing die het Publicatieblad sinds 2026 achter elke
@@ -1343,7 +1347,11 @@ class FormexOmzetter:
                 # kennisbank weigert die menging aan haar kant net zo.
                 self.onbekend("bepalingen", kind)
 
-    DISPOSITIEFPUNT = re.compile(r"\d{1,3}[.)]")
+    # `(1)` en `1.1.` sinds kb WP-42: vier aanbevelingen van test 4 en drie van de
+    # steekproef van kb WP-25 nummeren zo (32019H0534, 32023H1018, 32022H0553, 32022H0867;
+    # 32022H2510 met `1.1.`). Het eurlex-profiel leest ze alleen in het dispositief van een
+    # handeling zonder artikelen (patronen.md §9).
+    DISPOSITIEFPUNT = re.compile(r"\d{1,3}[.)]|\(\d{1,3}\)|\d{1,3}(?:\.\d{1,3})+\.")
 
     def dispositief(self, el, teller: dict) -> None:
         """De wettekst van een handeling zonder artikelen: de aanbeveling (kb WP-25).
@@ -1363,8 +1371,10 @@ class FormexOmzetter:
         - een onderdeel `a)` onder een punt zoals in een artikel;
         - het anker is `pt-<n>`, `pt-<n>-<letter>`, tweede reeks `pt-al2-<n>`.
 
-        Een markering die het profiel niet kent (`(1)`, `1.1.`, `I.`: vijf van de
-        dertig) is een weigering, geen gok; een groep zonder titel of met een
+        Sinds kb WP-42 ook een punt `(1)` of `1.1.` (drie harde spaties, gedrukte
+        markering ongewijzigd; `pt-1`, `pt-1-1`) en een `a)`-lijst direct onder een
+        groepstitel (`a) tekst`, `pt-a`). Een markering die het profiel niet kent
+        (`I.` als punt) is een weigering, geen gok; een groep zonder titel of met een
         `NO.GR.SEQ` is niet gemeten en ook een weigering.
         """
         for kind in el:
@@ -1392,6 +1402,12 @@ class FormexOmzetter:
                 self.dispositief(wrapper, teller)
             elif kind.tag == "NP":
                 self.dispositiefpunt(kind, teller)
+            elif kind.tag == "LIST" and self.letterlijst(kind):
+                # Een `a)`-lijst direct onder een groepstitel, niet onder een punt: de
+                # letters zijn zelf de punten (32022H0915, 32023H2425, kb WP-42). Ze
+                # krijgen de lijstvorm `a) tekst` en het anker `pt-a`; een tweede lijst
+                # die weer bij a) begint `pt-al2-a`, zoals een tweede opsomming in een lid.
+                self.inhoud(kind, basis="pt", teller=teller)
             elif kind.tag == "LIST" and (kind.get("TYPE") or "").upper() not in ONGENUMMERD:
                 for item in kind.findall("ITEM"):
                     np = item.find("NP")
@@ -1406,13 +1422,23 @@ class FormexOmzetter:
             else:
                 self.onbekend("dispositief", kind)
 
+    LETTERMARKERING = re.compile(r"\(?[a-z]{1,2}\)")
+
+    def letterlijst(self, lijst) -> bool:
+        """Is dit een opsomming waarvan elk onderdeel een letter draagt (`a)` of `(a)`)?"""
+        items = lijst.findall("ITEM")
+        return bool(items) and all(
+            len(item) == 1 and item[0].tag == "NP" and item[0].find("NO.P") is not None
+            and self.LETTERMARKERING.fullmatch(ws(self.inline(item[0].find("NO.P"))))
+            for item in items)
+
     def dispositiefpunt(self, np, teller: dict) -> None:
         """Eén genummerd punt van het dispositief, via de NP-tak van `inhoud()`."""
         nr = ws(self.inline(np.find("NO.P"))) if np.find("NO.P") is not None else ""
         if not self.DISPOSITIEFPUNT.fullmatch(nr):
             raise _xml_fout(f"een punt in het dispositief met markering {nr!r} is niet gemeten; "
-                            "alleen `1.` en `1)` (het eurlex-profiel leest `(1)`, `1.1.` en `I.` niet)")
-        self.inhoud(np, basis="pt", teller=teller)
+                            "alleen `1.`, `1)`, `(1)` en `1.1.` (het eurlex-profiel leest `I.` niet)")
+        self.inhoud(np, basis="pt", teller=teller, dispositief=True)
 
     def dubbele_divisie(self, anker: str, nr: str, volgnummer: int, kop: str) -> tuple[str, str]:
         """Een tweede hoofdstuk, afdeling of titel met hetzelfde nummer op hetzelfde niveau.
@@ -1477,7 +1503,8 @@ class FormexOmzetter:
             if not geankerd[0]:
                 self.u.eenheid(anker, "lid", nr)
 
-    def inhoud(self, el, basis: str, teller: dict, prefix=None, lid_anker=None, geankerd=None) -> None:
+    def inhoud(self, el, basis: str, teller: dict, prefix=None, lid_anker=None, geankerd=None,
+               dispositief: bool = False) -> None:
         def schrijf(tekst: str) -> None:
             if TABELMARKER in tekst:
                 # Een geciteerde tabel (zie `geciteerde_tabel`): de tekst ervóór,
@@ -1547,7 +1574,13 @@ class FormexOmzetter:
             # dezelfde vorm als een lid: nummer plus drie harde spaties.
             nr = ws(self.inline(el.find("NO.P"))) if el.find("NO.P") is not None else ""
             txt = ws(self.inline(el.find("TXT"))) if el.find("TXT") is not None else ""
-            scheiding = NBSP * 3 if re.fullmatch(r"\d{1,3}\.", nr) else " "
+            # In het dispositief van een handeling zonder artikelen krijgen ook `(1)` en
+            # `1.1.` die drie harde spaties (kb WP-42, patronen.md §9): de gedrukte
+            # markering blijft, en de spaties onderscheiden het punt van een overweging
+            # (`(1)` plus één spatie) en een nootdefinitie (plus twee harde spaties).
+            # In een bijlage blijft `(1)` één spatie, zoals altijd.
+            drie = r"\d{1,3}\.|\(\d{1,3}\)|\d{1,3}(?:\.\d{1,3})+\." if dispositief else r"\d{1,3}\."
+            scheiding = NBSP * 3 if re.fullmatch(drie, nr) else " "
             schrijf(_geen_opsomming(f"{nr}{scheiding}{txt}".strip()) if nr else txt)
             anker = f"{basis}-{nummer_anker(nr)}" if basis and nr else ""
             if anker:
@@ -2253,8 +2286,12 @@ class FormexOmzetter:
         # CONS.ANNEX `BIJLAGEN` die alleen een TOC draagt, zonder CONTENTS. Hier
         # las de omzetter alleen CONTENTS, en viel zo'n inhoudsopgave weg.
         opgaven = root.findall("TOC")
-        if len(opgaven) > 1 or (opgaven and inhoud is not None):
-            raise _xml_fout("een bijlage met meer dan een inhoudsopgave (TOC), of met een TOC naast "
+        # Eén TOC vóór CONTENTS mag (kb WP-42): de bijlage van aanbeveling 32022H2510 opent
+        # zo, en in bronvolgorde is dat dezelfde uitvoer als de TOC aan het begin van
+        # CONTENTS in de adequaatheidsbesluiten voor Japan en Korea (32019D0419, 32022D0254).
+        # Een TOC ná CONTENTS, of twee, is niet gemeten.
+        if len(opgaven) > 1 or (opgaven and inhoud is not None and not _voor(opgaven[0], inhoud, root)):
+            raise _xml_fout("een bijlage met meer dan een inhoudsopgave (TOC), of met een TOC na "
                             "CONTENTS, is niet gemeten")
         for toc in opgaven:
             self.inhoudsopgave(toc)
@@ -2494,6 +2531,12 @@ class FormexOmzetter:
                 self.inhoud(kind, basis=anker, teller=teller)
         if voorvoegsel[0]:
             raise _xml_fout(f"een bijlageonderdeel heeft een nummer ({nummer.strip()}, NO.GR.SEQ) maar geen tekst")
+
+
+def _voor(eerste, tweede, ouder) -> bool:
+    """Staat `eerste` in `ouder` vóór `tweede` (of is er geen `tweede`)?"""
+    kinderen = list(ouder)
+    return tweede is None or kinderen.index(eerste) < kinderen.index(tweede)
 
 
 def _geen_opsomming(regel: str) -> str:

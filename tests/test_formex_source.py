@@ -1570,8 +1570,12 @@ def test_een_geneste_inhoudsopgave_houdt_haar_volgorde_zonder_opmaak():
     # zie test_inhoudsopgave_met_titel_en_paginaverwijzingen_wordt_tekst_zonder_bladzijden.
     (_bijlage(b"BIJLAGEN", b"<TOC><TOC.BLK><TOC.ITEM><NO.ITEM>I</NO.ITEM><ITEM.CONT>Eisen</ITEM.CONT>"
               b"<P>Toelichting.</P></TOC.ITEM></TOC.BLK></TOC>"), "meer dan NO.ITEM en ITEM.CONT"),
+    # Eén TOC vóór CONTENTS mag sinds kb WP-42 (32022H2510); erna, of twee, blijft een weigering.
+    (b"<ANNEX><TITLE><TI><P>BIJLAGEN</P></TI></TITLE><CONTENTS><P>Tekst.</P></CONTENTS><TOC><TOC.BLK>"
+     + _toc_item(b"I", b"Eisen") + b"</TOC.BLK></TOC></ANNEX>", "na CONTENTS"),
     (b"<ANNEX><TITLE><TI><P>BIJLAGEN</P></TI></TITLE><TOC><TOC.BLK>" + _toc_item(b"I", b"Eisen")
-     + b"</TOC.BLK></TOC><CONTENTS><P>Tekst.</P></CONTENTS></ANNEX>", "naast CONTENTS"),
+     + b"</TOC.BLK></TOC><TOC><TOC.BLK>" + _toc_item(b"II", b"Meer") + b"</TOC.BLK></TOC></ANNEX>",
+     "meer dan een inhoudsopgave"),
 ])
 def test_een_niet_gemeten_inhoudsopgave_wordt_geweigerd(bijlage, reden):
     with pytest.raises(ConversionError, match=reden):
@@ -2243,8 +2247,8 @@ def test_aanbeveling_zonder_artikelen_schrijft_pt_punten():
 
 
 @pytest.mark.parametrize("bepalingen, melding", [
-    (b'<NP><NO.P>(1)</NO.P><TXT>Een punt tussen haakjes.</TXT></NP>', r"markering '\(1\)' is niet gemeten"),
-    (b'<NP><NO.P>1.1.</NO.P><TXT>Een geleed punt.</TXT></NP>', "markering '1.1.' is niet gemeten"),
+    (b'<NP><NO.P>I.</NO.P><TXT>Een Romeins punt.</TXT></NP>', "markering 'I.' is niet gemeten"),
+    (b'<NP><NO.P>(1a)</NO.P><TXT>Een punt met letter tussen haakjes.</TXT></NP>', r"markering '\(1a\)' is niet gemeten"),
     (b'<GR.SEQ LEVEL="1"><NP><NO.P>1.</NO.P><TXT>Een groep zonder titel.</TXT></NP></GR.SEQ>', "zonder titel"),
     (b'<ARTICLE IDENTIFIER="1"><TI.ART>Artikel 1</TI.ART><ALINEA>Een artikel.</ALINEA></ARTICLE>'
      b'<NP><NO.P>2.</NO.P><TXT>Een los punt naast een artikel.</TXT></NP>', "bepalingen:NP"),
@@ -2254,3 +2258,112 @@ def test_aanbeveling_weigert_wat_het_profiel_niet_leest(bepalingen, melding):
     genummerd punt naast artikelen blijven een weigering: geen gok welk anker dat wordt."""
     with pytest.raises(ConversionError, match=melding):
         formex_xml.omzetten(formex_zip(act=AANBEVELING % bepalingen))
+
+
+# ---------------------------------------------------------------------------
+# kb WP-42: de puntvormen `(1)`, `a)` en `1.1.` van een aanbeveling
+# ---------------------------------------------------------------------------
+
+def test_aanbeveling_met_punten_tussen_haakjes_houdt_de_markering():
+    """32019H0534 en 32023H1018 (T4-F5): punten `(1)`, `(2)` onder groepstitels `I.`, met
+    onderdelen `a)` of `(a)`. De gedrukte markering blijft, met drie harde spaties erachter
+    (patronen.md §9): `(1)` met één spatie is een overweging, met twee een nootdefinitie."""
+    bepalingen = (b'<GR.SEQ LEVEL="1"><TITLE><TI><NP><NO.P>I.</NO.P><TXT><HT TYPE="BOLD">DOELSTELLINGEN</HT></TXT></NP></TI></TITLE>'
+                  b'<NP><NO.P>(1)</NO.P><TXT>Deze aanbeveling wijst maatregelen aan die:</TXT><P>'
+                  b'<LIST TYPE="alpha"><ITEM><NP><NO.P>(a)</NO.P><TXT>de lidstaten helpen;</TXT></NP></ITEM>'
+                  b'<ITEM><NP><NO.P>(b)</NO.P><TXT>de Unie helpen.</TXT></NP></ITEM></LIST></P></NP>'
+                  b'<NP><NO.P>(2)</NO.P><TXT>De lidstaten evalueren.</TXT></NP></GR.SEQ>')
+    markdown, eenheden, _, _ = formex_xml.omzetten(formex_zip(act=AANBEVELING % bepalingen))
+    regels = [r for r in markdown.split("\n") if r]
+    start = regels.index("HEEFT DE VOLGENDE AANBEVELING VASTGESTELD:")
+    assert regels[start + 1:start + 6] == [
+        "## I. DOELSTELLINGEN",
+        f"(1){NBSP * 3}Deze aanbeveling wijst maatregelen aan die:",
+        "(a) de lidstaten helpen;",
+        "(b) de Unie helpen.",
+        f"(2){NBSP * 3}De lidstaten evalueren.",
+    ]
+    assert [e.anker for e in eenheden if e.anker.startswith("pt-")] == ["pt-1", "pt-1-a", "pt-1-b", "pt-2"]
+    # De overweging vóór de formule houdt één spatie.
+    assert "(1) Een overweging." in regels
+
+
+def test_aanbeveling_met_letterlijsten_onder_de_groepstitel():
+    """32022H0915 en 32023H2425 (T4-F5): een `a)`-lijst direct onder de groepstitel. Die
+    letters zijn de punten (`pt-a`); een tweede lijst die weer bij a) begint is `pt-al2-a`,
+    en de genummerde punten erna blijven `pt-1` (hun eigen reeks)."""
+    bepalingen = (b'<GR.SEQ LEVEL="1"><TITLE><TI><P>ALGEMEEN KADER</P></TI></TITLE>'
+                  b'<LIST TYPE="alpha"><ITEM><NP><NO.P>a)</NO.P><TXT>Niet bindend.</TXT></NP></ITEM>'
+                  b'<ITEM><NP><NO.P>b)</NO.P><TXT>Geen verplichting.</TXT></NP></ITEM></LIST></GR.SEQ>'
+                  b'<GR.SEQ LEVEL="1"><TITLE><TI><P>DEFINITIES</P></TI></TITLE><P>Verstaan wordt onder:</P>'
+                  b'<LIST TYPE="alpha"><ITEM><NP><NO.P>a)</NO.P><TXT>instantie;</TXT>'
+                  b'<P><LIST TYPE="roman"><ITEM><NP><NO.P>i)</NO.P><TXT>eerste;</TXT></NP></ITEM>'
+                  b'<ITEM><NP><NO.P>ii)</NO.P><TXT>tweede.</TXT></NP></ITEM></LIST></P></NP></ITEM>'
+                  b'<ITEM><NP><NO.P>b)</NO.P><TXT>observatie.</TXT></NP></ITEM></LIST></GR.SEQ>'
+                  b'<GR.SEQ LEVEL="1"><TITLE><TI><P>SPECIFIEK</P></TI></TITLE>'
+                  b'<NP><NO.P>1.</NO.P><TXT>De lidstaten werken samen.</TXT></NP></GR.SEQ>')
+    markdown, eenheden, _, _ = formex_xml.omzetten(formex_zip(act=AANBEVELING % bepalingen))
+    regels = [r for r in markdown.split("\n") if r]
+    start = regels.index("HEEFT DE VOLGENDE AANBEVELING VASTGESTELD:")
+    assert regels[start + 1:start + 12] == [
+        "## ALGEMEEN KADER", "a) Niet bindend.", "b) Geen verplichting.",
+        "## DEFINITIES", "Verstaan wordt onder:", "a) instantie;", "i) eerste;", "ii) tweede.",
+        "b) observatie.", "## SPECIFIEK", f"1.{NBSP * 3}De lidstaten werken samen.",
+    ]
+    assert [e.anker for e in eenheden if e.anker.startswith("pt-")] == [
+        "pt-a", "pt-b", "pt-al2-a", "pt-al2-a-i", "pt-al2-a-ii", "pt-al2-b", "pt-1"]
+
+
+def test_aanbeveling_met_decimale_punten():
+    """32022H2510: punten `1.1.` tot en met `4.2.` onder genummerde groepstitels. Drie harde
+    spaties, anker `pt-1-1`."""
+    bepalingen = (b'<GR.SEQ LEVEL="1"><TITLE><TI><NP><NO.P>1.</NO.P><TXT>DOEL</TXT></NP></TI></TITLE>'
+                  b'<NP><NO.P>1.1.</NO.P><TXT>Een doel.</TXT></NP>'
+                  b'<NP><NO.P>1.2.</NO.P><TXT>Een tweede.</TXT></NP></GR.SEQ>')
+    markdown, eenheden, _, _ = formex_xml.omzetten(formex_zip(act=AANBEVELING % bepalingen))
+    regels = [r for r in markdown.split("\n") if r]
+    assert f"1.1.{NBSP * 3}Een doel." in regels and f"1.2.{NBSP * 3}Een tweede." in regels
+    assert [e.anker for e in eenheden if e.anker.startswith("pt-")] == ["pt-1-1", "pt-1-2"]
+
+
+def test_een_punt_tussen_haakjes_in_een_bijlage_houdt_een_spatie():
+    """De drie harde spaties achter `(1)` gelden alleen in het dispositief: in een bijlage
+    blijft `(1) tekst` wat het was (32019D0419 en de andere bijlagen in raw/)."""
+    punt = b'<NP><NO.P>(1)</NO.P><TXT>Een bijlagepunt.</TXT></NP>'
+    markdown, _, _, _ = formex_xml.omzetten(formex_zip(act=_act_met_bijlage(punt)))
+    assert "(1) Een bijlagepunt." in markdown.split("\n")
+
+
+def test_een_inhoudsopgave_met_kolomkoppen():
+    """De bijlage van 32022H2510 heeft een `TOC.HD` (een lege kop en `Bladzijde`). Die hoort
+    bij de paginakolom, die als metadata wegvalt (`ITEM.REF`); de regels blijven."""
+    toc = (b'<TOC><TITLE><TI><P><HT TYPE="BOLD">Inhoudsopgave</HT></P></TI></TITLE>'
+           b'<TOC.HD><TOC.HD.CONT><IE/></TOC.HD.CONT><TOC.HD.REF><HT TYPE="ITALIC">Bladzijde</HT></TOC.HD.REF></TOC.HD>'
+           b'<TOC.BLK><TOC.ITEM><NO.ITEM>1.</NO.ITEM><ITEM.CONT>Beginselen</ITEM.CONT><ITEM.REF>184</ITEM.REF></TOC.ITEM>'
+           b'</TOC.BLK></TOC><GR.SEQ LEVEL="1"><TITLE><TI><NP><NO.P>1.</NO.P><TXT>Beginselen</TXT></NP></TI></TITLE>'
+           b'<P>Tekst.</P></GR.SEQ>')
+    markdown, _, onbekend, _ = formex_xml.omzetten(formex_zip(act=_act_met_bijlage(toc)))
+    regels = [r for r in markdown.split("\n") if r]
+    assert "1. Beginselen" in regels and "Inhoudsopgave" in regels
+    assert "Bladzijde" not in markdown and "184" not in markdown
+    assert not onbekend
+
+
+def test_een_inhoudsopgave_voor_contents_in_een_bijlage():
+    """De bijlage van 32022H2510 heeft `TITLE`, `TOC`, `CONTENTS` naast elkaar. Eén TOC vóór
+    CONTENTS geeft dezelfde volgorde als een TOC aan het begin van CONTENTS; na CONTENTS
+    blijft het een weigering."""
+    toc = (b'<TOC><TOC.BLK><TOC.ITEM><NO.ITEM>1.</NO.ITEM><ITEM.CONT>Beginselen</ITEM.CONT>'
+           b'<ITEM.REF>184</ITEM.REF></TOC.ITEM></TOC.BLK></TOC>')
+    inhoud = b'<CONTENTS><P>Tekst van de bijlage.</P></CONTENTS>'
+
+    def met_bijlage(kinderen: bytes) -> bytes:
+        return formex_zip(act=ACT.replace(
+            b"</FINAL>", b"</FINAL><ANNEX><TITLE><TI><P>BIJLAGE</P></TI></TITLE>" + kinderen + b"</ANNEX>"))
+
+    markdown, _, onbekend, _ = formex_xml.omzetten(met_bijlage(toc + inhoud))
+    regels = [r for r in markdown.split("\n") if r]
+    assert regels.index("1. Beginselen") < regels.index("Tekst van de bijlage.")
+    assert not onbekend
+    with pytest.raises(ConversionError, match="TOC na CONTENTS"):
+        formex_xml.omzetten(met_bijlage(inhoud + toc))
