@@ -3,6 +3,25 @@
 Nieuwste bovenaan. De inhoudelijke uitleg staat in `CLAUDE.md`; hier alleen wat er
 veranderde en waarom.
 
+## 29 september 2026 — de OP-XML-woordenschat van Kamerstukken (kb WP-41)
+
+- **OP-XML (`officiele_bekendmakingen.py`)**, in de raw-vorm van `md-clean-documenten/references/
+  patronen.md` §4 (T6-F5, T6-F6):
+  - `<datumtekst>` wordt een gewone regel onder de titelregel (`Ontvangen 5 maart 2025`);
+  - een verwerkingsinstructie (`<?xpp ep?>`, `<?xpp witregel?>`) in een tabel, een rij of een cel is
+    onzichtbaar; tekst erachter buiten een cel is een weigering;
+  - `<plaatje>`: de afbeelding niet overnemen, wel vastleggen (`afbeeldingen_weggelaten`, een
+    waarschuwing), een `bijschrift` is tekst; dezelfde afspraak als `bwb_xml.plaatje()`;
+  - `<kop><label>Hoofdstuk</label><nr>1.</nr>…` wordt `## Hoofdstuk 1. Inleiding`; een label ná het
+    nummer of zonder nummer blijft een weigering;
+  - een stuk in meer `<dossier>`s: elk paar in bronvolgorde in de titelregel. De metadata splitst
+    `22112;32761` in `dossiernummers` en houdt het eerste als `dossiernummer`; ongesplitst was de
+    identiteit `kst-2211232761-nr-4304`. Noemt het publicatie-id een ander dossier dan het eerste,
+    dan is dat een weigering;
+  - een lege `<sup/>` laat niets achter; een `sup` of `inf` met tekst blijft een weigering (T6-F3).
+- Gemeten: de tien Kamerstukken van test 6 die weigerden, zetten alle tien om (`kb_fetch`); de meetlat
+  (Formex) is ongewijzigd, 287/307, geen verschil. Tests: 588.
+
 ## 26 september 2026 — een handeling zonder artikelen: de aanbeveling (kb WP-25)
 
 - **Formex (`formex_xml.py`)**: een `ENACTING.TERMS` zonder eigen `ARTICLE` gaat door
