@@ -145,6 +145,24 @@ python3 -m venv .venv
 .venv/bin/python app.py
 ```
 
+### Dezelfde versies als de ontwikkelaar, en de tests
+
+`requirements.txt` geeft ondergrenzen; `requirements.lock` is de `pip freeze` van de werkende
+`.venv` (Python uit `.python-version`, nu 3.13; lokaal werkt 3.14 ook). Wil je exact dezelfde
+versies, installeer dan daaruit:
+
+```bash
+.venv/bin/pip install -r requirements.lock
+.venv/bin/python -m pytest tests/ -q
+```
+
+Instellingen staan met uitleg in `.env.example` (kopieer naar `.env`). Twee tests lezen een gouden
+voorbeeld uit de juridische kennisbank; die map vinden ze via `KB_ROOT`, anders `~/Documents/kb`,
+anders `../kb`. Een gezette `KB_ROOT` die niet bestaat is een fout; zonder kennisbank (de kb is
+privé, dus ook in CI) slaan die twee tests over met de reden, en de rest draait gewoon.
+GitHub Actions (`.github/workflows/tests.yml`) draait pytest op elke push naar `sander` en bouwt
+de Docker-image om te controleren dat `meetlat/`, `tests/` en `.deploy-state/` er niet in zitten.
+
 ### Kennisbankbundels vanaf de opdrachtregel
 
 `mdconv.kb_fetch` zet dezelfde bundel op schijf als de download in de browser, voor de

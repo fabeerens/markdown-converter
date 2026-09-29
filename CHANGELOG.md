@@ -3,6 +3,24 @@
 Nieuwste bovenaan. De inhoudelijke uitleg staat in `CLAUDE.md`; hier alleen wat er
 veranderde en waarom.
 
+## 29 september 2026 — de converter draait zonder de Mac van Sander (kb WP-55)
+
+Geen gedragswijziging in `mdconv/`; alleen wat rond de omzetting hangt.
+
+- **`KB_ROOT` (`tests/kbwortel.py`)**: de twee tests die een gouden voorbeeld van de kb lezen
+  (`test_hudoc_lokaal.py`, `test_officiele_bekendmakingen.py`) zochten `~/Documents/kb` en sloegen stil
+  over als dat ontbrak. Nu `KB_ROOT`, dan `~/Documents/kb`, dan `../kb`; gezet maar ontbrekend, of een kb
+  zonder het voorbeeld, faalt met het pad; zonder kb wordt overgeslagen met de reden.
+- **Reproduceerbaar**: `.python-version` (3.13), `requirements.lock` (`pip freeze` van de `.venv`),
+  `.env.example`. `.dockerignore` sluit `meetlat/` (88 MB), `tests/`, `.deploy-state/`, `.pytest_cache/`
+  en `.github/` uit: de build-context gaat van 95,7 naar 0,9 MB.
+- **CI**: `.github/workflows/tests.yml` draait pytest op push naar `sander` en bouwt de image om te
+  controleren dat die mappen er niet in zitten.
+- **Grens**: `tests/test_grens.py` faalt op een import van een kb-module of een `sys.path` naar de kb.
+- Meetlat: twee documenten (`02018R1724-20260520`, `32019R0089`) gaven al sinds WP-42 andere uitvoer dan
+  de basislijn, omdat tabelnoten nu in de volgorde van `GR.NOTES` genummerd worden; de basislijn is nu
+  bijgewerkt. Tests: 629 (627 plus de twee grenstests).
+
 ## 29 september 2026 — HUDOC-nummering en Cellar-metadata (kb WP-43, deel B)
 
 - **HUDOC-DOCX (`docx.py`, `hudoc_docx.py`)**, vier arresten die weigerden (T5-F8):

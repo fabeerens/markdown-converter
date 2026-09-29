@@ -19,7 +19,8 @@ verandert zit aan de achterkant.
    herbouwt het bronbewijs met haar eigen parser uit de bewaarde bronbytes. Twee
    onafhankelijke implementaties die het oneens zijn, wijzen de fout aan;
    gedeelde code maakt dat bewijs waardeloos. Gedeeld worden alleen het formaat
-   en vaste testbestanden.
+   en vaste testbestanden. `tests/test_grens.py` bewaakt dit met `ast` (geen import van een
+   kb-module, geen `sys.path` naar de kb); het spiegelbeeld staat in de kb.
 2. **Een XML-route schrijft de raw-vorm die het profiel van de kennisbank al
    aankan**, niet een mooiere vorm. Voor EUR-Lex: lid = `1.` plus drie harde
    spaties, overweging = `(1)` plus één spatie, nootdefinitie = `(1)` plus twee
@@ -40,7 +41,7 @@ verandert zit aan de achterkant.
 
 - **Tests zijn karakteriseringstests**: ze leggen het *bestaande* gedrag vast.
   Verandert er gedrag, dan verander je de test bewust en zeg je dat in de
-  commit. Draai `.venv/bin/python -m pytest tests/ -q` (nu 627 tests, stand na kb WP-43) vóór
+  commit. Draai `.venv/bin/python -m pytest tests/ -q` (nu 629 tests, stand na kb WP-55) vóór
   je klaar bent.
 - **Raak je een Formex-omzetter** (`formex_xml.py`, `formex_hof.py`,
   `xml_gedeeld.py` of de Formex-tak van `eurlex.py`), **draai dan de meetlat**:
@@ -49,6 +50,14 @@ verandert zit aan de achterkant.
   als je in de commit zegt waarom. Een reparatie begint bij de oorzaken die de
   meetlat telt, niet bij het ene document dat iemand tegenkwam; noem in de commit
   de doorlaat vóór en na (bv. "wetgeving 127/266 → 139/266").
+- **De kb-map komt uit `KB_ROOT`**, nooit uit een vast pad: `tests/kbwortel.py` zoekt `KB_ROOT`,
+  dan `~/Documents/kb`, dan `../kb`. Gezet maar ontbrekend faalt met het pad; zonder kb slaat een
+  test over met zijn reden. Een nieuwe test die de kb nodig heeft, gebruikt `kb_golden()` en zet
+  geen eigen `skipif` op een pad. Variabelen die de app leest staan in `.env.example`.
+- **Reproduceerbaar en CI.** `.python-version` (3.13, zoals de Docker-image) en `requirements.lock`
+  (`pip freeze` van de `.venv`; verander je `requirements.txt`, ververs dan ook de lock).
+  `.github/workflows/tests.yml` draait pytest op elke push naar `sander`. `.dockerignore` houdt
+  `meetlat/`, `tests/` en `.deploy-state/` uit de image.
 - **Geen netwerk in tests.** Vervang `net.documents` met `monkeypatch`; zie
   `_fake_cellar` in `tests/test_characterisation.py`.
 - **Lui laden blijft lui.** MarkItDown en pdf-inspector kosten honderden ms bij
