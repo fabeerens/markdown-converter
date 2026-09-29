@@ -3,6 +3,21 @@
 Nieuwste bovenaan. De inhoudelijke uitleg staat in `CLAUDE.md`; hier alleen wat er
 veranderde en waarom.
 
+## 29 september 2026 — aanbevelingen met punten `(1)`, `a)` en `1.1.`, en tabelnoten (kb WP-42)
+
+- **Formex, het dispositief van een aanbeveling (`formex_xml.dispositief()`)**, in de raw-vorm van
+  `md-clean-eurlex/references/patronen.md` §9 (T4-F5):
+  - een punt `(1)` of `1.1.` houdt zijn gedrukte markering, met drie harde spaties erachter
+    (`pt-1`, `pt-1-1`); in een bijlage blijft `(1)` één spatie;
+  - een `a)`-lijst direct onder een groepstitel wordt `a) tekst`, anker `pt-a`, een nieuwe reeks
+    `pt-al2-a`; `I.` als punt blijft een weigering.
+- **Inhoudsopgave in een bijlage**: `TOC.HD` is metadata, zoals `ITEM.REF`; één TOC vóór CONTENTS mag.
+- **Tabelnoten** (T4-F3): de noten van `GR.NOTES` krijgen hun nummer vóór de rijen, in bronvolgorde,
+  zoals het Publicatieblad en de kb-lezer (32018R1724).
+- Gemeten: de zeven aanbevelingen van test 4 en van de steekproef van kb WP-25 zetten alle zeven om; over
+  de 93 Formex-bronnen in kb `raw/` verandert alleen hun uitvoer en die van 32018R1724. Meetlat 287/307,
+  andere uitvoer bij 02018R1724-20260520 en 32019R0089 (alleen nootnummers). Tests: 596.
+
 ## 29 september 2026 — de OP-XML-woordenschat van Kamerstukken (kb WP-41)
 
 - **OP-XML (`officiele_bekendmakingen.py`)**, in de raw-vorm van `md-clean-documenten/references/

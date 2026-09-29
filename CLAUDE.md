@@ -315,8 +315,9 @@ accountregistratie namens de gebruiker):
   zonder kop, eenheid of lijst, in bronvolgorde en zonder opmaak. Ze staat als kind van een
   CONS.ANNEX `BIJLAGEN` in de geconsolideerde MDR, of in CONTENTS in 2005/66. De
   Publicatiebladversie van de MDR, waar dezelfde opgave als NP staat, leest daardoor regel voor
-  regel gelijk. `ITEM.REF`, een TOC naast CONTENTS of iets anders in een TOC.ITEM blijft een
-  weigering. Gemeten gevolg: wetgeving 167 → 174 van 266, onder meer de MDR, de IVDR en de
+  regel gelijk. `ITEM.REF` (het bladzijdenummer) en `TOC.HD` (de kolomkoppen erboven) vallen als
+  metadata weg (kb WP-20 en WP-42); één TOC vóór CONTENTS mag (32022H2510, kb WP-42); een TOC ná
+  CONTENTS, twee TOC's of iets anders in een TOC.ITEM blijft een weigering. Gemeten gevolg: wetgeving 167 → 174 van 266, onder meer de MDR, de IVDR en de
   machineverordening.
   Een **inclusie** wordt niet altijd kaal aangeroepen zoals in 32026R1744
   (`<P><QUOT.S><INCL.ELEMENT/></QUOT.S></P>`). Gemeten in de meetlat: `<P><INCL.ELEMENT/></P>`
