@@ -27,8 +27,12 @@ Wat de route **weigert** in plaats van raadt: een ander worteldocument dan `kame
 vocabulaire van Staatsblad en Staatscourant is niet gemeten), elk element met tekst zonder
 eigen behandeling, een lijst die niet `expliciet` genummerd is, een geneste lijst, een
 tabel die niet rechthoekig te maken is, een nootmarker zonder definitie, een `nootref` die
-naar geen noot in het stuk wijst, en een bron waarvan de woorden na omzetting niet als
-multiset gelijk zijn.
+naar geen noot in het stuk wijst, een `sup` of `inf` met tekst, en een bron waarvan de
+woorden na omzetting niet als multiset gelijk zijn.
+
+Sinds kb WP-41 (T6-F5, T6-F6) gemeten, in de raw-vorm van `patronen.md` §4 van het
+documentenprofiel: `<datumtekst>`, een verwerkingsinstructie in een tabel, `<plaatje>`, een
+kop met `<label>` vóór het nummer, een lege `<sup/>` en een stuk in meer dossiers.
 """
 
 from __future__ import annotations
@@ -131,7 +135,9 @@ def converteer(data: bytes, metadata_bytes: bytes, pub_id: str,
         waarschuwingen=tuple(meta["waarschuwingen"]),
         extra={"publicatie_id": pub_id, "metadata": metadata, **{
             k: meta[k] for k in ("noten", "lijstitems", "tabellen", "bijlagen", "opmaak_weggelaten",
-                                  "extrefs", "nootverwijzingen")}},
+                                  "extrefs", "nootverwijzingen")},
+               **({"afbeeldingen_weggelaten": meta["afbeeldingen_weggelaten"]}
+                  if meta["afbeeldingen_weggelaten"] else {})},
     )
     return markdown, f"Officiële Bekendmakingen • {pub_id}", herkomst
 
@@ -209,6 +215,7 @@ class _Lezer:
         self.koppen = self.lijstitems = self.tabellen = self.bijlagen = 0
         self.opmaak = self.extrefs = 0
         self.tabelnr = 0
+        self.afbeeldingen: list[dict] = []
         self.gegenereerd: Counter = Counter()
 
     # -- inline ---------------------------------------------------------
@@ -259,8 +266,18 @@ class _Lezer:
             elif naam == "ondernummer":
                 # `Nr. <ondernummer>4</ondernummer>`: het nummer hoort bij zijn voorvoegsel.
                 delen.append(self._ruw(kind))
+            elif naam == "datum":
+                # `<datumtekst>Ontvangen <datum isodatum="2025-03-05">5 maart 2025</datum>`: de
+                # datum is tekst; `@isodatum` is een attribuut en geen woord (T6-F5, kb WP-41).
+                delen.append(self._ruw(kind))
             elif naam in ("functie", "voornaam", "achternaam", "naam"):
                 delen.append(" " + self._ruw(kind) + " ")
+            elif naam in ("sup", "inf") and not len(kind) and not (kind.text or "").strip():
+                # Een lege `<sup/>` vóór de tekst van een noot (twee noten van kst-36531-3, de
+                # memorie van toelichting bij de uitvoering van de DSA) draagt geen teken. Een
+                # `sup` of `inf` mét tekst (een macht, een index) is niet gemeten en blijft een
+                # weigering: of `m2` een macht of een nootmarker is, wordt niet geraden (T6-F3).
+                pass
             elif naam.startswith("?") or naam == "?":
                 pass
             else:
@@ -295,6 +312,13 @@ class _Lezer:
                     if _kort(onder) != "ondertekening":
                         raise ConversionError(f"Onverwacht element in de sluiting ({_kort(onder)}).")
                     self.uit.blok(self.inline(onder))
+            elif naam == "datumtekst":
+                # `Ontvangen 5 maart 2025` onder de titel van elke nota naar aanleiding van het
+                # verslag in test 6 (4 van 4, T6-F5). Een gewone regel: de datum is tekst, en een
+                # kop zou het profiel een anker laten uitdelen voor iets dat geen sectie is.
+                self.uit.blok(self.inline(kind))
+            elif naam == "plaatje":
+                self.plaatje(kind)
             elif naam == "kop":
                 # Een kop buiten een divisie of bijlage hoort bij het stuk zelf; die staat er niet.
                 raise ConversionError("Een kop buiten een divisie of bijlage; omzetting geweigerd.")
@@ -306,16 +330,47 @@ class _Lezer:
     def divisie(self, el, diepte: int) -> None:
         kop = next((k for k in el if _kort(k) == "kop"), None)
         if kop is not None:
+            label = next((k for k in kop if _kort(k) == "label"), None)
             nr = next((k for k in kop if _kort(k) == "nr"), None)
             titel = next((k for k in kop if _kort(k) == "titel"), None)
-            onbekend = [_kort(k) for k in kop if _kort(k) not in ("nr", "titel")]
+            onbekend = [_kort(k) for k in kop if _kort(k) not in ("label", "nr", "titel")]
             if onbekend or titel is None:
                 raise ConversionError(f"Een kop met onverwachte inhoud ({onbekend or 'geen titel'}).")
-            tekst = " ".join(t for t in (self.inline(nr) if nr is not None else "", self.inline(titel)) if t)
+            # `<kop><label>Hoofdstuk</label><nr>1.</nr><titel>Inleiding</titel>` (kst-36716-3,
+            # kst-36875-6): het label staat vóór het nummer, zoals de PDF het zet
+            # (`## Hoofdstuk 1. Inleiding`). Het profiel leest `Hoofdstuk <n>` als bronnummer.
+            # Alleen in die volgorde gemeten; een label na het nummer of zonder nummer niet.
+            volgorde = [_kort(k) for k in kop if _kort(k) in ("label", "nr")]
+            if label is not None and (nr is None or volgorde != ["label", "nr"]):
+                raise ConversionError(f"Een kop met een label in een niet gemeten vorm ({volgorde}).")
+            tekst = " ".join(t for t in (self.inline(label) if label is not None else "",
+                                         self.inline(nr) if nr is not None else "", self.inline(titel)) if t)
             self.uit.blok(f"{'#' * min(diepte + 1, 6)} {tekst}")
             self.koppen += 1
         rest = _Ouder(el, kop)
         self.lees(rest, diepte)
+
+    def plaatje(self, el) -> None:
+        """Een afbeelding (`<plaatje><illustratie naam="kst-36825-3-001.png"/>`, een processchema
+        in kst-36825-3): niet overnemen, wel vastleggen; een bijschrift is tekst.
+
+        Dezelfde afspraak als de BWB-route sinds WP-20 (`bwb_xml.py`, `plaatje()`): geen
+        beeldbytes en geen plaatshouder in de Markdown, een melding in de herkomst en een lijst
+        `afbeeldingen_weggelaten`. Een afbeelding heeft geen woorden, dus de zelfcontrole ziet het
+        verschil niet; de melding zorgt dat het nooit stil gebeurt.
+        """
+        for kind in el:
+            naam = _kort(kind)
+            if not isinstance(kind.tag, str):
+                continue
+            if naam == "illustratie":
+                self.afbeeldingen.append({
+                    "naam": kind.get("naam"), "formaat": kind.get("formaat"),
+                    "breedte": kind.get("breedte"), "hoogte": kind.get("hoogte")})
+            elif naam == "bijschrift":
+                self.uit.blok(self.inline(kind))
+            else:
+                raise ConversionError(f"Onverwacht element in een afbeelding ({naam}).")
 
     def lijst(self, lijst, niveau: int = 0) -> None:
         if lijst.get("type") != "expliciet":
@@ -366,7 +421,9 @@ class _Lezer:
         if len(groepen) != 1:
             raise ConversionError(f"Een tabel heeft {len(groepen)} tgroup-elementen; precies één is vereist.")
         for k in tabel:
-            if _kort(k) == "title":
+            if not isinstance(k.tag, str):
+                self._verwerkingsinstructie(k)
+            elif _kort(k) == "title":
                 self.uit.blok(self.inline(k))
             elif _kort(k) not in ("tgroup",):
                 raise ConversionError(f"Onverwacht element in een tabel ({_kort(k)}).")
@@ -378,15 +435,24 @@ class _Lezer:
         kop_rijen, rijen = 0, []
         for deel in groep:
             naam = _kort(deel)
+            if not isinstance(deel.tag, str):
+                self._verwerkingsinstructie(deel)
+                continue
             if naam in ("colspec", "spanspec"):
                 continue
             if naam not in ("thead", "tbody", "tfoot"):
                 raise ConversionError(f"Onverwacht element in een tabel ({naam}).")
             for rij in deel:
+                if not isinstance(rij.tag, str):
+                    self._verwerkingsinstructie(rij)
+                    continue
                 if _kort(rij) != "row":
                     raise ConversionError(f"Onverwacht element in een tabel ({_kort(rij)}).")
                 cellen = []
                 for cel in rij:
+                    if not isinstance(cel.tag, str):
+                        self._verwerkingsinstructie(cel)
+                        continue
                     if _kort(cel) != "entry":
                         raise ConversionError(f"Onverwacht element in een tabelrij ({_kort(cel)}).")
                     start, eind = cel.get("namest"), cel.get("nameend")
@@ -410,11 +476,27 @@ class _Lezer:
     def _cel(self, cel) -> str:
         delen = [cel.text or ""]
         for kind in cel:
+            if not isinstance(kind.tag, str):
+                # `<entry><al>…</al><?xpp witregel?><al>…</al></entry>` (kst-36531-3): een
+                # zetinstructie tussen twee alinea's van één cel, onzichtbaar zoals in een
+                # alinea. Wat erna staat, telt.
+                delen.append(kind.tail or "")
+                continue
             if _kort(kind) != "al":
                 raise ConversionError(f"Onverwacht element in een tabelcel ({_kort(kind)}).")
             delen.append(" " + self.inline(kind) + " ")
             delen.append(kind.tail or "")
         return "".join(delen)
+
+
+    @staticmethod
+    def _verwerkingsinstructie(pi) -> None:
+        """Een zetinstructie tussen de onderdelen van een tabel (`<tbody><?xpp ep?><row>`,
+        kst-36875-3): onzichtbaar. Tot WP-41 gaf `_kort()` er `?` voor en weigerde de tabel
+        (T6-F5). Staat er tekst achter, dan hoort die bij geen cel, en dat is niet gemeten."""
+        if (pi.tail or "").strip():
+            raise ConversionError("Tekst achter een verwerkingsinstructie buiten een tabelcel; "
+                                  "omzetting geweigerd.")
 
 
 class _Ouder:
@@ -486,6 +568,12 @@ def omzetten(data: bytes, metadata: dict) -> tuple[str, dict]:
     waarschuwingen = []
     if lezer.opmaak:
         waarschuwingen.append(f"{lezer.opmaak} keer opmaak (<nadruk>) niet overgenomen; de tekst blijft.")
+    if lezer.afbeeldingen:
+        namen = [a["naam"] or "?" for a in lezer.afbeeldingen]
+        waarschuwingen.append(
+            f"{len(namen)} {'afbeelding' if len(namen) == 1 else 'afbeeldingen'} uit de OP-XML niet "
+            f"overgenomen; de tekst eromheen en een bijschrift staan er wel: {', '.join(namen[:5])}"
+            + (f" en {len(namen) - 5} meer" if len(namen) > 5 else "") + ".")
     if lezer.nootrefs:
         # Een tweede marker naar dezelfde noot: de kennisbank telt markers per noot, en
         # moet deze relatie ook lezen voordat het document door haar poort kan.
@@ -496,6 +584,7 @@ def omzetten(data: bytes, metadata: dict) -> tuple[str, dict]:
         "koppen": lezer.koppen, "noten": len(lezer.uit.noten), "lijstitems": lezer.lijstitems,
         "tabellen": lezer.tabellen, "bijlagen": lezer.bijlagen, "opmaak_weggelaten": lezer.opmaak,
         "extrefs": lezer.extrefs, "nootverwijzingen": lezer.nootrefs, "waarschuwingen": waarschuwingen,
+        "afbeeldingen_weggelaten": lezer.afbeeldingen,
     }
 
 

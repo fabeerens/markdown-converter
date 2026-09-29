@@ -167,8 +167,17 @@ def test_metadata_must_name_the_requested_publication(monkeypatch):
     (lambda x: x.replace(b"<noot.nr>2</noot.nr>", b"<noot.nr>1</noot.nr>"), "Twee noten met hetzelfde label"),
     (lambda x: x.replace(b"<kamerstuk>", b"<staatsblad>").replace(b"</kamerstuk>", b"</staatsblad>"),
      "geen enkel <kamerstuk>"),
+    # Sinds kb WP-41 is een label vóór het nummer gemeten (`Hoofdstuk 1.`); ná het nummer niet.
     (lambda x: x.replace(b"<kop><nr>1.</nr><titel>Inleiding</titel></kop>", b"<kop><nr>1.</nr><label>x</label><titel>Inleiding</titel></kop>"),
+     "label in een niet gemeten vorm"),
+    (lambda x: x.replace(b"<kop><nr>1.</nr><titel>Inleiding</titel></kop>", b"<kop><nr>1.</nr><bron>x</bron><titel>Inleiding</titel></kop>"),
      "kop met onverwachte inhoud"),
+    # Een `sup` mét tekst blijft een weigering: macht of nootmarker wordt niet geraden (T6-F3).
+    (lambda x: x.replace(b"<al>Hieronder staat het advies.</al>", b"<al>Hieronder staat 10 m<sup>2</sup>.</al>"),
+     "binnen een alinea \\(sup\\)"),
+    (lambda x: x.replace(b"<tbody><row>", b"<tbody><?xpp ep?>x<row>"), "achter een verwerkingsinstructie"),
+    (lambda x: x.replace(b"<al>Hieronder staat het advies.</al>", b"<plaatje><tekening/></plaatje>"),
+     "in een afbeelding \\(tekening\\)"),
 ])
 def test_what_the_route_does_not_know_is_refused_with_the_reason(wijziging, reden):
     with pytest.raises(ConversionError, match=reden):
@@ -237,3 +246,31 @@ def test_the_real_kamerstuk_gives_exactly_the_golden_raw_form():
                                           "kst-34851-4")
     assert markdown == (KB_GOLDEN / "kst-34851-nr-4.raw.md").read_text(encoding="utf-8")
     assert herkomst.extra["noten"] == 146 and herkomst.extra["tabellen"] == 2
+
+
+def test_de_woordenschat_van_test_6_wordt_omgezet():
+    """kb WP-41 (T6-F5, T6-F6): `<datumtekst>` onder de titel van elke nota naar aanleiding van het
+    verslag, een zetinstructie in een tabel (kst-36875-3, kst-36531-3), een afbeelding (kst-36825-3),
+    een kop met label (kst-36716-3) en een lege `<sup/>` in een noot (kst-36531-3), in de raw-vorm van
+    `patronen.md` §4 van het documentenprofiel."""
+    xml = (XML
+           .replace(b"<noot.al>Titelnoot.", b"<noot.al><sup/>Titelnoot.")
+           .replace(b"</noot></titel>", b"</noot></titel><datumtekst>Ontvangen "
+                                         b"<datum isodatum=\"2017-12-12\">12 december 2017</datum></datumtekst>")
+           .replace(b"<divisie><kop><nr>1.</nr><titel>Inleiding</titel></kop>",
+                    b"<divisie><kop><label>Hoofdstuk</label><nr>1.</nr><titel>Inleiding</titel></kop>"
+                    b"<plaatje><illustratie naam=\"kst-34851-4-001.png\" formaat=\"png\"/></plaatje>")
+           .replace(b"<tbody><row>", b"<tbody><?xpp ep?><row>")
+           .replace(b"<al>Artikel 9</al></entry>", b"<al>Artikel 9</al><?xpp witregel?><al>en 10</al></entry>"))
+    markdown, _, herkomst = ob.converteer(xml, METADATA, "kst-34851-4")
+    regels = markdown.split("\n")
+    # Een eigen blok direct onder de titelregel (de blokken staan met een lege regel ertussen).
+    assert regels.index("Ontvangen 12 december 2017") == regels.index("# 34 851 Regels (Uitvoeringswet AVG). Nr. 4 ADVIES[^1]") + 2
+    assert "## Hoofdstuk 1. Inleiding" in regels
+    assert "| Artikel 9 en 10 | ja |" in regels
+    assert "[^1]: Titelnoot." in regels
+    assert herkomst.extra["afbeeldingen_weggelaten"] == [
+        {"naam": "kst-34851-4-001.png", "formaat": "png", "breedte": None, "hoogte": None}]
+    assert any("1 afbeelding uit de OP-XML niet overgenomen" in w for w in herkomst.waarschuwingen)
+    assert "png" not in markdown
+
