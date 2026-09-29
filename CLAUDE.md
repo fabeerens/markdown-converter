@@ -534,6 +534,9 @@ accountregistratie namens de gebruiker):
   nummer staat dan niet in de tekst; gemeten in 3 van 35, waaronder Big Brother Watch),
   Franse uitspraken, beslissingen en samenvattingen. De zelfcontrole telt de woorden in de bron
   met een eigen doorloop en eist gelijke woordverzamelingen en aaneengesloten bladalinea's.
+  Sinds kb WP-43 leest `docx.Teller` een `numFmt` in `mc:AlternateContent` als de `mc:Choice`
+  (`custom`, `α, β, γ, ...`: de `(α)`-koppen van Big Brother Watch), draagt een `w:sdt` in een alinea
+  zijn tekst, is `Symbol F069` een ι en een lege `ECHRPlaceholder` niets.
   **Cloudflare en de lokale route** (25 september 2026, T2-F5 in de foutlog van de
   kennisbank): HUDOC geeft de Python-client nu elke keer 403 met `server: cloudflare` en de
   wachtpagina "Just a moment..."; curl met dezelfde User-Agent kreeg 200, dus het is een

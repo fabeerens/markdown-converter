@@ -3,6 +3,24 @@
 Nieuwste bovenaan. De inhoudelijke uitleg staat in `CLAUDE.md`; hier alleen wat er
 veranderde en waarom.
 
+## 29 september 2026 — HUDOC-nummering en Cellar-metadata (kb WP-43, deel B)
+
+- **HUDOC-DOCX (`docx.py`, `hudoc_docx.py`)**, vier arresten die weigerden (T5-F8):
+  - een `numFmt` in `mc:AlternateContent`: de `mc:Choice` (`custom`, `α, β, γ, ...`) is wat HUDOC toont,
+    `(α)`, `(β)`; een ander eigen formaat of een niveau zonder `numFmt` en zonder keuze weigert;
+  - `Symbol F069` is `ι`, in de lezer en in de brontekst van de zelfcontrole;
+  - een `w:sdt` midden in een alinea draagt zijn tekst in `w:sdtContent`; `w:showingPlcHdr` weigert;
+  - een lege `ECHRPlaceholder`-alinea is niets, met tekst weigert ze; `Jupara0` is een alinea met randnummer.
+- **Formex-HvJ (`eurlex.py`, `formex_hof.py`)**:
+  - vindt de Cellar geen ECLI onder de oude CELEX van de bron (`62001J0101`), dan volgt een tweede vraag
+    onder de nieuwe vorm (`62001CJ0101`), alleen voor de `J` van het Hof (Lindqvist, T2-F14);
+  - noemt `BIB.JUDGMENT` maar één van de gevoegde zaken, dan komen ze uit de eerste alinea van
+    `JUDGMENT.INIT` (`In de gevoegde zaken C‑203/15 en C‑698/15,`), in de gemeten vorm en met een melding
+    (Tele2, T5-F9).
+- Gemeten: de 14 bewaarde HUDOC-DOCX en de 37 HvJ-Formex-bronnen in kb `raw/` geven dezelfde markdown; de
+  zaaknummers veranderen bij Tele2 en T-70/23. Rotaru blijft weigeren op een ingebedde afbeelding. Meetlat
+  287/307, ongewijzigd. Tests: 627.
+
 ## 29 september 2026 — BWB-constructies die wegvielen of weigerden (kb WP-43, deel A)
 
 - **BWB-XML (`bwb_xml.py`)**, gevonden door de bronlezing van kb WP-30 en test 6 (T6-F3, T6-F4):
