@@ -1,5 +1,5 @@
 {
- "commit": "e608024+wijzigingen",
+ "commit": "0fe9c8b",
  "documenten": {
   "02002L0058-20091219": {
    "melding": null,
@@ -52,7 +52,7 @@
    "waarschuwingen": []
   },
   "02014L0065-20260606": {
-   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: annex-2-i-2-, annex-2-ii-ii, art-4-1-1-a, art-4-1-1-b (de Formex-bron nummert op één niveau twee eenheden gelijk; alleen een herhaalde markering binnen één opsomming wordt met een volgnummer onderscheiden)",
+   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: annex-2-i-2-, art-4-1-1-a, art-4-1-1-b (de Formex-bron nummert op één niveau twee eenheden gelijk; alleen een herhaalde markering binnen één opsomming wordt met een volgnummer onderscheiden)",
    "oorzaak": "structuur: dubbele structurele ankers",
    "route": "wetgeving",
    "sectie": "geconsolideerd",
@@ -223,7 +223,7 @@
    "oorzaak": null,
    "route": "wetgeving",
    "sectie": "geconsolideerd",
-   "sha256": "c067e2fa821e5357c1cb2ccf6f49f930687e6bd7abbc898eb455acad7fb6beac",
+   "sha256": "aceb08d838fd651c31364c24129d157e460176b3d47d1a3bf891062522dc274f",
    "status": "ok",
    "tekens": 80709,
    "waarschuwingen": [
@@ -1171,7 +1171,7 @@
    "waarschuwingen": []
   },
   "32014L0065": {
-   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: annex-2-i-2-, annex-2-ii-ii, art-4-1-1-a, art-4-1-1-b (de Formex-bron nummert op één niveau twee eenheden gelijk; alleen een herhaalde markering binnen één opsomming wordt met een volgnummer onderscheiden)",
+   "melding": "Formex-structuurcontrole faalt: dubbele structurele ankers: annex-2-i-2-, art-4-1-1-a, art-4-1-1-b (de Formex-bron nummert op één niveau twee eenheden gelijk; alleen een herhaalde markering binnen één opsomming wordt met een volgnummer onderscheiden)",
    "oorzaak": "structuur: dubbele structurele ankers",
    "route": "wetgeving",
    "sectie": "belangrijk",
@@ -1841,7 +1841,7 @@
    "oorzaak": null,
    "route": "wetgeving",
    "sectie": "steekproef-wetgeving",
-   "sha256": "7644bbfc5a53129c99980aeecd6de5dd75c0dcad3f7260808c0f251105e60cf3",
+   "sha256": "553948eaf1524a2cca71ff73418a2db488db0fc124dfdf4aeac58883f87838e9",
    "status": "ok",
    "tekens": 76945,
    "waarschuwingen": []
@@ -3672,6 +3672,6 @@
    ]
   }
  },
- "gemeten": "2026-09-25 20:52",
+ "gemeten": "2026-09-29 21:38",
  "taal": "NL"
 }
