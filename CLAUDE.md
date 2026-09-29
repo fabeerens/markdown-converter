@@ -598,6 +598,10 @@ accountregistratie namens de gebruiker):
   **`<circulaire>`** (nadere regel NR/REG-1829, BWBR0041321) heeft de vorm van `<regeling>`; haar
   `circulaire.divisie`s worden koppen (`## 1. Reikwijdte`) zonder eenheid, omdat de bron ze geen
   artikel noemt.
+  Sinds kb WP-43 (29 september 2026) is een **`<sup>` met cijfers alleen een noot als dezelfde bijlage
+  er een definitie voor heeft**, anders een macht `^n^` (Archiefregeling: `kg/m<sup>3</sup>`); een
+  ondertekening is één regel met de losse tekst ertussen; `<table><title>` en `<kop><subtitel>` worden
+  een alinea boven de tabel en onder de kop, en een ander kind van `<table>` of `<kop>` weigert.
 - **Duitse rechtspraak** — twee lagen, met een gedeelde parser:
   - **Primair: OpenLegalData** (`de_openlegaldata.py`, `de.openlegaldata.io`) — een gratis,
     **sleutelloze** JSON-API, rechtstreeks doorzoekbaar op ECLI (`?ecli=<ECLI>`, dan een

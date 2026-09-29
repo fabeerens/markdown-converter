@@ -3,6 +3,24 @@
 Nieuwste bovenaan. De inhoudelijke uitleg staat in `CLAUDE.md`; hier alleen wat er
 veranderde en waarom.
 
+## 29 september 2026 — BWB-constructies die wegvielen of weigerden (kb WP-43, deel A)
+
+- **BWB-XML (`bwb_xml.py`)**, gevonden door de bronlezing van kb WP-30 en test 6 (T6-F3, T6-F4):
+  - `<afk>` en `<organisatie>` zijn gewone inline tekst (BWBR0042755 weigerde op `inline:afk`);
+  - de lijsttekens `−` (U+2212), `○` en `□` zijn ongemarkeerd en geven geen anker (BWBR0043632,
+    BWBR0049314 weigerden op `annex-1-`);
+  - een `<sup>` met cijfers is alleen een nootmarker als dezelfde bijlage er een definitie voor heeft,
+    anders een macht `^n^` (Archiefregeling: `kg/m[^3]` wees naar niets);
+  - `<table><title>` staat als alinea boven de tabel, `<kop><subtitel>` als alinea onder de kop;
+    een ander kind van `<table>` of `<kop>` is een weigering in plaats van stil verlies;
+  - een ondertekening is één regel, met de losse tekst ertussen (`De Minister van Justitie, J. P. H.
+    Donner`); `<naam>` zet een spatie tussen voornaam en achternaam;
+  - witruimte aan de rand van `<nadruk>` blijft, buiten de markering (`*zorgverlener* die`).
+- Gemeten over de 79 BWB-bronnen in kb `raw/`: ankers gelijk; op woordniveau verandert alleen de
+  uitvoer van de acht documenten van het WP, bij de andere 69 alleen de regelindeling en de komma's
+  van de ondertekening. De Formex-meetlat is ongewijzigd (287/307). Tests: 613 (één
+  karakteriseringstest, de ondertekening per kind, bewust aangepast).
+
 ## 29 september 2026 — aanbevelingen met punten `(1)`, `a)` en `1.1.`, en tabelnoten (kb WP-42)
 
 - **Formex, het dispositief van een aanbeveling (`formex_xml.dispositief()`)**, in de raw-vorm van
