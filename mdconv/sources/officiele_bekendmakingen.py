@@ -174,6 +174,25 @@ def lees_metadata(data: bytes, pub_id: str) -> dict:
         raise ConversionError(
             f"De metadata noemt zichzelf {uit.get('identifier')!r} en niet {pub_id}; "
             "omzetting geweigerd.")
+    # Een stuk in meer dossiers noemt ze in één veld, gescheiden door `;` (`22112;32761` bij
+    # kst-22112-4304, `32761;33552` bij kst-32761-343). Ongesplitst werd dat de identiteit
+    # `kst-2211232761-nr-4304` (T6-F6, kb WP-41). Het eerste is het dossier van het publicatie-id,
+    # en dat blijft `dossiernummer`; de volledige lijst staat in `dossiernummers`. Noemt het id een
+    # ander dossier dan het eerste, dan is de volgorde niet te vertrouwen en wordt niets gekozen.
+    if uit.get("dossiernummer"):
+        lijst = [d.strip() for d in uit["dossiernummer"].split(";")]
+        if not all(lijst):
+            raise ConversionError(f"Een lege plek in de dossiernummers ({uit['dossiernummer']!r}); "
+                                  "omzetting geweigerd.")
+        uit["dossiernummers"] = lijst
+        if len(lijst) > 1:
+            id_dossier = pub_id.split("-")[1] if pub_id.startswith("kst-") else None
+            kaal = re.sub(r"[^a-z0-9]", "", lijst[0].lower())
+            if id_dossier is not None and id_dossier != kaal:
+                raise ConversionError(
+                    f"{pub_id} staat in de dossiers {lijst}, en het eerste is niet het dossier van "
+                    "het publicatie-id; omzetting geweigerd.")
+            uit["dossiernummer"] = lijst[0]
     return uit
 
 
@@ -522,9 +541,9 @@ def omzetten(data: bytes, metadata: dict) -> tuple[str, dict]:
     _verzamel_noten(stuk, lezer)
 
     kop = next((k for k in stuk if _kort(k) == "kamerstukkop"), None)
-    dossier = next((k for k in stuk if _kort(k) == "dossier"), None)
+    dossiers = [k for k in stuk if _kort(k) == "dossier"]
     inhoud = next((k for k in stuk if _kort(k) == "stuk"), None)
-    if dossier is None or inhoud is None:
+    if not dossiers or inhoud is None:
         raise ConversionError("Het Kamerstuk mist zijn dossier of zijn stuk; omzetting geweigerd.")
     for k in stuk:
         if _kort(k) not in ("kamerstukkop", "dossier", "stuk"):
@@ -537,16 +556,22 @@ def omzetten(data: bytes, metadata: dict) -> tuple[str, dict]:
 
     # De titelregel: dossiernummer, dossiertitel, stuknummer en stuktitel, zoals de PDF ze
     # op de titelpagina zet (`34 851 Regels … Nr. 4 ADVIES …`). Het leesteken ertussen is
-    # opmaak; elk woord komt uit de bron.
-    dossiernr = " ".join(t.strip() for t in dossier.find("dossiernummer").itertext() if t.strip()) \
-        if dossier.find("dossiernummer") is not None else ""
-    dossiertitel = lezer.inline(dossier.find("titel")) if dossier.find("titel") is not None else ""
+    # opmaak; elk woord komt uit de bron. Een stuk in meer dossiers (een brief in 22 112 én
+    # 32 761, kst-22112-4304; kst-32761-343) heeft één `<dossier>` per dossier, en elk paar komt
+    # in bronvolgorde in de titelregel. Tot WP-41 nam de route alleen het eerste, en haar
+    # zelfcontrole weigerde terecht op de woorden van het tweede (T6-F6).
+    delen = []
+    for dossier in dossiers:
+        onder = [_kort(k) for k in dossier if _kort(k) not in ("dossiernummer", "titel")]
+        if onder:
+            raise ConversionError(f"Onverwacht element in het dossier ({onder}).")
+        dossiernr = " ".join(t.strip() for t in dossier.find("dossiernummer").itertext() if t.strip()) \
+            if dossier.find("dossiernummer") is not None else ""
+        dossiertitel = lezer.inline(dossier.find("titel")) if dossier.find("titel") is not None else ""
+        delen += [dossiernr, dossiertitel.rstrip(".") + "."]
     stuknr = lezer.inline(inhoud.find("stuknr")) if inhoud.find("stuknr") is not None else ""
     stuktitel = lezer.inline(inhoud.find("titel")) if inhoud.find("titel") is not None else ""
-    onder = [_kort(k) for k in dossier if _kort(k) not in ("dossiernummer", "titel")]
-    if onder:
-        raise ConversionError(f"Onverwacht element in het dossier ({onder}).")
-    lezer.uit.blok("# " + " ".join(p for p in (dossiernr, dossiertitel.rstrip(".") + ".", stuknr, stuktitel) if p.strip(". ")))
+    lezer.uit.blok("# " + " ".join(p for p in (*delen, stuknr, stuktitel) if p.strip(". ")))
     lezer.koppen += 1
     rest = _Ouder(inhoud, None)
     rest._kinderen = [k for k in inhoud if _kort(k) not in ("stuknr", "titel")]

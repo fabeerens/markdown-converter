@@ -274,3 +274,27 @@ def test_de_woordenschat_van_test_6_wordt_omgezet():
     assert any("1 afbeelding uit de OP-XML niet overgenomen" in w for w in herkomst.waarschuwingen)
     assert "png" not in markdown
 
+
+def test_een_stuk_in_twee_dossiers_heet_naar_het_eerste():
+    """kb WP-41 (T6-F6): kst-22112-4304 staat in 22 112 en 32 761. Elk paar komt in de titelregel, de
+    metadata splitst `22112;32761`, en de identiteit is die van het publicatie-id."""
+    xml = XML.replace(b"</dossier>", b"</dossier><dossier><dossiernummer><dossiernr>32 761</dossiernr>"
+                                     b"</dossiernummer><titel>Verwerking en bescherming persoonsgegevens</titel></dossier>", 1)
+    meta = METADATA.replace(b'content="34851"', b'content="34851;32761"')
+    markdown, _, herkomst = ob.converteer(xml, meta, "kst-34851-4")
+    assert ("# 34 851 Regels (Uitvoeringswet AVG). 32 761 Verwerking en bescherming persoonsgegevens. "
+            "Nr. 4 ADVIES[^1]") in markdown.split("\n")
+    assert herkomst.document_id == "kst-34851-nr-4"
+    assert herkomst.extra["metadata"]["dossiernummer"] == "34851"
+    assert herkomst.extra["metadata"]["dossiernummers"] == ["34851", "32761"]
+    # Noemt het publicatie-id een ander dossier dan het eerste, dan wordt er niet gekozen.
+    with pytest.raises(ConversionError, match="niet het dossier van het publicatie-id"):
+        ob.converteer(xml, METADATA.replace(b'content="34851"', b'content="32761;34851"'), "kst-34851-4")
+    # Het tweede dossier weglaten ziet de zelfcontrole, zoals vóór WP-41.
+    with pytest.raises(ConversionError, match="mist of verdubbelt"):
+        oorspronkelijk = ob._Lezer.inline
+        try:
+            ob._Lezer.inline = lambda self, el, **kw: "" if (el.text or "").startswith("Verwerking en") else oorspronkelijk(self, el, **kw)
+            ob.converteer(xml, meta, "kst-34851-4")
+        finally:
+            ob._Lezer.inline = oorspronkelijk
