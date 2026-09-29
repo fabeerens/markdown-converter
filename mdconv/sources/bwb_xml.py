@@ -21,7 +21,10 @@ CONTAINERS = {"boek": "boek", "deel": "deel", "titeldeel": "tit", "hoofdstuk": "
 OVERSLAAN = {"meta-data", "jcis", "jci", "bwb-inputbestand", "bwb-wijzigingen",
              "redactionele-correcties", "kop", "lidnr", "li.nr", "citeertitel"}
 INLINE = {"al", "nadruk", "sup", "extref", "intref", "redactie", "sub", "unl", "inf", "meta-data"}
-ONGEMARKEERD = re.compile(r"^[\-–—•·*]$")
+# Een lijstteken is geen nummer en geeft geen anker. `−` (U+2212), `○` en `□` kwamen erbij met de
+# Regeling register onderwijsdeelnemers (BWBR0043632) en de Regeling Bibob-formulieren 2024
+# (BWBR0049314): `nummer_anker("−")` is leeg, en `eenheid()` weigerde `annex-1-` (T6-F4, kb WP-43).
+ONGEMARKEERD = re.compile(r"^[\-–—−•·*○□]$")
 
 
 class _BwbUitvoer(Uitvoer):
@@ -72,6 +75,9 @@ class BwbOmzetter:
         self.nootlabels: set[str] = set()
         self.noten: list[tuple[str, str]] = []
         self.afbeeldingen_weggelaten: list[dict] = []
+        # De labels van de `sup`-noten die een definitie hebben, per bijlage vooraf gelezen
+        # (`bijlage()`): een marker staat meestal vóór zijn definitie.
+        self.sup_definities: set[str] = set()
 
     # ---------- inline ----------
     def inline(self, el, noot_prefix: str = "") -> str:
@@ -86,20 +92,37 @@ class BwbOmzetter:
         if tag in OVERSLAAN:
             return ""
         if tag == "nadruk":
-            binnen = ws(self.inline(el, noot_prefix))
+            ruw = self.inline(el, noot_prefix)
+            binnen = ws(ruw)
             soort = el.get("type", "")
             if not binnen:
-                return ""
+                return " " if ruw else ""
+            # Witruimte aan de rand van de nadruk hoort bij de zin, niet bij de opmaak: de
+            # Regeling ggz en fz 2026 (BWBR0051654) schrijft `zorgverlener </nadruk>die`, en
+            # `ws()` maakte daar `zorgverlenerdie` van (kb WP-30, verklaard; kb WP-43). De
+            # spatie komt buiten de markering, want `*tekst *` is geen Markdown-nadruk.
+            voor = " " if ruw[:1].isspace() else ""
+            na = " " if ruw[-1:].isspace() else ""
             if soort == "cur":
-                return f"*{binnen}*"
+                return f"{voor}*{binnen}*{na}"
             if soort in ("vet", "halfvet"):
-                return f"**{binnen}**"
-            return binnen
+                return f"{voor}**{binnen}**{na}"
+            return f"{voor}{binnen}{na}"
         if tag == "sup":
             tekst = ws("".join(el.itertext()))
-            if tekst.isdigit():
+            # Een `<sup>` met cijfers is alleen een nootmarker als dezelfde bijlage een
+            # definitie met dat nummer heeft (`<al><sup>n</sup>…`, zie `nootdefinitie()`).
+            # Anders is het een macht: de Archiefregeling (BWBR0027041) schrijft
+            # `kg/m<sup>3</sup>` en heeft geen enkele noot, en `[^3]` wees daar naar niets
+            # (T6-F3, kb WP-28 en WP-43).
+            if tekst.isdigit() and f"{noot_prefix}{tekst}" in self.sup_definities:
                 return f"[^{noot_prefix}{tekst}]"
             return f"^{tekst}^" if tekst else ""
+        if tag == "naam":
+            # `<naam><voornaam>J. P. H.</voornaam><achternaam>Donner</achternaam></naam>`
+            # heeft in de bron geen witruimte tussen de delen; zonder spatie las het als
+            # `H.Donner` (kb WP-43, bij de ondertekening).
+            return self.aaneen(el, noot_prefix)
         if tag == "redactie":
             return f"[Red: {ws(self.inline(el, noot_prefix))}]"
         if tag == "noot":
@@ -107,11 +130,28 @@ class BwbOmzetter:
         if tag == "plaatje":
             # In een tabelcel (Opiumwet, bijlage): het bijschrift is de celtekst.
             return self.plaatje(el)
-        if tag in ("al", "extref", "intref", "datum", "naam", "voornaam", "achternaam",
-                   "functie", "plaats", "sub", "unl", "inf"):
+        # `<afk>` is een aangehaalde aanduiding in de lopende tekst (`in <afk>artikel 14 van
+        # de Wet op de medische hulpmiddelen</afk> voor «…»`, BWBR0042755); tot kb WP-43 een
+        # weigering (T6-F4). `<organisatie>` staat in een ondertekening (`De <functie>Minister
+        # </functie> van <organisatie>Justitie</organisatie>`).
+        if tag in ("al", "extref", "intref", "datum", "voornaam", "achternaam",
+                   "functie", "organisatie", "plaats", "sub", "unl", "inf", "afk"):
             return self.inline(el, noot_prefix)
         self.u.markeer_onbekend(f"inline:{tag}")
         return self.inline(el, noot_prefix)
+
+    def aaneen(self, el, noot_prefix: str = "") -> str:
+        """De inline tekst van `el`, met een spatie waar twee kinderen zonder witruimte aansluiten.
+
+        Voor een ondertekening en een naam: hun delen zijn aparte elementen, die de portal
+        op aparte regels of met een spatie toont. Tekst tussen de delen (`De`, ` van `, `, `)
+        blijft zoals de bron hem geeft.
+        """
+        delen = [el.text or ""]
+        for kind in el:
+            delen.append(self.inline_el(kind, noot_prefix))
+            delen.append(kind.tail if (kind.tail or "").strip() else " ")
+        return ws("".join(delen))
 
     def noot(self, el) -> str:
         """Een `<noot>` op de plek van zijn marker: `[^1]` daar, de definitie eronder.
@@ -208,6 +248,14 @@ class BwbOmzetter:
         """Aanhef, wetsluiting en dergelijke: alinea's in volgorde."""
         if el.tag in OVERSLAAN:
             return
+        if el.tag == "ondertekening":
+            # Eén regel, zoals de portal hem toont. Kind voor kind plat geslagen verloor de
+            # losse tekst ertussen (`De`, ` van `, `, `): `De <functie>Minister</functie> van
+            # <organisatie>Justitie</organisatie>` werd `Minister` en `Justitie` (kb WP-30:
+            # BWBR0015808, BWBR0022835, BWBR0024926; kb WP-43). Een kind dat
+            # `inline_el()` niet kent, blijft een weigering.
+            self.u.blok(self.aaneen(el))
+            return
         alleen_inline = all(c.tag in INLINE for c in el)
         if el.tag in ("al", "considerans.al", "wij", "slotformulering", "afkondiging") or alleen_inline:
             self.u.blok(ws(self.inline(el)))
@@ -225,6 +273,12 @@ class BwbOmzetter:
         k = el.find("kop")
         if k is None:
             return "", "", "", False
+        for kind in k:
+            # Wat hier niet genoemd is, viel tot kb WP-43 stil weg: zo de `<subtitel>` van
+            # een bijlage (WP-30). Gemeten over de 79 BWB-bronnen van de kennisbank: alleen
+            # `nr`, `label`, `titel` en `subtitel`.
+            if kind.tag not in ("label", "nr", "titel", "subtitel") and kind.tag not in OVERSLAAN:
+                self.u.markeer_onbekend(f"kop:{kind.tag}")
         label = ws(self.inline(k.find("label"))) if k.find("label") is not None else ""
         nr = ws(self.inline(k.find("nr"))) if k.find("nr") is not None else ""
         titel = ws(self.inline(k.find("titel"))) if k.find("titel") is not None else ""
@@ -233,6 +287,23 @@ class BwbOmzetter:
         if nr_eerst:
             self.omgedraaid.append(f"{nr} {label}")
         return label, nr, titel, nr_eerst
+
+    def subtitel(self, el) -> None:
+        """De `<subtitel>` van een kop als eigen alinea direct onder de kop.
+
+        Het Besluit burgerservicenummer (BWBR0022829, bijlage 1) en het Besluit
+        basisadministraties persoonsgegevens BES (BWBR0028622, bijlagen I en II) geven een
+        bijlage een subtitel naast haar titel; `kop()` las hem niet, en hij viel weg (kb WP-30,
+        `source-incomplete`). Onder de kop, niet erin: de kopregel is het ankerlabel, en
+        een subtitel erin zou een kop maken die de bron niet als één titel geeft.
+        """
+        k = el.find("kop")
+        if k is None:
+            return
+        for sub in k.findall("subtitel"):
+            tekst = ws(self.inline(sub))
+            if tekst:
+                self.u.blok(tekst)
 
     def kopregel(self, label: str, nr: str, titel: str, nr_eerst: bool = False) -> str:
         # Zonder label en nummer is de kop alleen de titel. De Wet bescherming
@@ -297,6 +368,7 @@ class BwbOmzetter:
                 regel = self.kopregel(label, nr, titel, nr_eerst)
                 self.u.blok(f"{'#' * min(niveau, 6)} {regel}")
                 self.u.eenheid(anker, kind.tag, regel)
+                self.subtitel(kind)
                 eigen = anker.split("-", 1)[1] if not pad.get("annex") else anker.split(f"{CONTAINERS[kind.tag]}-", 1)[1]
                 sleutel = {"hoofdstuk": "hfd", "afdeling": "afd", "titeldeel": "tit"}.get(kind.tag)
                 nieuw = dict(pad)
@@ -333,6 +405,7 @@ class BwbOmzetter:
         regel = self.kopregel(label, nr, titel, nr_eerst)
         if regel:
             self.u.blok(f"{'#' * min(niveau, 6)} {regel}")
+        self.subtitel(el)
         self.container_inhoud(el, niveau + 1, pad)
 
     def artikel(self, el, niveau: int, pad: dict) -> None:
@@ -356,6 +429,7 @@ class BwbOmzetter:
         regel = self.kopregel(label or "Artikel", nr, titel, nr_eerst)
         self.u.blok(f"{'#' * min(niveau, 6)} {regel}")
         self.u.eenheid(anker, "artikel", regel)
+        self.subtitel(el)
         status = (el.get("status") or "").lower()
         inwerking = el.get("inwerking")
         if status == "vervallen":
@@ -532,6 +606,7 @@ class BwbOmzetter:
         regel = self.kopregel(label, nr, titel, nr_eerst) if label or nr else titel
         if regel:
             self.u.blok(regel)
+        self.subtitel(el)
         for kind in el:
             if kind.tag == "kop" or kind.tag in OVERSLAAN:
                 continue
@@ -578,6 +653,17 @@ class BwbOmzetter:
         return "\n".join(r for r in regels if r.strip())
 
     def tabel(self, el, prefix_noot: str) -> None:
+        # Een `<title>` staat als alinea boven de tabel; tot kb WP-43 las `tabel()` alleen de
+        # `tgroup`s, en vielen de zes tabeltitels van het Besluit verplichte politiegegevens
+        # (BWBR0032083) weg (kb WP-30, `source-incomplete`). Een ander kind viel ook stil
+        # weg; gemeten over de 79 BWB-bronnen van de kennisbank zijn er geen andere.
+        for kind in el:
+            if kind.tag == "title":
+                tekst = ws(self.inline(kind, prefix_noot))
+                if tekst:
+                    self.u.blok(tekst)
+            elif kind.tag != "tgroup" and kind.tag not in OVERSLAAN:
+                self.u.markeer_onbekend(f"table:{kind.tag}")
         for tgroup in el.findall("tgroup"):
             kolommen = {c.get("colname"): i for i, c in enumerate(tgroup.findall("colspec"))}
             rijen, koprijen = [], 0
@@ -611,10 +697,17 @@ class BwbOmzetter:
         anker = f"annex-{n}"
         self.bijlage_ankers.append(anker)
         self.huidige_bijlage = anker
+        prefix = f"{anker}-"
+        # Dezelfde vorm als `nootdefinitie()`: een `<al>` zonder tekst vooraf die met
+        # `<sup>n</sup>` begint. Een `<sup>` met dat nummer in deze bijlage is een marker.
+        self.sup_definities = {
+            f"{prefix}{ws(''.join(al[0].itertext()))}" for al in el.iter("al")
+            if not (al.text or "").strip() and len(al) and al[0].tag == "sup"
+            and ws("".join(al[0].itertext())).isdigit()}
         regel = self.kopregel(label or "Bijlage", nr, titel, nr_eerst)
         self.u.blok(f"{'#' * niveau} {regel}")
         self.u.eenheid(anker, "bijlage", regel)
-        prefix = f"{anker}-"
+        self.subtitel(el)
         for kind in el:
             if kind.tag == "kop" or kind.tag in OVERSLAAN:
                 continue
@@ -628,6 +721,7 @@ class BwbOmzetter:
             else:
                 self.inhoud(kind, basis=anker, prefix_noot=prefix)
         self.huidige_bijlage = ""
+        self.sup_definities = set()
 
 
 def omzetten(data: bytes | str) -> tuple[str, list, dict, dict]:

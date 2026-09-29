@@ -499,8 +499,8 @@ def test_circulaire_heeft_de_vorm_van_een_regeling_met_divisies_als_kop_zonder_e
         "- a. de taken van de NZa;\n- b. de informatie aan VWS.",
         "Behandeling:",
         "Slot.",
-        "de Nederlandse Zorgautoriteit,",
-        "voorzitter",
+        # Een ondertekening is één regel (kb WP-43); tot dan stond elk kind op een eigen regel.
+        "de Nederlandse Zorgautoriteit, voorzitter",
     ]
 
 
@@ -575,3 +575,120 @@ def test_een_plaatje_wordt_weggelaten_met_melding_en_het_bijschrift_blijft():
         "2 afbeeldingen uit de BWB-XML niet overgenomen; de tekst eromheen en een bijschrift "
         "staan er wel: 272866.png, 1.png."]
     assert not onbekend
+
+
+# ---------- BWB-constructies van kb WP-43 (T6-F3, T6-F4 en de vier klassen van kb WP-30) ----------
+
+def wet(artikel: str = "<al>Tekst.</al>", bijlage: str = "", sluiting: str = "") -> bytes:
+    return f"""<toestand bwb-id="BWBR0000001" inwerkingtreding="2020-01-01"><wetgeving>
+<citeertitel>Testregeling</citeertitel><regeling><regeling-tekst>
+<artikel><kop><label>Artikel</label><nr>1</nr></kop>{artikel}</artikel>
+</regeling-tekst>{sluiting}{bijlage}</regeling></wetgeving></toestand>""".encode()
+
+
+def test_afk_is_gewone_lopende_tekst():
+    """Wet medische hulpmiddelen (BWBR0042755): een aangehaalde aanduiding in `<afk>`."""
+    markdown, _, _, _ = wetten.bwb_xml.omzetten(wet(
+        "<al>Wat in <afk>artikel 14 van de Wet op de medische hulpmiddelen</afk> voor «x» staat.</al>"))
+    assert "Wat in artikel 14 van de Wet op de medische hulpmiddelen voor «x» staat." in markdown
+
+
+@pytest.mark.parametrize("teken", ["−", "○", "□"])
+def test_lijsttekens_min_cirkel_en_vierkant_geven_geen_anker(teken):
+    """Regeling register onderwijsdeelnemers (BWBR0043632) en Regeling Bibob-formulieren 2024
+    (BWBR0049314): `nummer_anker()` maakte van deze tekens een leeg ankersegment."""
+    bijlage = (f'<bijlage><kop><label>Bijlage</label><nr>1</nr></kop><lijst><li><li.nr>{teken}</li.nr>'
+               f'<al>een gegeven</al></li><li><li.nr>{teken}</li.nr><al>nog een</al></li></lijst></bijlage>')
+    markdown, eenheden, _, _ = wetten.bwb_xml.omzetten(wet(bijlage=bijlage))
+    assert f"- {teken} een gegeven\n- {teken} nog een" in markdown
+    assert [e.anker for e in eenheden] == ["art-1", "annex-1"]
+
+
+def test_sup_zonder_definitie_in_de_bijlage_is_een_macht():
+    """Archiefregeling (BWBR0027041): `kg/m<sup>3</sup>` zonder enige noot werd `[^3]`."""
+    bijlage = ("<bijlage><kop><label>Bijlage</label><nr>2</nr></kop>"
+               "<al>Minimaal 120 g/m<sup>2</sup> papier.</al></bijlage>")
+    markdown, _, _, _ = wetten.bwb_xml.omzetten(wet("<al>Beton van 625 kg/m<sup>3</sup>.</al>", bijlage))
+    assert "Beton van 625 kg/m^3^." in markdown
+    assert "Minimaal 120 g/m^2^ papier." in markdown
+    assert "[^" not in markdown
+
+
+def test_sup_met_definitie_in_dezelfde_bijlage_blijft_een_noot_en_een_macht_ernaast_niet():
+    """De marker staat vóór zijn definitie; een macht met een ander nummer is geen noot, en een
+    definitie in een andere bijlage telt niet."""
+    bijlage = ("<bijlage><kop><label>Bijlage</label><nr>1</nr></kop>"
+               "<al>Waarde<sup>1</sup> per m<sup>2</sup>.</al><al><sup>1</sup>De noot.</al></bijlage>"
+               "<bijlage><kop><label>Bijlage</label><nr>2</nr></kop><al>Ook m<sup>1</sup>.</al></bijlage>")
+    markdown, _, _, _ = wetten.bwb_xml.omzetten(wet(bijlage=bijlage))
+    assert "Waarde[^annex-1-1] per m^2^." in markdown
+    assert "[^annex-1-1]: De noot." in markdown
+    assert "Ook m^1^." in markdown
+
+
+def test_tabeltitel_staat_als_alinea_boven_de_tabel():
+    """Besluit verplichte politiegegevens (BWBR0032083): zes `<table><title>` vielen weg."""
+    tabel = ('<table><title>Herleidbaarheidsinformatie</title><tgroup cols="1"><colspec colname="c1"/>'
+             '<tbody><row><entry colname="c1"><al>Open bron</al></entry></row></tbody></tgroup></table>')
+    markdown, _, _, _ = wetten.bwb_xml.omzetten(wet(bijlage=f"<bijlage><kop><label>Bijlage</label><nr>1</nr></kop>{tabel}</bijlage>"))
+    blokken = markdown.split("\n\n")
+    titel = blokken.index("Herleidbaarheidsinformatie")
+    assert blokken[titel + 1].startswith("|")
+    assert "Open bron" in blokken[titel + 1]
+
+
+def test_ander_kind_van_een_tabel_is_een_weigering():
+    tabel = ('<table><tfoot>x</tfoot><tgroup cols="1"><colspec colname="c1"/>'
+             '<tbody><row><entry colname="c1"><al>a</al></entry></row></tbody></tgroup></table>')
+    with pytest.raises(ConversionError, match="table:tfoot"):
+        wetten.bwb_xml.omzetten(wet(tabel))
+
+
+def test_subtitel_van_een_bijlage_staat_onder_de_kop():
+    """Besluit burgerservicenummer (BWBR0022829) en Besluit bpg BES (BWBR0028622)."""
+    bijlage = ("<bijlage><kop><label>Bijlage</label><nr>I</nr><titel>bij artikel 3</titel>"
+               "<subtitel>Algemene gegevens</subtitel></kop><al>Lijst.</al></bijlage>")
+    markdown, eenheden, _, _ = wetten.bwb_xml.omzetten(wet(bijlage=bijlage))
+    assert "## Bijlage I. bij artikel 3\n\nAlgemene gegevens\n\nLijst." in markdown
+    assert eenheden[-1].tekst == "Bijlage I. bij artikel 3"
+
+
+def test_onbekend_kind_van_een_kop_is_een_weigering():
+    xml = wet().replace(b"<nr>1</nr></kop>", b"<nr>1</nr><opschrift>x</opschrift></kop>")
+    with pytest.raises(ConversionError, match="kop:opschrift"):
+        wetten.bwb_xml.omzetten(xml)
+
+
+def test_ondertekening_is_een_regel_met_de_losse_tekst_ertussen():
+    """BWBR0015808, BWBR0022835, BWBR0024926: `De` en ` van ` vielen weg (kb WP-30)."""
+    sluiting = ("<regeling-sluiting><ondertekening>De <functie>Minister</functie> van "
+                '<organisatie afkorting="OCW">Onderwijs, Cultuur en Wetenschap</organisatie>, '
+                "<naam><voornaam>R.H.A.</voornaam><achternaam>Plasterk</achternaam></naam>"
+                "</ondertekening></regeling-sluiting>")
+    markdown, _, _, _ = wetten.bwb_xml.omzetten(wet(sluiting=sluiting))
+    assert "\n\nDe Minister van Onderwijs, Cultuur en Wetenschap, R.H.A. Plasterk\n" in markdown
+
+
+def test_ondertekening_zonder_losse_tekst_houdt_de_delen_uit_elkaar():
+    sluiting = ("<regeling-sluiting><ondertekening><functie>De Minister van Justitie</functie>"
+                "<naam><achternaam>Donner</achternaam></naam></ondertekening></regeling-sluiting>")
+    markdown, _, _, _ = wetten.bwb_xml.omzetten(wet(sluiting=sluiting))
+    assert "De Minister van Justitie Donner" in markdown
+
+
+def test_onbekend_kind_van_een_ondertekening_blijft_een_weigering():
+    sluiting = "<regeling-sluiting><ondertekening><handtekening>x</handtekening></ondertekening></regeling-sluiting>"
+    with pytest.raises(ConversionError, match="inline:handtekening"):
+        wetten.bwb_xml.omzetten(wet(sluiting=sluiting))
+
+
+@pytest.mark.parametrize("bron, verwacht", [
+    ('AGB-code <nadruk type="cur">zorgverlener </nadruk>die', "AGB-code *zorgverlener* die"),
+    ('de<nadruk type="vet"> kern</nadruk>zaak', "de **kern**zaak"),
+    ('een<nadruk type="cur"> </nadruk>woord', "een woord"),
+    ('<nadruk type="cur">cursief</nadruk>.', "*cursief*."),
+])
+def test_witruimte_aan_de_rand_van_een_nadruk_blijft_buiten_de_markering(bron, verwacht):
+    """Regeling ggz en fz 2026 (BWBR0051654): `zorgverlener </nadruk>die` werd `zorgverlenerdie`."""
+    markdown, _, _, _ = wetten.bwb_xml.omzetten(wet(f"<al>{bron}</al>"))
+    assert verwacht in markdown
