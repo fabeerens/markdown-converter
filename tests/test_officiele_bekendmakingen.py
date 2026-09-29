@@ -15,6 +15,7 @@ import zipfile
 
 import pytest
 
+from kbwortel import kb_golden
 from mdconv import kb_bundle, net
 from mdconv.errors import ConversionError
 from mdconv.sources import detect_source, from_link
@@ -228,23 +229,20 @@ def test_self_check_refuses_lost_text(monkeypatch):
         ob.converteer(XML, METADATA, "kst-34851-4")
 
 
-KB_GOLDEN = pathlib.Path.home() / "Documents" / "kb" / "golden" / "documenten" / "kst-34851-nr-4-xml"
-
-
-@pytest.mark.skipif(not (KB_GOLDEN / "bron.xml").exists(), reason="het gouden voorbeeld van de kennisbank ontbreekt")
 def test_the_real_kamerstuk_gives_exactly_the_golden_raw_form():
     """`kst-34851-4`: 85 koppen, 146 noten, twee tabellen. De kennisbank bewaart de bron en de
     raw-vorm als vast testbestand; de omzetting moet die letterlijk reproduceren."""
-    zij = json.loads((KB_GOLDEN / "kst-34851-nr-4.source.json").read_text(encoding="utf-8"))
+    gouden = kb_golden("documenten", "kst-34851-nr-4-xml", bestand="bron.xml")
+    zij = json.loads((gouden / "kst-34851-nr-4.source.json").read_text(encoding="utf-8"))
     metadata = zij["extra"]["metadata"]
     xml_metadata = "<m>" + "".join(
         f'<metadata name="{naam}" content="{waarde}"/>' for naam, waarde in (
             ("DC.identifier", "kst-34851-4"), ("OVERHEIDop.dossiernummer", metadata["dossiernummer"]),
             ("OVERHEIDop.ondernummer", metadata["ondernummer"]))) + "</m>"
-    markdown, _, herkomst = ob.converteer((KB_GOLDEN / "bron.xml").read_bytes(),
+    markdown, _, herkomst = ob.converteer((gouden / "bron.xml").read_bytes(),
                                           xml_metadata.replace("<m>", "<metadata_gegevens>").replace("</m>", "</metadata_gegevens>").encode(),
                                           "kst-34851-4")
-    assert markdown == (KB_GOLDEN / "kst-34851-nr-4.raw.md").read_text(encoding="utf-8")
+    assert markdown == (gouden / "kst-34851-nr-4.raw.md").read_text(encoding="utf-8")
     assert herkomst.extra["noten"] == 146 and herkomst.extra["tabellen"] == 2
 
 

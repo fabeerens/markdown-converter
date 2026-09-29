@@ -24,6 +24,7 @@ import pathlib
 
 import pytest
 
+from kbwortel import kb_golden
 from mdconv import kb_fetch
 from mdconv.errors import ConversionError
 from mdconv.sources import from_link, hudoc
@@ -32,7 +33,6 @@ FIXTURE = pathlib.Path(__file__).parent / "fixtures" / "hudoc"
 ITEM_ID = "001-153906"
 ECLI = "ECLI:CE:ECHR:2015:0423JUD003636709"
 PAD_ID = "ECLI-CE-ECHR-2015-0423JUD003636709"
-KB_GOLDEN = pathlib.Path.home() / "Documents" / "kb" / "golden" / "jurisprudentie" / PAD_ID
 # 25 september 2026, 13:03:34 UTC: de tijd waarop de browser het bestand bewaarde.
 DOWNLOADTIJD = 1790341414
 
@@ -138,12 +138,12 @@ def test_de_lokale_route_geeft_byte_voor_byte_de_bundel_van_de_online_route(tmp_
     assert "handmatig in de browser gedownload" in regel["melding"]
 
 
-@pytest.mark.skipif(not (KB_GOLDEN / "bron.md").exists(), reason="het gouden voorbeeld van de kennisbank ontbreekt")
 def test_de_lokale_route_geeft_het_gouden_bestand(tmp_path):
     """De fixture is het gouden bestand; de raw-vorm moet dus ook de gouden zijn."""
+    gouden = kb_golden("jurisprudentie", PAD_ID, bestand="bron.md")
     uit = tmp_path / "uit"
     assert kb_fetch.main(["--hudoc-map", str(_map(tmp_path)), "--uit", str(uit)]) == 0
-    assert (uit / f"raw/jurisprudentie/{PAD_ID}.md").read_bytes() == (KB_GOLDEN / "bron.md").read_bytes()
+    assert (uit / f"raw/jurisprudentie/{PAD_ID}.md").read_bytes() == (gouden / "bron.md").read_bytes()
 
 
 # --------------------------------------------------------------------------
