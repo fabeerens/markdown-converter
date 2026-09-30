@@ -33,6 +33,31 @@ architectuur en verwijst hiernaartoe.
   geen `shown` (niet `false`: dat de wijziging is overschreven is voor Formex niet gemeten).
   `corrections` schrijft de omzetter niet; een `MOD.ACT` met een ander `TYPE` dan `MOD` komt met
   een waarschuwing niet in `amendments`.
+  **Geschrapte tekst** (kb WP-64, 30 september 2026). Een consolidatie laat een geschrapte passage
+  staan tussen `<?CLG.MDFO … ACTION="DELETED" …?>` en de `<?CLG.MDFC …?>` die ernaar verwijst, en
+  ElementTree gooit die instructies weg. Tot WP-64 schreef de omzetter die oude tekst dus als
+  geldende tekst: de artikelen 17 tot en met 19 van eIDAS (02014R0910-20241018), en in de
+  kennisbank 40 passages in acht documenten, die de poort daar sinds WP-63 tegenhoudt
+  (`source-deleted-text`). Nu leest `_zonder_geschrapte_tekst()` elk onderdeel mét zijn
+  instructies, schrijft op die plek wat EUR-Lex toont en haalt daarna alle instructies weg, zodat
+  de rest van de omzetter dezelfde boom ziet als voorheen. Gemeten in de HTML van dezelfde
+  consolidaties: een bereik op `LEVEL="STRUCTURE"` (artikel, lid, punt, afdeling) toont EUR-Lex als
+  één alinea `▼M2 —————` (eIDAS 11 van 11, Europol 02016R0794-20260111 15 van 15, AI-verordening
+  02024R1689-20260727 4 van 4). Hier wordt dat een alinea `—————`, want de Formex-route schrijft geen
+  ▼-markering, en preclean V9 van de kennisbank maakt van de HTML-vorm precies dat. Een geschrapt
+  opschrift (`STI` van HOOFDSTUK IV in de AVMD) toont EUR-Lex niet; in een kop kan geen alinea
+  staan, dus daar verdwijnt alleen de tekst. Een bereik op `LEVEL="TEXT"` met hooguit één woord laat
+  EUR-Lex staan (`3.` in artikel 35 van Europol, `.` in bijlage I van de AI-verordening, ` en` in
+  artikel 46 van de EES-verordening), en hier blijft het dus ook; een langer tekstbereik wordt
+  `—————` op de plek van de tekst (artikel 28, lid 2 van MiFIR, 02014R0600-20251123: `2.   —————`).
+  Een bereik dat vlak vóór een element opent en daarbinnen sluit (de punten a) tot en met d) van
+  artikel 52, lid 15 van MiFIR; punt f) van artikel 50 quater CRR, waarvan de alinea
+  erna blijft), opent één niveau dieper. Een bereik dat niet in één element opent en sluit, een
+  ander niveau, of een geschrapt element op een plek waar geen alinea kan staan (een tabelrij) is
+  een weigering: `omzetten()` telt na of elke plek als `—————` is geschreven. Wat geschrapt is,
+  telt ook voor de zelfcontrole niet meer als brontekst. In de meetlat veranderde de uitvoer van
+  tien consolidaties, alleen op die plekken (en de nootnummers na een noot in een geschrapt
+  artikel van 02018L1972); de doorlaat bleef 287 van 307.
   Een **definitielijst** (`DLIST`) is genummerd: elk `DLIST.ITEM` wordt `16) “term” …` als
   eigen alinea met een eigen structuureenheid (`art-4-16`). Draagt de `DEFINITION` zelf een
   `LIST`, `DLIST` of `TBL`, dan blijft dat een opsomming: de kopregel loopt tot het eerste

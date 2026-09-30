@@ -1,14 +1,14 @@
 {
- "commit": "0fe9c8b",
+ "commit": "b44464f+wijzigingen",
  "documenten": {
   "02002L0058-20091219": {
    "melding": null,
    "oorzaak": null,
    "route": "wetgeving",
    "sectie": "testset",
-   "sha256": "7cee08b1974d1bf71e8518eb106f6670c6c2f89140b6050aa01385fc122c0498",
+   "sha256": "ae764a81272c5d18126aaa03eeab6ef72f37ec485fb056d064993c81cd78bf28",
    "status": "ok",
-   "tekens": 35607,
+   "tekens": 35472,
    "waarschuwingen": [
     "De geconsolideerde Formex bevat geen considerans en die van de basishandeling kon niet worden ingevoegd: de Formex van de basishandeling 32002L0058 is niet beschikbaar (HTTP 404). De overwegingen en hun rec-ankers ontbreken.",
     "CLG.MDFO in de tekst noemt 32009L0136R(01), 32009L0136R(03), dat niet als wijziging in GR.MOD.ACT staat; amendments kan onvolledig zijn."
@@ -19,9 +19,9 @@
    "oorzaak": null,
    "route": "wetgeving",
    "sectie": "geconsolideerd",
-   "sha256": "31c59f9f275ac0bc48c8e86f2f55b00949291bc3a3fce16fc0afc640281fb66a",
+   "sha256": "28c5788f70917f8b4ea30b9f5209e8b9f991098475822ee578cadfde59a67f2d",
    "status": "ok",
-   "tekens": 149346,
+   "tekens": 146167,
    "waarschuwingen": [
     "Overwegingen en aanhef zijn overgenomen uit de oorspronkelijke handeling (CELEX:32010L0013); de geconsolideerde tekst op EUR-Lex bevat deze niet.",
     "CLG.MDFO in de tekst noemt 32010L0013R(01), dat niet als wijziging in GR.MOD.ACT staat; amendments kan onvolledig zijn."
@@ -42,7 +42,7 @@
    ]
   },
   "02013R0575-20270101": {
-   "melding": "Formex-element(en) met tekst zonder eigen behandeling: FORMULA (220×); omzetting geweigerd. Een formule wordt bewust niet omgezet: een index, breuk of operator heeft geen tekstvorm die leesbaar blijft en door de woordcontrole te bewijzen is.",
+   "melding": "Formex-element(en) met tekst zonder eigen behandeling: FORMULA (211×); omzetting geweigerd. Een formule wordt bewust niet omgezet: een index, breuk of operator heeft geen tekstvorm die leesbaar blijft en door de woordcontrole te bewijzen is.",
    "oorzaak": "element FORMULA",
    "route": "wetgeving",
    "sectie": "geconsolideerd",
@@ -66,9 +66,9 @@
    "oorzaak": null,
    "route": "wetgeving",
    "sectie": "geconsolideerd",
-   "sha256": "e34e8a43e24f1b0cd64682eb2f81e09566623dd7814260d04dddbfdd040792b7",
+   "sha256": "e12a5979818c83baf7b80270c13b868b1afbcc9e846f944d56654cb35e7e52cf",
    "status": "ok",
-   "tekens": 419556,
+   "tekens": 397910,
    "waarschuwingen": [
     "Overwegingen en aanhef zijn overgenomen uit de oorspronkelijke handeling (CELEX:32014R0600); de geconsolideerde tekst op EUR-Lex bevat deze niet.",
     "Geen CLG.MDFO in de tekst noemt 32021R0023, 32025R1156; van deze wijzigende handeling(en) is `shown` niet vastgesteld.",
@@ -80,9 +80,9 @@
    "oorzaak": null,
    "route": "wetgeving",
    "sectie": "testset",
-   "sha256": "2b20b4e14811069acf15c1f0fbc26d1c5f3da245a58e8e5f8b12b41756bf36a5",
+   "sha256": "a984e24ce4862c36f0eb64a0cd9570ece8213780bd78ee0674f3299fe1d2eaff",
    "status": "ok",
-   "tekens": 254521,
+   "tekens": 243219,
    "waarschuwingen": [
     "Overwegingen en aanhef zijn overgenomen uit de oorspronkelijke handeling (CELEX:32014R0910); de geconsolideerde tekst op EUR-Lex bevat deze niet.",
     "CLG.MDFO in de tekst noemt 32024R1183R(01), 32024R1183R(02), dat niet als wijziging in GR.MOD.ACT staat; amendments kan onvolledig zijn.",
@@ -145,9 +145,9 @@
    "oorzaak": null,
    "route": "wetgeving",
    "sectie": "geconsolideerd",
-   "sha256": "4cf94fed51bad0e74f49d7fd14d5e46b0ef8feab8afcc8e5bf939505884dec28",
+   "sha256": "c3e8203943c6054bbf4f5cb1934dd6887a6fa0b29322ee08f774993f3a6ea0ad",
    "status": "ok",
-   "tekens": 282404,
+   "tekens": 270182,
    "waarschuwingen": [
     "Overwegingen en aanhef zijn overgenomen uit de oorspronkelijke handeling (CELEX:32016R0794); de geconsolideerde tekst op EUR-Lex bevat deze niet."
    ]
@@ -157,9 +157,9 @@
    "oorzaak": null,
    "route": "wetgeving",
    "sectie": "geconsolideerd",
-   "sha256": "09dcd4fe7d53302b686e23c73d2ed0a36bfc3d456da23c59035fc0745bb9db33",
+   "sha256": "9b4b1bbaad7234e44d031b811f279db7b44530df2dc476f118018b155c71723f",
    "status": "ok",
-   "tekens": 725033,
+   "tekens": 723861,
    "waarschuwingen": [
     "Overwegingen en aanhef zijn overgenomen uit de oorspronkelijke handeling (CELEX:32017R0745); de geconsolideerde tekst op EUR-Lex bevat deze niet.",
     "CLG.MDFO in de tekst noemt 32017R0745R(01), 32017R0745R(02), 32017R0745R(03), dat niet als wijziging in GR.MOD.ACT staat; amendments kan onvolledig zijn.",
@@ -197,9 +197,9 @@
    "oorzaak": null,
    "route": "wetgeving",
    "sectie": "geconsolideerd",
-   "sha256": "9a1dfc6dfbedb2dbfa3f2bb469e3dcb697a3e1cb29be5e39263379c674291b3a",
+   "sha256": "73c6b943300aeb37c923329bb435365b43730c83237180d8f6062365be5dab51",
    "status": "ok",
-   "tekens": 743987,
+   "tekens": 737871,
    "waarschuwingen": [
     "Overwegingen en aanhef zijn overgenomen uit de oorspronkelijke handeling (CELEX:32018L1972); de geconsolideerde tekst op EUR-Lex bevat deze niet.",
     "CLG.MDFO in de tekst noemt 32018L1972R(01), 32018L1972R(05), dat niet als wijziging in GR.MOD.ACT staat; amendments kan onvolledig zijn."
@@ -248,9 +248,9 @@
    "oorzaak": null,
    "route": "wetgeving",
    "sectie": "geconsolideerd",
-   "sha256": "cc8c56641579e7f16eeb399e25290162c3583e7b4a4fb855735e9c01e3eb1ec9",
+   "sha256": "07a33dd69284caaf54c89411effe1556f0ae1d18919f8da0a403576f0a5c38f0",
    "status": "ok",
-   "tekens": 241147,
+   "tekens": 241035,
    "waarschuwingen": [
     "Overwegingen en aanhef zijn overgenomen uit de oorspronkelijke handeling (CELEX:32018R1862); de geconsolideerde tekst op EUR-Lex bevat deze niet.",
     "CLG.MDFO in de tekst noemt 32018R1862R(02), 32018R1862R(06), dat niet als wijziging in GR.MOD.ACT staat; amendments kan onvolledig zijn."
@@ -300,9 +300,9 @@
    "oorzaak": null,
    "route": "wetgeving",
    "sectie": "geconsolideerd",
-   "sha256": "9347886adeb922806a52531a07d4bf404b414fe892486bb092f096df4afe1548",
+   "sha256": "3d995f77537f1ef51a0105b9d5b76c6e899bb3bfd91076a5ef5ffc62e89c9f6c",
    "status": "ok",
-   "tekens": 106374,
+   "tekens": 106149,
    "waarschuwingen": [
     "Overwegingen en aanhef zijn overgenomen uit de oorspronkelijke handeling (CELEX:32021R0953); de geconsolideerde tekst op EUR-Lex bevat deze niet.",
     "Geen CLG.MDFO in de tekst noemt 32021R2288; van deze wijzigende handeling(en) is `shown` niet vastgesteld.",
@@ -363,9 +363,9 @@
    "oorzaak": null,
    "route": "wetgeving",
    "sectie": "testset",
-   "sha256": "c35f2bb25c4ae5f84e23d477d475adb192d3d9d21f3110b90ede78b92b3e1bd0",
+   "sha256": "d147e200c9effc6abd796aa64ab40b0f6428954441ca42ea58bf0263c814c84f",
    "status": "ok",
-   "tekens": 708402,
+   "tekens": 705805,
    "waarschuwingen": [
     "Overwegingen en aanhef zijn overgenomen uit de oorspronkelijke handeling (CELEX:32024R1689); de geconsolideerde tekst op EUR-Lex bevat deze niet.",
     "De vindplaats van de basishandeling in de geconsolideerde Formex is onvolledig (NO.OJ); oj_reference is leeg.",
@@ -3672,6 +3672,6 @@
    ]
   }
  },
- "gemeten": "2026-09-29 21:38",
+ "gemeten": "2026-09-30 09:20",
  "taal": "NL"
 }

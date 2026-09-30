@@ -46,6 +46,14 @@ NBSP = " "
 # U+0000 kan in XML niet voorkomen, dus nooit in brontekst.
 TABELMARKER = "\x00"
 ONGENUMMERD = {"DASH", "NDASH", "BULLET", "NONE", "DISC"}
+# De plek van een geschrapt structuurelement (`_zonder_geschrapte_tekst`). Geen
+# Formex-tag, en zonder tekst: een walker die hem niet kent, laat hem stil vallen, en
+# daarom telt `omzetten()` na of elke plek als alinea `—————` is geschreven.
+GESCHRAPT = "GESCHRAPT"
+# Wat EUR-Lex op die plek toont (`▼M2 —————`), zonder de markering: vijf em-streepjes.
+STREEP = "—" * 5
+# Een geschrapte kop of opschrift toont EUR-Lex niet; daar komt geen alinea.
+KOPELEMENTEN = {"TI", "STI", "TI.ART", "STI.ART"}
 METADATA = {"BIB.INSTANCE", "BIB.DOC", "BIB.DATA", "PUBLICATION.REF", "NO.DOC", "INFO.CONSLEG",
             "INFO.PROD", "FAM.COMP", "GR.MOD.ACT", "DOCUMENT.REF", "PAGE.FIRST", "PAGE.LAST",
             "PAGE.SEQ", "PAGE.TOTAL", "LG.DOC", "NO.SEQ", "VOLUME.REF",
@@ -243,7 +251,7 @@ def _onderdelen(data: bytes) -> tuple[ET.Element, list[tuple[str, ET.Element]], 
         uit = []
         for naam in kort:
             try:
-                uit.append((naam, ET.fromstring(zf.read(per_naam[naam]))))
+                uit.append((naam, _zonder_geschrapte_tekst(zf.read(per_naam[naam]), naam)))
             except (ET.ParseError, KeyError) as exc:
                 raise _xml_fout(f"onderdeel {naam} is niet leesbaar ({exc})", exc)
         inclusie_namen: list[str] = []
@@ -284,7 +292,7 @@ def _onderdelen(data: bytes) -> tuple[ET.Element, list[tuple[str, ET.Element]], 
         inclusies: dict[str, ET.Element] = {}
         for naam in dict.fromkeys(inclusie_namen):
             try:
-                inclusies[naam] = ET.fromstring(zf.read(per_naam[naam]))
+                inclusies[naam] = _zonder_geschrapte_tekst(zf.read(per_naam[naam]), naam)
             except (ET.ParseError, KeyError) as exc:
                 raise _xml_fout(f"inclusie {naam} is niet leesbaar ({exc})", exc)
         return doc, uit, inclusies, afbeeldingen
@@ -331,6 +339,162 @@ def _wijzigingsmarkeringen(data: bytes) -> Counter:
     except (zipfile.BadZipFile, ET.ParseError, OSError) as exc:
         raise _xml_fout(f"de wijzigingsmarkeringen zijn niet te lezen ({exc})", exc)
     return totaal
+
+
+def _instructie(el) -> tuple[str, dict[str, str]] | None:
+    """`(doel, attributen)` van een verwerkingsinstructie in de boom, anders None."""
+    if el.tag is not ET.ProcessingInstruction:
+        return None
+    doel, _, rest = (el.text or "").partition(" ")
+    return doel, dict(re.findall(r'([A-Z][A-Z.]*)="([^"]*)"', rest))
+
+
+def _zonder_geschrapte_tekst(data: bytes, naam: str) -> ET.Element:
+    """Lees een onderdeel, met op de plek van elk geschrapt bereik wat EUR-Lex daar toont.
+
+    Een geconsolideerde tekst laat een geschrapte passage staan tussen
+    `<?CLG.MDFO … ACTION="DELETED" …?>` en de `<?CLG.MDFC …?>` die ernaar verwijst.
+    ElementTree gooit die instructies weg, dus tot kb WP-64 (30 september 2026)
+    schreef deze omzetter de oude tekst als geldende tekst: de artikelen 17 tot en
+    met 19 van eIDAS (02014R0910-20241018), en in de kennisbank 40 passages in acht
+    documenten. EUR-Lex toont er iets anders, en dat is gemeten in de HTML van
+    dezelfde consolidaties:
+
+    - `LEVEL="STRUCTURE"`: het hele element (artikel, lid, punt, afdeling) is één
+      alinea `▼M2 —————` (eIDAS 11 van 11, Europol 02016R0794-20260111 15 van 15,
+      AI-verordening 02024R1689-20260727 4 van 4). Hier wordt het een alinea
+      `—————`, want deze route schrijft geen ▼-markering, en preclean V9 van de
+      kennisbank maakt van de HTML-vorm precies dat. Een geschrapt opschrift (`STI`
+      van HOOFDSTUK IV in de AVMD, 02010L0013-20250208) toont EUR-Lex niet: in een
+      kop kan geen alinea staan, dus daar verdwijnt alleen de tekst.
+    - `LEVEL="TEXT"`: met hooguit één woord laat EUR-Lex de tekst staan (`3.` in
+      artikel 35 van Europol, `.` in bijlage I van de AI-verordening, ` en` in artikel
+      46 van de EES-verordening 02017R2226-20260612), en hier blijft hij dus ook.
+      Langer wordt het `—————` op de plek van de tekst, zoals in artikel 28, lid 2,
+      van MiFIR (02014R0600-20251123: `2. ►M8 ————— ◄`).
+
+    Wat hier verdwijnt, is ook voor de zelfcontrole geen brontekst meer: woorden,
+    bladalinea's en structuur tellen dan wat EUR-Lex toont. Een geschrapt bereik
+    dat niet in één element opent en sluit, of een ander niveau dan deze twee,
+    is niet gemeten en een weigering.
+    """
+    parser = ET.XMLParser(target=ET.TreeBuilder(insert_pis=True))
+    parser.feed(data)
+    root = parser.close()
+    _schrap(root, naam)
+    _zonder_instructies(root)
+    return root
+
+
+def _schrap(ouder, naam: str) -> None:
+    """Vervang elk geschrapt bereik onder `ouder`, van boven naar beneden.
+
+    Eerst de bereiken van dit niveau en dan pas de kinderen die blijven: een
+    geschrapt bereik binnen een geschrapt bereik (artikel 92 bis, lid 3 van de
+    geconsolideerde CRR) verdwijnt zo met het buitenste mee.
+    """
+    index = 0
+    while index < len(ouder):
+        kind = ouder[index]
+        pi = _instructie(kind)
+        if pi is None or pi[0] != "CLG.MDFO" or pi[1].get("ACTION") != "DELETED":
+            index += 1
+            continue
+        id_ = pi[1].get("ID", "")
+        einde = next((j for j in range(index + 1, len(ouder)) if _sluit(ouder[j], id_)), None)
+        if einde is None and _daal_af(ouder, index, id_):
+            # Het bereik opent nu in het volgende element; `_schrap` op dat kind vindt het.
+            continue
+        if einde is None:
+            raise _xml_fout(f"het geschrapte bereik {id_} in {naam} sluit niet in hetzelfde element; "
+                            "alleen een bereik dat in één element opent en sluit, is gemeten")
+        binnen = list(ouder[index + 1:einde])
+        elementen = [e for e in binnen if e.tag is not ET.ProcessingInstruction]
+        los = (kind.tail or "") + "".join(e.tail or "" for e in binnen)
+        niveau = pi[1].get("LEVEL")
+        if niveau == "STRUCTURE":
+            if ws(los):
+                raise _xml_fout(f"het geschrapte structuurbereik {id_} in {naam} bevat losse tekst; "
+                                "dat is niet gemeten")
+            for e in binnen:
+                ouder.remove(e)
+            if elementen and not all(e.tag in KOPELEMENTEN for e in elementen):
+                plaats = ET.Element(GESCHRAPT, {"ACTIVE.DOC": pi[1].get("ACTIVE.DOC", "")})
+                ouder.insert(index + 1, plaats)
+                einde = index + 2
+            else:
+                einde = index + 1
+            kind.tail = None
+        elif niveau == "TEXT":
+            omhulsel = ET.Element("x")
+            omhulsel.text = kind.tail
+            omhulsel.extend(e for e in binnen if e.tag is not ET.ProcessingInstruction)
+            if len(_woorden(_plat_bron(omhulsel))) > 1:
+                if any(e.tag not in INLINE_TEKST | INLINE_TRANSPARANT for e in elementen):
+                    raise _xml_fout(f"het geschrapte tekstbereik {id_} in {naam} bevat een blok; "
+                                    "dat is niet gemeten")
+                for e in binnen:
+                    ouder.remove(e)
+                kind.tail = f" {STREEP} "
+                einde = index + 1
+        else:
+            raise _xml_fout(f"het geschrapte bereik {id_} in {naam} heeft het niveau {niveau!r}; "
+                            "alleen STRUCTURE en TEXT zijn gemeten")
+        index = einde + 1
+    for kind in ouder:
+        if kind.tag is not ET.ProcessingInstruction:
+            _schrap(kind, naam)
+
+
+def _sluit(el, id_: str) -> bool:
+    """Is `el` de `CLG.MDFC` die het bereik `id_` sluit?"""
+    pi = _instructie(el)
+    return pi is not None and pi[0] == "CLG.MDFC" and pi[1].get("IDREF") == id_
+
+
+def _daal_af(ouder, index: int, id_: str) -> bool:
+    """Laat een bereik dat vlak vóór een element opent en daarbinnen sluit, in dat element openen.
+
+    Artikel 52, lid 15 van MiFIR (02014R0600-20251123) verliest de punten a) tot en
+    met d) van een opsomming die daarna doorloopt: het bereik opent
+    vóór de `LIST` en sluit erin, na punt d). In artikel 50 quater, lid 1 van de
+    geconsolideerde CRR (02013R0575-20270101) opent het vóór `ITEM` f) en sluit na
+    diens `TXT`, en de `P` erachter blijft. Wat vóór het bereik staat, is in beide
+    gevallen alleen de begintag: geen woord. Dan is het hetzelfde bereik, één niveau
+    dieper, en blijft het element zelf met wat er na het bereik in staat.
+    """
+    begin = ouder[index]
+    if index + 1 >= len(ouder) or ws(begin.tail or ""):
+        return False
+    volgende = ouder[index + 1]
+    if volgende.tag is ET.ProcessingInstruction or ws(volgende.text or ""):
+        return False
+    if not any(_sluit(el, id_) for el in volgende.iter()):
+        return False
+    ouder.remove(begin)
+    begin.tail, volgende.text = volgende.text, None
+    volgende.insert(0, begin)
+    return True
+
+
+def _zonder_instructies(root) -> None:
+    """Haal de verwerkingsinstructies uit de boom, met hun staart op de plek ervoor.
+
+    Dat is de boom die `ET.fromstring` zonder instructies had gegeven: de tekst na
+    een instructie sluit aan op de tekst ervoor.
+    """
+    for ouder in list(root.iter()):
+        vorige = None
+        for kind in list(ouder):
+            if kind.tag is not ET.ProcessingInstruction:
+                vorige = kind
+                continue
+            if kind.tail:
+                if vorige is None:
+                    ouder.text = (ouder.text or "") + kind.tail
+                else:
+                    vorige.tail = (vorige.tail or "") + kind.tail
+            ouder.remove(kind)
 
 
 def _plat_bron(el) -> str:
@@ -567,6 +731,7 @@ class FormexOmzetter:
         self.afbeeldingen_weggelaten: list[dict] = []
         self.citaatdiepte = 0                       # >0 binnen een QUOT.S die inline loopt
         self.citaattabellen: list[list[str] | None] = []  # blokken per TABELMARKER, None = geschreven
+        self.strepen = 0                            # geschreven plekken van een geschrapt element
 
     def onbekend(self, context: str, el) -> None:
         """Weiger onbekende inhoud; een leeg technisch element mag verdwijnen."""
@@ -828,6 +993,12 @@ class FormexOmzetter:
             # `inhoud()` gaat (een cel, een definitie, een overweging): daar kan
             # geen tabel staan, en de tabel zelf is dan nergens geschreven.
             raise _xml_fout("een geciteerde tabel staat op een plek waar alleen tekst kan staan")
+        plekken = sum(1 for _, root in onderdelen + inclusiedelen for _ in root.iter(GESCHRAPT))
+        if self.strepen != plekken:
+            # Een plek zonder tekst valt in een walker die hem niet kent stil weg; dan
+            # zou de lezer niet zien dat daar iets geschrapt is, en EUR-Lex toont het wel.
+            raise _xml_fout(f"{plekken - self.strepen} van de {plekken} geschrapte elementen staan op een "
+                            "plek waar de omzetter geen alinea ————— kan schrijven; dat is niet gemeten")
         if self.afbeeldingen_weggelaten:
             self.meld_afbeeldingen()
         if self.aaneen:
@@ -1339,6 +1510,8 @@ class FormexOmzetter:
                 self.bepalingen(wrapper, nieuw, wortel=False)
             elif kind.tag == "ARTICLE":
                 self.artikel(kind)
+            elif kind.tag == GESCHRAPT:
+                self.streep()
             elif kind.tag in METADATA:
                 continue
             else:
@@ -1417,6 +1590,8 @@ class FormexOmzetter:
                     self.dispositiefpunt(np, teller)
             elif kind.tag in ("P", "ALINEA", "LIST", "DLIST"):
                 self.inhoud(kind, basis="pt", teller=teller)
+            elif kind.tag == GESCHRAPT:
+                self.streep()
             elif kind.tag in METADATA:
                 continue
             else:
@@ -1439,6 +1614,11 @@ class FormexOmzetter:
             raise _xml_fout(f"een punt in het dispositief met markering {nr!r} is niet gemeten; "
                             "alleen `1.`, `1)`, `(1)` en `1.1.` (het eurlex-profiel leest `I.` niet)")
         self.inhoud(np, basis="pt", teller=teller, dispositief=True)
+
+    def streep(self) -> None:
+        """De plek van een geschrapt artikel, afdeling of onderdeel: `—————` als eigen alinea."""
+        self.u.blok(STREEP)
+        self.strepen += 1
 
     def dubbele_divisie(self, anker: str, nr: str, volgnummer: int, kop: str) -> tuple[str, str]:
         """Een tweede hoofdstuk, afdeling of titel met hetzelfde nummer op hetzelfde niveau.
@@ -1532,13 +1712,14 @@ class FormexOmzetter:
                 geankerd[0] = True
 
         tag = el.tag
+        blokken = ("LIST", "TBL", "GR.TBL", "P", "NP", "DLIST", GESCHRAPT) + ANNOTATIES
         if tag == "ALINEA":
-            if not any(c.tag in ("LIST", "TBL", "GR.TBL", "P", "NP", "DLIST") + ANNOTATIES for c in el):
+            if not any(c.tag in blokken for c in el):
                 schrijf(ws(self.inline(el)))
                 return
             tekst = el.text or ""
             for kind in el:
-                if kind.tag in ("LIST", "TBL", "GR.TBL", "P", "NP", "DLIST") + ANNOTATIES:
+                if kind.tag in blokken:
                     schrijf(ws(tekst))
                     tekst = ""
                     self.inhoud(kind, basis, teller, prefix, lid_anker, geankerd)
@@ -1558,7 +1739,7 @@ class FormexOmzetter:
                 # dan de alinea; met tekst ernaast blijft het een weigering.
                 self.inhoud(el[0], basis, teller, prefix, lid_anker, geankerd)
             elif (el.find("LIST") is not None or el.find("TBL") is not None or el.find("DLIST") is not None
-                  or any(c.tag in ANNOTATIES for c in el)):
+                  or el.find(GESCHRAPT) is not None or any(c.tag in ANNOTATIES for c in el)):
                 # Een P die een annotatie draagt, is in de bron een omhulsel: 57 van
                 # de 58 annotaties in een P zijn er het enige kind (de opmerkingen in
                 # de milieukeurcriteria 32005D0338 en in 32024D2627), de 58e staat
@@ -1665,6 +1846,13 @@ class FormexOmzetter:
                 self.inhoud(kind, basis, teller)
         elif tag == "GR.TBL":
             self.tabelgroep(el)
+        elif tag == GESCHRAPT:
+            # Via `schrijf()`: is de eerste alinea van een lid geschrapt, dan staat het
+            # lidnummer ervoor (`2.   —————`). Zo toont EUR-Lex het bij een geschrapt
+            # tekstbereik aan het begin van een lid (artikel 28, lid 2 van MiFIR,
+            # 02014R0600-20251123), en zonder nummer op die regel kreeg het lid geen anker.
+            schrijf(STREEP)
+            self.strepen += 1
         elif tag == "INCL.ELEMENT":
             # Leeg, dus `onbekend()` zou hem stil laten vallen.
             bijschrift = self.afbeelding(el, blok=True)
@@ -1979,12 +2167,22 @@ class FormexOmzetter:
     def lijst(self, el, basis: str, extra: str) -> None:
         """Elk onderdeel is een eigen alinea: `a) tekst`, niet een Markdown-lijst."""
         if el.tag == "DLIST":
-            for item in el.findall("DLIST.ITEM"):
-                self.definitiepunt(item, basis, extra)
+            for item in el:
+                if item.tag == "DLIST.ITEM":
+                    self.definitiepunt(item, basis, extra)
+                elif item.tag == GESCHRAPT:
+                    self.streep()
             return
         genummerd = el.get("TYPE", "").upper() not in ONGENUMMERD
         gezien: Counter = Counter()
-        for item in el.findall("ITEM"):
+        for item in el:
+            if item.tag == GESCHRAPT:
+                # Een geschrapt onderdeel `d)` (artikel 12, lid 3 van eIDAS): de streep
+                # staat waar het stond, tussen c) en het volgende lid.
+                self.streep()
+                continue
+            if item.tag != "ITEM":
+                continue
             np = item.find("NP")
             if np is not None:
                 nr = ws(self.inline(np.find("NO.P"))) if np.find("NO.P") is not None else ""

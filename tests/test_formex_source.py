@@ -2386,3 +2386,144 @@ def test_een_inhoudsopgave_voor_contents_in_een_bijlage():
     assert not onbekend
     with pytest.raises(ConversionError, match="TOC na CONTENTS"):
         formex_xml.omzetten(met_bijlage(inhoud + toc))
+
+
+# ---------------------------------------------------------------- geschrapte tekst (kb WP-64)
+
+STREEP = formex_xml.STREEP
+
+
+def _weg(n: int, inhoud: bytes, niveau: str = "STRUCTURE") -> bytes:
+    """Een bereik zoals de Cellar het om een geschrapte passage zet."""
+    return (f'<?CLG.MDFO ID="O{n}" IDREF="C{n}" ACTION="DELETED" LEVEL="{niveau}" COMMAND="EXPLICIT" '
+            f'ACTIVE.DOC="32025R0037" ACTIVE.LOC="AR:1;PT:{n}" MOD.LEVEL="1"?>').encode() + inhoud + \
+        f'<?CLG.MDFC ID="C{n}" IDREF="O{n}"?>'.encode()
+
+
+def _geconsolideerd(bepalingen: bytes) -> bytes:
+    return formex_zip(act=(
+        b'<CONS.ACT><INFO.CONSLEG CONSLEG.REF="2019R0881" START.DATE="20250204" END.DATE="99999999" '
+        b'PROD.SEQ="001.001.0"/><CONS.DOC><BIB.INSTANCE><LG.DOC>NL</LG.DOC></BIB.INSTANCE>'
+        b'<TITLE><P><HT TYPE="UC">Verordening (EU) 2019/881</HT></P></TITLE>'
+        b'<PREAMBLE><PREAMBLE.INIT/><PREAMBLE.FINAL/></PREAMBLE><ENACTING.TERMS>'
+        + bepalingen + b"</ENACTING.TERMS></CONS.DOC></CONS.ACT>"))
+
+
+def _artikel(nr: int, *leden: bytes) -> bytes:
+    return (f'<ARTICLE IDENTIFIER="{nr:03d}"><TI.ART>Artikel {nr}</TI.ART><STI.ART>Opschrift {nr}</STI.ART>'
+            .encode() + b"".join(leden) + b"</ARTICLE>")
+
+
+def _lid(nr: int, tekst: bytes) -> bytes:
+    return f"<PARAG><NO.PARAG>{nr}.</NO.PARAG><ALINEA>".encode() + tekst + b"</ALINEA></PARAG>"
+
+
+def _alineas(markdown: str) -> list[str]:
+    return [a.strip("\n") for a in markdown.split("\n\n") if a.strip("\n")]
+
+
+def test_geschrapt_artikel_lid_en_onderdeel_worden_een_streep_zoals_eurlex_ze_toont():
+    """eIDAS (02014R0910-20241018) laat artikel 17 tot en met 19, lid 7 van artikel 12 en
+    onderdeel d) van artikel 12, lid 3 tussen `CLG.MDFO ACTION="DELETED"` en `CLG.MDFC` staan.
+    EUR-Lex toont er `▼M2 —————`; tot kb WP-64 schreef deze route de oude tekst als geldende
+    tekst. Nu komt op elke plek een alinea `—————`, en de geschrapte woorden staan nergens."""
+    lijst = (b'<LIST TYPE="alpha"><ITEM><NP><NO.P>a)</NO.P><TXT>blijvend onderdeel;</TXT></NP></ITEM>'
+             + _weg(1, b"<ITEM><NP><NO.P>b)</NO.P><TXT>vervallen onderdeel;</TXT></NP></ITEM>")
+             + b"<ITEM><NP><NO.P>c)</NO.P><TXT>laatste onderdeel.</TXT></NP></ITEM></LIST>")
+    bepalingen = (
+        _artikel(1, _lid(1, b"<P>Aanhef van het eerste lid:</P>" + lijst),
+                 _weg(2, _lid(2, b"Tweede lid dat vervallen is.")),
+                 _lid(3, b"Derde lid blijft."))
+        + _weg(3, _artikel(2, _lid(1, b"Een heel artikel dat vervallen is.")))
+        + _artikel(3, _lid(1, b"Het laatste artikel.")))
+    markdown, eenheden, onbekend, _ = formex_xml.omzetten(_geconsolideerd(bepalingen))
+    alineas = _alineas(markdown)
+    assert "vervallen" not in markdown and "Artikel 2" not in markdown.replace(NBSP, " ")
+    assert alineas.count(STREEP) == 3
+    assert alineas[alineas.index("a) blijvend onderdeel;") + 1] == STREEP
+    assert alineas[alineas.index(STREEP) + 1] == "c) laatste onderdeel."
+    assert alineas[alineas.index(f"3.{NBSP * 3}Derde lid blijft.") - 1] == STREEP
+    assert alineas[alineas.index(f"### Artikel{NBSP}3") - 1] == STREEP
+    ankers = {e.anker for e in eenheden}
+    assert {"art-1-1-a", "art-1-1-c", "art-1-3", "art-3"} <= ankers
+    assert not ankers & {"art-1-1-b", "art-1-2", "art-2"}
+    assert not onbekend
+
+
+def test_een_geschrapt_opschrift_laat_de_kop_staan_zonder_streep():
+    """De AVMD (02010L0013-20250208) schrapt het opschrift van HOOFDSTUK IV; EUR-Lex toont
+    dan alleen de kop, en in een kop kan geen alinea staan."""
+    bepalingen = (b"<DIVISION><TITLE><TI><P>HOOFDSTUK I</P></TI>"
+                  + _weg(1, b"<STI><P>VERVALLEN OPSCHRIFT</P></STI>") + b"</TITLE>"
+                  + _artikel(1, _lid(1, b"Tekst.")) + b"</DIVISION>")
+    markdown, _, _, _ = formex_xml.omzetten(_geconsolideerd(bepalingen))
+    assert "VERVALLEN" not in markdown and STREEP not in markdown
+    assert "## HOOFDSTUK I" in _alineas(markdown)
+
+
+def test_een_geschrapt_tekstbereik_van_een_woord_blijft_staan_en_een_langer_wordt_een_streep():
+    """EUR-Lex laat een tekstbereik van hooguit één woord staan (`3.` in artikel 35 van
+    Europol, ` en` in artikel 46 van de EES-verordening) en toont een langer als `—————` op
+    die plek (artikel 28, lid 2 van MiFIR: `2. ►M8 ————— ◄`). Het lidnummer blijft ervoor."""
+    bepalingen = _artikel(
+        1, _lid(1, b"Eerste lid" + _weg(1, b" en", "TEXT") + b" verder."),
+        f"<PARAG><NO.PARAG>2.</NO.PARAG><ALINEA>".encode()
+        + _weg(2, b"Een hele alinea die vervallen is.", "TEXT")
+        + b"</ALINEA><ALINEA>De tweede alinea blijft.</ALINEA></PARAG>")
+    markdown, eenheden, _, _ = formex_xml.omzetten(_geconsolideerd(bepalingen))
+    alineas = _alineas(markdown)
+    assert f"1.{NBSP * 3}Eerste lid en verder." in alineas
+    assert f"2.{NBSP * 3}{STREEP}" in alineas
+    assert "vervallen" not in markdown and "De tweede alinea blijft." in alineas
+    assert "art-1-2" in {e.anker for e in eenheden}
+
+
+def test_een_bereik_dat_voor_een_opsomming_opent_en_erin_sluit_schrapt_alleen_die_punten():
+    """Artikel 52, lid 15 van MiFIR (02014R0600-20251123): het bereik opent vóór
+    de `LIST` en sluit na punt b); de opsomming loopt door met c)."""
+    lijst = (b"<P>Aanhef:</P>" + b'<?CLG.MDFO ID="O1" IDREF="C1" ACTION="DELETED" LEVEL="STRUCTURE" '
+             b'ACTIVE.DOC="32025R0037"?><LIST TYPE="alpha">'
+             b"<ITEM><NP><NO.P>a)</NO.P><TXT>eerste vervallen;</TXT></NP></ITEM>"
+             b"<ITEM><NP><NO.P>b)</NO.P><TXT>tweede vervallen;</TXT></NP></ITEM>"
+             b'<?CLG.MDFC ID="C1" IDREF="O1"?>'
+             b"<ITEM><NP><NO.P>c)</NO.P><TXT>blijft.</TXT></NP></ITEM></LIST>")
+    markdown, eenheden, _, _ = formex_xml.omzetten(_geconsolideerd(_artikel(1, _lid(1, lijst))))
+    alineas = _alineas(markdown)
+    assert "vervallen" not in markdown
+    assert alineas[alineas.index(f"1.{NBSP * 3}Aanhef:") + 1:][:2] == [STREEP, "c) blijft."]
+    assert "art-1-1-c" in {e.anker for e in eenheden}
+
+
+def test_een_geschrapt_bereik_binnen_een_geschrapt_bereik_geeft_een_streep():
+    """Artikel 92 bis, lid 3 van de geconsolideerde CRR: een bereik in een geschrapt bereik."""
+    binnen = _weg(2, _lid(3, b"Binnenste vervallen lid."))
+    bepalingen = _artikel(1, _lid(1, b"Blijft."), _weg(1, _lid(2, b"Buitenste vervallen lid.") + binnen))
+    markdown, _, _, _ = formex_xml.omzetten(_geconsolideerd(bepalingen))
+    assert _alineas(markdown).count(STREEP) == 1 and "vervallen" not in markdown
+
+
+def test_een_geschrapt_bereik_dat_niet_in_een_element_sluit_is_een_weigering():
+    """Een bereik dat in een lid opent en in het volgende sluit, is niet gemeten; raden waar
+    de geschrapte tekst eindigt, zou geldende tekst kunnen weggooien."""
+    bepalingen = _artikel(
+        1, b'<PARAG><NO.PARAG>1.</NO.PARAG><ALINEA>Tekst <?CLG.MDFO ID="O1" IDREF="C1" ACTION="DELETED" '
+        b'LEVEL="TEXT" ACTIVE.DOC="32025R0037"?>die hier begint.</ALINEA></PARAG>'
+        + _lid(2, b'en hier eindigt<?CLG.MDFC ID="C1" IDREF="O1"?>.'))
+    with pytest.raises(ConversionError, match="sluit niet in hetzelfde element"):
+        formex_xml.omzetten(_geconsolideerd(bepalingen))
+
+
+def test_een_geschrapt_element_op_een_plek_zonder_alinea_is_een_weigering():
+    """Een geschrapte tabelrij is niet gemeten: `tabel()` kent geen streep, en de plek zou
+    stil wegvallen. De natelling in `omzetten()` weigert dat."""
+    tabel = (b"<TBL COLS=\"1\"><CORPUS><ROW><CELL COL=\"1\">Blijft</CELL></ROW>"
+             + _weg(1, b"<ROW><CELL COL=\"1\">Vervallen rij</CELL></ROW>") + b"</CORPUS></TBL>")
+    with pytest.raises(ConversionError, match="geschrapte elementen"):
+        formex_xml.omzetten(_geconsolideerd(_artikel(1, _lid(1, b"Tabel:"), tabel)))
+
+
+def test_een_vervangen_bereik_verandert_niets_aan_de_uitvoer():
+    """Alleen `DELETED` telt; de instructies van een vervangen passage gaan eruit zoals voorheen."""
+    zonder = formex_xml.omzetten(formex_zip(act=_cons_act()))[0]
+    met = formex_xml.omzetten(formex_zip(act=_cons_act(markeringen=("32025R0037", "32025R0038"))))[0]
+    assert met == zonder
