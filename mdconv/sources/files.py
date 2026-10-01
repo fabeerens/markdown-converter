@@ -62,18 +62,27 @@ ENGINE_MARKITDOWN = "MarkItDown"
 # een gebruiker een verkeerd citaat kunnen laten overnemen; vandaar een
 # waarschuwing boven de tekst i.p.v. stil doorlaten.
 _REPLACEMENT_CHAR = "�"
-_UNMAPPED_GLYPHS_NOTE = (
-    "*Let op: dit document bevat een of meer onleesbare tekens (`�`) op de plek van "
+# Dezelfde boodschap op twee plekken (besluit 3 van WP-77): bij een losse download als
+# cursieve alinea boven de tekst, bij een document met `document_id` als waarschuwing in
+# `Document.warnings` en dus in de herkomst, want de tekst van een kennisbankdocument
+# moet gelijk blijven aan wat de bron geeft.
+UNMAPPED_GLYPHS_WARNING = (
+    "Let op: dit document bevat een of meer onleesbare tekens (`�`) op de plek van "
     "letters die de extractie niet kon achterhalen — vaak een typografische ligatuur "
     "(bv. \"fi\", \"ft\", \"th\") die het lettertype alleen als samengesteld glyph opslaat, "
-    "zonder tekstcodering. Controleer de gemarkeerde plekken handmatig tegen het origineel.*"
+    "zonder tekstcodering. Controleer de gemarkeerde plekken handmatig tegen het origineel."
 )
+_UNMAPPED_GLYPHS_NOTE = f"*{UNMAPPED_GLYPHS_WARNING}*"
+
+
+def has_unmapped_glyphs(markdown: str) -> bool:
+    return _REPLACEMENT_CHAR in markdown
 
 
 def warn_if_unmapped_glyphs(markdown: str) -> str:
     """Zet de waarschuwing hierboven boven de tekst als er onvertaalde glyphs
     (`�`) in staan; anders `markdown` ongewijzigd."""
-    if _REPLACEMENT_CHAR not in markdown:
+    if not has_unmapped_glyphs(markdown):
         return markdown
     return f"{_UNMAPPED_GLYPHS_NOTE}\n\n{markdown}"
 

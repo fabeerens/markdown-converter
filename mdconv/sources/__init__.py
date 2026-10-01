@@ -330,9 +330,10 @@ def from_file(data: bytes, filename: str, *, extract_images: bool = False,
     alleen bij PDF-invoer toont.
 
     Bevat de geëxtraheerde tekst onvertaalde glyphs (`�`, zie
-    `files.warn_if_unmapped_glyphs`), dan krijgt de tekst een waarschuwing
-    boven zich i.p.v. de gebruiker stilzwijgend een gat in de tekst te laten
-    overnemen.
+    `files.warn_if_unmapped_glyphs`), dan wordt dat niet stil doorgelaten: zonder
+    `document_id` staat de waarschuwing boven de tekst, met `document_id` staat zij
+    in `warnings` en de herkomst en blijft de tekst zoals de bron hem geeft
+    (`_glyphs`, besluit 3 van WP-77).
     """
     if document_id is not None and not DOCUMENT_ID.match(document_id):
         raise ConversionError(
@@ -341,6 +342,7 @@ def from_file(data: bytes, filename: str, *, extract_images: bool = False,
     with capture_source_documents() as documenten:
         doc, extra = _omzetten(data, filename, extract_images=extract_images,
                                document_id=document_id, source_url=source_url)
+    doc = _glyphs(doc, document_id)
     if not documenten:
         return doc
     herkomst = Herkomst(
@@ -385,7 +387,6 @@ def _omzetten(data: bytes, filename: str, *, extract_images: bool, document_id: 
         pages = files.convert_pdf_pages(data)
         if pages is not None:
             markdown, attachments = _attach_pdf_images_inline(pages, data)
-            markdown = files.warn_if_unmapped_glyphs(markdown)
             engine = files.ENGINE_PDF_INSPECTOR
             if attachments:
                 engine = f"{engine} + {len(attachments)} afbeelding(en)"
@@ -407,7 +408,6 @@ def _omzetten(data: bytes, filename: str, *, extract_images: bool, document_id: 
             markdown = f"{markdown.rstrip()}\n\n## Bijlagen\n\n{embeds}\n"
             engine = f"{engine} + {len(attachments)} afbeelding(en)"
 
-    markdown = files.warn_if_unmapped_glyphs(markdown)
     extra = {}
     if naam.endswith(".pdf"):
         extra = _leg_pdf_vast(data, markdown, source_url, document_id)
@@ -416,6 +416,22 @@ def _omzetten(data: bytes, filename: str, *, extract_images: bool, document_id: 
 
 
 _DOCX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+
+def _glyphs(doc: Document, document_id: str | None) -> Document:
+    """Onvertaalde glyphs (`�`) niet stil doorlaten; waar de boodschap staat hangt af van de vraag.
+
+    Zonder `document_id` is dit de losse download en staat de waarschuwing van Floris boven
+    de tekst, waar de lezer hem ziet. Met `document_id` wil de gebruiker een kennisbankbundel,
+    en daarin moet de tekst gelijk blijven aan wat de bron geeft; dezelfde boodschap gaat dan
+    in `warnings`, en dus in `herkomst.waarschuwingen` en `processing`, waar de kennisbank
+    erop kan afketsen. Vóór `bind_structure`, zodat het bronbewijs de uiteindelijke tekst hasht.
+    """
+    if not files.has_unmapped_glyphs(doc.markdown):
+        return doc
+    if document_id is None:
+        return replace(doc, markdown=files.warn_if_unmapped_glyphs(doc.markdown))
+    return replace(doc, warnings=doc.warnings + (files.UNMAPPED_GLYPHS_WARNING,))
 
 
 def _terugval(data: bytes, filename: str, fout: ConversionError,

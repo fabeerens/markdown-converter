@@ -126,3 +126,48 @@ def test_a_kamerstuk_fallback_is_refused_by_kb_fetch_and_names_why(tmp_path, mon
     assert regel["status"] == "geweigerd" and "ValueError" not in regel["melding"]
     assert "bronbewijs" in regel["melding"] and "geen gestructureerde XML" in regel["melding"]
     assert not (tmp_path / "raw").exists()
+
+
+# ---------------------------------------------------------------------------
+# Besluit 3
+# ---------------------------------------------------------------------------
+
+def _pdf_met_glyph(monkeypatch):
+    from mdconv.sources import files, pdf_images
+
+    monkeypatch.setattr(files, "convert", lambda data, name: ("Dit is o�en een probleem.\n", files.ENGINE_PDF_INSPECTOR))
+    monkeypatch.setattr(pdf_images, "available", lambda: False)
+
+
+def test_unmapped_glyphs_go_above_the_text_of_a_loose_download(monkeypatch):
+    from mdconv.sources import files, from_file
+
+    _pdf_met_glyph(monkeypatch)
+    doc = from_file(b"%PDF", "rapport.pdf")
+    assert doc.markdown.startswith("*Let op: dit document bevat een of meer onleesbare tekens")
+    assert doc.markdown.endswith("Dit is o�en een probleem.\n")
+    assert doc.warnings == ()
+    # De herkomst van een losse download hasht de tekst mét de alinea: wat je downloadt is wat er staat.
+    from mdconv.source_structure import sha256
+    assert doc.provenance.extra["source_structure"]["markdown_sha256"] == sha256(doc.markdown)
+
+
+def test_unmapped_glyphs_go_into_the_metadata_of_a_kb_document(monkeypatch):
+    from mdconv.sources import files, from_file
+
+    _pdf_met_glyph(monkeypatch)
+    doc = from_file(b"%PDF", "rapport.pdf", document_id="edpb-guidelines-05-2020")
+    assert doc.markdown == "Dit is o�en een probleem.\n"
+    assert doc.warnings == (files.UNMAPPED_GLYPHS_WARNING,)
+    assert doc.provenance.waarschuwingen == (files.UNMAPPED_GLYPHS_WARNING,)
+    assert doc.provenance.as_json()["waarschuwingen"] == [files.UNMAPPED_GLYPHS_WARNING]
+
+
+def test_a_clean_pdf_gets_neither(monkeypatch):
+    from mdconv.sources import files, from_file, pdf_images
+
+    monkeypatch.setattr(files, "convert", lambda data, name: ("Schone tekst.\n", files.ENGINE_PDF_INSPECTOR))
+    monkeypatch.setattr(pdf_images, "available", lambda: False)
+    for document_id in (None, "edpb-guidelines-05-2020"):
+        doc = from_file(b"%PDF", "rapport.pdf", document_id=document_id)
+        assert doc.markdown == "Schone tekst.\n" and doc.warnings == ()
