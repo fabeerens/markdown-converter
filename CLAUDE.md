@@ -4,16 +4,20 @@ Lokale web-tool (Python/Flask) die jurisprudentie, wetgeving en documenten omzet
 Markdown, met optionele AI-opschoning. Draait volledig lokaal op de Mac van de gebruiker.
 De projectmap heet nog "EUR-lex naar md" (historisch); de tool zelf heet "Markdown converter".
 
-De UI heeft vier tabbladen: **Jurisprudentie** (HvJ EU / EHRM / NL via ECLI of link),
-**Wetgeving** (EU via CELEX/ELI/link, NL via wetten.overheid.nl/BWB), **Documentupload**
+De UI heeft vijf tabbladen: **Jurisprudentie** (HvJ EU / EHRM / NL via ECLI of link),
+**Wetgeving** (EU via CELEX/ELI/link, NL via wetten.overheid.nl/BWB), **Open overheid**
+(kamerstukken, Kamervragen, Handelingen, bijlagen en Woo-documenten: ophalen via
+id/dossiernotatie/link/D-nummer óf zoeken — zie "Open overheid" onder "Belangrijke details"),
+**Documentupload**
 (bestand(en) slepen óf link(s) naar een bestand plakken) en **Tekst plakken** (kale of
 verrijkte tekst rechtstreeks in een `contenteditable`-vak plakken/typen). Tabs 1 en 2
-posten beide naar `/api/convert/link` (auto-detectie); tab 3 naar `/api/convert/file` of
+posten beide naar `/api/convert/link` (auto-detectie); tab Open overheid naar
+`/api/convert/overheid` (geen taalkeuze) en zoekt via `/api/search`; Documentupload naar `/api/convert/file` of
 `/api/convert/file-url` (of, met de **wiskunde-modus** aan, naar de streaming-varianten
 `/api/convert/file/ocr` resp. `/api/convert/file-url/ocr` — zie "Wiskunde-modus" hieronder);
-tab 4 naar `/api/convert/text`. Tabs 1–3 ondersteunen **meerdere
-documenten tegelijk** (zie "Meerdere documenten" hieronder); tab 4 is één plakvak per keer
-— een batch van tekstvakken past niet bij hoe je knipt-en-plakt. Bij tabs 1–3 kun je
+Tekst plakken naar `/api/convert/text`. De eerste vier bronnen-tabs (Jurisprudentie, Wetgeving, Open overheid, Documentupload) ondersteunen **meerdere
+documenten tegelijk** (zie "Meerdere documenten" hieronder); Tekst plakken is één plakvak per keer
+— een batch van tekstvakken past niet bij hoe je knipt-en-plakt. Bij die vier kun je
 bovendien een hele **lijst** in één keer aanleveren (zie "Batch-import" onder Front-end).
 
 ## Starten
@@ -36,6 +40,7 @@ mdconv/
   errors.py                ConversionError/ConfigError/UpstreamError (+ .status)
   net.py                   gedeelde gepoolde requests-Sessions (retries alleen op GET)
   ocr.py                   wiskunde-modus: PDF pagina-voor-pagina door een vision-LLM
+  search.py                zoeken in Open overheid (SRU + Woo) met één uniforme resultaatvorm
   state.py                 StateFile: mtime-gecachet lezen, flock + atomair schrijven
   render.py                gedeelde HTML→markdown: tidy, koppen promoveren, marker-tabellen
   version.py               lui berekend versienummer/buildteller voor de footer
@@ -47,6 +52,10 @@ mdconv/
     wetten.py              BWB/wetten.overheid.nl portal-HTML → markdown
     formex.py              Formex-XML → markdown (context expliciet, dus thread-safe)
     files.py               PDF via pdf-inspector, rest via MarkItDown (beide lui geladen)
+    kamerstuk.py           kamerstukken/Kamervragen/Handelingen/bijlagen: officiële XML (of PDF) → markdown
+    woo.py                 Woo-documenten van open.overheid.nl: zoek-API, bestand → markdown, relaties
+    sru.py                 SRU-client (repository.overheid.nl): zoeken, record op id, bijlagen van een stuk
+    common.py              Fetched-dataclass, bijlage()-items voor het paneel, header(), slug()
     pasted_text.py         handmatig geplakte tekst (kaal of verrijkte HTML) → markdown
     pdf_images.py           losse afbeeldingen uit een PDF (pdfimages/pdfinfo, poppler)
   attachments.py            tijdelijke, token-based opslag van geëxtraheerde afbeeldingen
@@ -77,6 +86,8 @@ soort), zodat de route niets over engines of classificatie hoeft te weten.
 | **`ECLI:NL:…`** of rechtspraak.nl-link | Rechtspraak.nl |
 | HUDOC-link, item-id (`001-…`), **`ECLI:CE:ECHR:…`** | HUDOC (EHRM) |
 | wetten.overheid.nl-link of **BWB-nummer** (`BWBR0040940`) | wetten.overheid.nl |
+| **`kst-…`/`ah-tk-…`/`h-tk-…`/`blg-…`-id**, officielebekendmakingen.nl- of tweedekamer.nl-link | Open overheid → `kamerstuk.py` (staat bóvenaan `detect_source`) |
+| **open.overheid.nl-link**, `ronl-…`/`oep-…`-id | Open overheid → `woo.py` (idem) |
 | **`ECLI:DE:…`** (Duitse rechtspraak) | OpenLegalData (terugval: rechtsprechung-im-internet.de) |
 | **`ECLI:BE:…`** (Belgische rechtspraak) | Juportal |
 | **`ECLI:FR:CC:…`** (Conseil constitutionnel) of **`ECLI:FR:CCASS:…`** (Cour de cassation); overige FR-gerechten: nette foutmelding | conseil-constitutionnel.fr resp. Judilibre |
@@ -110,6 +121,99 @@ accountregistratie namens de gebruiker):
 
 ## Belangrijke, niet-voor-de-hand-liggende details
 
+- **Open overheid — kamerstukken** (`mdconv/sources/kamerstuk.py`, endpoint
+  `/api/convert/overheid`, tab "Open overheid" tussen Wetgeving en Documentupload; interne
+  sleutel `oo`): wat Tkconv's `tkgetxml` doet is alleen de
+  SyncFeed van opendata.tweedekamer.nl binnenhalen (metadata); de **tekst** zit niet in die feed.
+  De gestructureerde tekst staat in de **officiële XML** op
+  `https://zoek.officielebekendmakingen.nl/{id}.xml` (schema `op-xsd-2012-2`, keyless, geen WAF-
+  blokkade — anders dan EUR-Lex). Eén parser voor `kst-` (kamerstukken), `ah-tk-`/`ah-ek-`
+  (Kamervragen + antwoord) en `h-tk-`/`h-ek-` (Handelingen); onbekende elementen worden als
+  alinea/container gelezen, nooit weggelaten (`_is_container`/`_INLINE`). `<metadata.xml>` naast
+  het stuk (soort, indiener, datum, bijlage-id's) is best-effort verrijking, geparallelliseerd met
+  de XML-fetch.
+  - **Invoer** (`parse_reference`): publicatie-id (hoofdletters genormaliseerd), URL, dossiernotatie
+    ("36600-VII, nr. 1", "21501-02 nr. 3174", "36836 D"), D-nummer (`2024D40329`), Document-GUID of
+    tweedekamer.nl-link met `did=`. Een kaal dossiernummer zonder stuknummer krijgt een eigen
+    foutmelding i.p.v. een gok. `detect_source` claimt alleen de **ondubbelzinnige** vormen (id's en
+    links), vóór de HUDOC-test (de cijfers in zo'n id mogen niet als item-id gelezen worden); losse
+    dossiernotaties horen bij het eigen tabblad.
+  - **D-nummer/GUID → publicatie** via de OData-API (`gegevensmagazijn.tweedekamer.nl/OData/v4/2.0/
+    Document`, `$expand=Kamerstukdossier`): dossier+toevoeging+`Volgnummer` → `kst-…`;
+    `Aanhangselnummer` `242501244` → `ah-tk-20242025-1244`. Heeft het document geen van beide (een
+    brief buiten een dossier, `Volgnummer` -1), of staat de XML er (nog) niet, dan **terugval op het
+    originele bestand** (`Document({id})/resource`, DOCX/PDF) via `files.convert` — mét een
+    cursieve notitie bovenaan, nooit stil.
+  - **Koppen**: `divisie`/`kop`. Genummerde koppen ("1.", "2.1") krijgen hun niveau uit de
+    nummering (de bron nest "2.1" niet altijd in "2."); ongenummerde `tussenkop`pen uit hun opmaak
+    (vet > halfvet > vetcur > cur > rom > ondlijn), **relatief per container**: gebruikt een
+    sectie maar één stijl, dan is dat één niveau. H1 = dossiertitel, H2 = stuktitel, inhoud vanaf H3.
+  - **Voetnoten**: `noot` staat inline in de bron → `[^nr]` + definities onderaan; een nummer dat
+    opnieuw begint (bijlagen) krijgt een `-2`-suffix zodat labels uniek blijven. **Links**: `extref`
+    → `[tekst](url)` (`kst-…` → `…/{id}.html`, `dossier/…` → `…/dossier/…`, `soort=URL` letterlijk).
+  - **Tabellen** (CALS): col-/rowspans uitgevouwen, meerdere kopregels per kolom samengevoegd
+    (met herhaalde span-tekst), lege afstandsrijen weggelaten.
+  - **Afbeeldingen** (`illustratie naam=…`) worden gedownload van `…/officielebekendmakingen.nl/{naam}`
+    en als `![[naam]]` + bijlage meegegeven (zelfde `attachments`-mechanisme als PDF-afbeeldingen;
+    max. 30 stuks / 10 MB per stuk / 50 MB totaal). Wat niet lukt blijft als gewone
+    `![naam](bron-url)` staan — zichtbaar, geen dode embed.
+  - **Veiligheid**: de XML-parser resolve't geen entiteiten en doet geen netwerk (`_parser()`);
+    pinned door een test met een externe entiteit.
+  - **Geen XML? Dan de PDF.** Nieuwe publicaties (`blg-…`, `ah-<nummer>`, ook recente stukken)
+    bestaan alleen als PDF: `zoek.officielebekendmakingen.nl/{id}.xml` geeft 404. `fetch()` slaat de
+    XML-poging voor `blg-`/`ah-<cijfers>` over en valt voor andere ids terug op het SRU-record
+    (`sru.by_identifier`) → de `pdf`-manifestatie → `files.convert`, met kopblok uit het record en een
+    cursieve notitie ("geen gestructureerde XML"). Download is begrensd op 100 MB.
+  - **Bijlagen voor het paneel**: `sru.attachments_of(id)` (CQL `w.hoofddocument==<id>`) geeft de
+    `blg-…`-bijlagen mét titel; een bijlage wijst zelf terug naar zijn hoofddocument. Best-effort
+    (een storing geeft een leeg paneel, nooit een mislukte conversie); zonder SRU-resultaat vallen
+    we terug op `OVERHEIDop.bijlage` uit metadata.xml. Elk item is `{query, titel, rol, open_url}`;
+    `query` gaat weer naar `/api/convert/overheid`, dus een bijlage is zelf een volwaardig document.
+  - Niet gebouwd: bijlagen van bijlagen volgen, Handelingen-structuur (sprekers) verder dan platte
+    tekst, Staatscourant/Staatsblad (`stcrt-`/`stb-`, ander schema).
+- **Open overheid — Woo** (`mdconv/sources/woo.py`): open.overheid.nl heeft een keyless JSON-API
+  (dezelfde als de eigen SPA, afgelezen uit de JS-bundel; de SRU-zoekdienst bevat Woo **niet**):
+  `/overheid/openbaarmakingen/api/v0/zoek?zoektekst=…` (zoeken + facetten), `/zoek/{id}` (metadata),
+  `/documenten/{id}` (het bestand). Waar je op moet letten:
+  - Parameternamen: `zoektekst` (niet `zoekterm` — dat wordt stilzwijgend genegeerd en geeft alle
+    700k documenten), `aantalResultaten` ∈ {10, 20, 50} (anders 400), `start` = offset,
+    `sort=publicatiedatum` + `order=asc`, datums als **dd-mm-jjjj** (de UI levert ISO; `woo.search`
+    zet om), filters (`documentsoort` e.d.) **dubbel URL-gecodeerd** en de URL zelf bouwen (niet via
+    `requests`' `params=`, dat codeert nog eens).
+  - Een id met `_2`-suffix is het **versienummer**; het bestand zit onder het id zónder suffix. Een
+    bestand kan ook een eigen `url` hebben (bv. opendata.rijksoverheid.nl) — alleen
+    overheidshosts worden gevolgd (`_TRUSTED_HOSTS`), anders de eigen `/documenten/`-route.
+    `_pick_file` kiest PDF/Office/tekst en slaat zips over; geen bruikbaar bestand → duidelijke fout.
+  - Gescande pdf's zonder tekstlaag geven vrijwel geen tekst: dan een cursieve waarschuwing met het
+    advies de OCR-/wiskunde-modus bij Documentupload te gebruiken.
+  - **Relaties** (`documentrelaties`) worden het bijlagenpaneel: rollen uit de TOOI-thesaurus
+    (`c_05f4a5f3` = "heeft bijlage", `c_4d1ea9ba` = "is bijlage bij", plus bundel/onderdeel; de
+    identiteitsgroep valt weg). Titels worden parallel opgehaald (max. 30).
+  - Een **kale UUID** is ook een Tweede Kamer-Document-Id: `sources.from_overheid` vraagt het aan
+    open.overheid.nl (`woo.is_known_id`, één verzoek) en valt anders terug op de TK-open data; een
+    `_n`-suffix of link is altijd Woo.
+- **Zoeken** (`mdconv/search.py`, `GET /api/search`, `GET /api/search/soorten`): twee bronnen,
+  één resultaatvorm `{id, query, titel, soort, datum, bron, meta, snippet, open_url}` — `query`
+  gaat direct naar `/api/convert/overheid`.
+  - `pub` = SRU (`https://repository.overheid.nl/sru`, keyless; `sru.py`). CQL die werkt:
+    `cql.textAndIndexes="…"` (volledige tekst), `w.dossiernummer=="36600-VII"` (een invoer die op een
+    dossiernummer lijkt wordt automatisch een dossierzoekopdracht), `w.publicatienaam==`,
+    `dt.type==Bijlage`, `dt.date>=…`, `A NOT B` (**niet** `AND NOT`), sorteren met
+    `sortBy dt.date/sort.descending` (de `sortKeys`-parameter wordt genegeerd). Zoektekst gaat
+    alleen tussen quotes mee nadat `"` en `\` eruit zijn. Zonder zoektekst is "nieuwste eerst" de
+    standaard. De "soorten" (`sru.SOORTEN`) zijn vast; sluit Staatscourant e.d. uit omdat de
+    converter daar niets mee kan.
+  - `woo` = `woo.search`; het soortfilter komt uit de facetten van het laatste antwoord (meeste
+    eerst, max. 40). Zonder zoekterm én zonder filter weigert de zoekfunctie (anders 700k treffers).
+  - Front-end (`oo`-state + `renderOO`/`renderResults`/`runSearch` in `app.js`): modus "Ophalen" ↔
+    "Zoeken" (onthouden in `localStorage`), selectievakjes + "Geselecteerde ophalen", een
+    verzoek-token zodat alleen het laatste antwoord de lijst bijwerkt, paginering. Een document dat al
+    open staat (`doc.ident`) wordt getoond i.p.v. dubbel opgehaald.
+- **Bijlagenpaneel** (`#bijlagen`, `renderBijlagen()`): rechts naast het resultaat, toont
+  `doc.bijlagen` van het actieve document. Per item "Naar Markdown" (→ nieuw tabblad), "Tonen" als het
+  al open staat, "Origineel ↗", en "Alles ophalen (n)". Vanaf 1100px breed staat het in een grid
+  naast de editor (het resultaat is dan breder dan de rest van de pagina, max. 1360px);
+  daaronder staat het onder de editor. Opaak, niet glas (inhoudspaneel, zie Designsysteem).
 - **EUR-Lex fetch**: de portal-HTML (`/legal-content/…/HTML/`) blokkeert bots (HTTP 202, lege body;
   inmiddels een AWS WAF-JS-challenge, dus ook met retries permanent 202 — de portal is in de praktijk
   dood voor een simpele `requests`-scraper). Gebruik het **Cellar-archief** via content negotiation,
@@ -1020,7 +1124,7 @@ enige dikte, niet een plat vlak met alleen een hoogtelicht.
   daar een `ZoneInfoNotFoundError` geven in plaats van gewoon te werken.
 
 ## Tests
-`.venv/bin/python -m pytest tests/ -q` — 214 karakteriseringstests die het gedrag
+`.venv/bin/python -m pytest tests/ -q` — 297 tests (`tests/test_kamerstuk.py` en `tests/test_open_overheid.py` zijn de Open-overheid-bronnen en het zoeken; de rest karakteriseringstests) die het gedrag
 vastleggen in plaats van het te beschrijven: `detect_source`-precedentie, ELI→CELEX,
 de geconsolideerde-CELEX-afhandeling (datum behouden, preambule invoegen, en de vier
 terugvalpaden als dat niet lukt), de versie-terugvalladder (nieuwste versie op of vóór de

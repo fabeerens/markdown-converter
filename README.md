@@ -20,7 +20,22 @@ Plak een ECLI of link; de tool herkent de bron automatisch:
 - **EU-wetgeving** — CELEX-nummer (bv. `32016R0679`, de AVG), een link, of een ELI-link (bv. `https://eur-lex.europa.eu/eli/reg/2016/679/oj`). Officiële tekst uit het Cellar-archief (met terugval op de EUR-Lex portal).
 - **Nederlandse wetgeving** — een wetten.overheid.nl-link of een BWB-nummer (bv. `BWBR0040940`, optioneel met versiedatum `/2021-07-01`). Staat er een **hoofdstuk-anker** in de link (bv. `…/2026-07-01#Hoofdstuk16`), dan wordt alléén dat onderdeel opgehaald en omgezet.
 
-### 3. Documentupload
+### 3. Open overheid
+Kamerstukken, Kamervragen met antwoord, Handelingen, bijlagen en **Woo-documenten**. Twee werkwijzen:
+
+**Ophalen** — per regel of als geplakte lijst:
+- een **identifier** — `kst-36600-VII-1`, `ah-tk-20242025-100`, `h-tk-20242025-20-3`, `blg-1184123`;
+- een **dossiernotatie** — `36600-VII, nr. 1`, `Kamerstukken II 2024/25, 36600-VII, nr. 1`;
+- een **link** naar officielebekendmakingen.nl, tweedekamer.nl of open.overheid.nl;
+- een **D-nummer** uit de [open data van de Tweede Kamer](https://opendata.tweedekamer.nl) (`2024D40329`).
+
+**Zoeken** — in de volledige tekst van parlementaire stukken (zoekdienst van overheid.nl; een dossiernummer als `36600-VII` geeft alle stukken van dat dossier) of in de Woo-documenten van open.overheid.nl. Filter op soort en datum, sorteer op relevantie of datum, vink resultaten aan en haal ze in één keer op.
+
+Kamerstukken komen uit de **officiële XML**, dus met structuur: koppen (nummering en typografie bepalen het niveau), **voetnoten** (`[^1]`), **verwijzingen** als links, lijsten, tabellen en afbeeldingen (die komen als bijlage mee in de zip). Bestaat er alleen een PDF (nieuwe publicaties en bijlagen), dan wordt die omgezet, met een notitie. Woo-documenten worden omgezet vanuit hun bestand (meestal PDF) met een kopblok met soort, organisatie, datum en thema; een scan zonder tekstlaag levert een waarschuwing.
+
+Rechts van het resultaat staat het **bijlagenpaneel**: bijlagen bij een kamerstuk, of de gerelateerde documenten van een Woo-document. Elk item is met één klik naar Markdown om te zetten in een nieuw tabblad.
+
+### 4. Documentupload
 - Sleep een of meer bestanden in het venster (of klik om te bladeren), **of plak een of meer links naar bestanden** (bv. directe PDF-links).
 - **Formex-XML** (`.xml`) van EUR-Lex → eigen structuur-parser (nette koppen, recitals, artikelen, lijsten, voetnoten).
 - **PDF** → via [pdf-inspector](https://github.com/firecrawl/pdf-inspector), met nette, layout-bewuste markdown (koppen, lijsten, tabellen). Bij een gescande/foto-PDF zonder tekstlaag valt de tool terug op MarkItDown.
@@ -28,7 +43,7 @@ Plak een ECLI of link; de tool herkent de bron automatisch:
 
 ### Meerdere documenten tegelijk
 
-Bij Jurisprudentie en Wetgeving kun je met **"+ Document toevoegen"** meerdere ECLI's/CELEX-
+Bij Jurisprudentie, Wetgeving en Kamerstukken kun je met **"+ Document toevoegen"** meerdere ECLI's/CELEX-
 nummers/links tegelijk invoeren; **Ophalen** haalt ze allemaal parallel op. Bij Documentupload
 kun je meerdere bestanden tegelijk slepen/kiezen en/of meerdere links toevoegen. Elk opgehaald
 document krijgt een eigen **tabblad** boven de uitvoer — je schakelt ertussen om te bekijken,
