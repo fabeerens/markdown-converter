@@ -191,7 +191,7 @@ Verwijzingen als "zie Front-end hieronder" in die documenten wijzen naar het doc
   daar een `ZoneInfoNotFoundError` geven in plaats van gewoon te werken.
 
 ## Tests
-`.venv/bin/python -m pytest tests/ -q` — TESTAANTAL tests (`tests/test_kamerstuk.py`, `test_open_overheid.py` en
+`.venv/bin/python -m pytest tests/ -q` — 803 tests (`tests/test_kamerstuk.py`, `test_open_overheid.py` en
 `test_consultatie_wgk.py` zijn de Open-overheid-bronnen, het zoeken en de weergave; `test_kb_route_streng.py` de drie
 besluiten van WP-77; de rest karakteriseringstests) die het gedrag
 vastleggen in plaats van het te beschrijven: `detect_source`-precedentie, ELI→CELEX,
