@@ -20,7 +20,29 @@ Plak een ECLI of link; de tool herkent de bron automatisch:
 - **EU-wetgeving** — CELEX-nummer (bv. `32016R0679`, de AVG), een link, of een ELI-link (bv. `https://eur-lex.europa.eu/eli/reg/2016/679/oj`). Officiële tekst uit het Cellar-archief (met terugval op de EUR-Lex portal).
 - **Nederlandse wetgeving** — een wetten.overheid.nl-link of een BWB-nummer (bv. `BWBR0040940`, optioneel met versiedatum `/2021-07-01`). Staat er een **hoofdstuk-anker** in de link (bv. `…/2026-07-01#Hoofdstuk16`), dan wordt alléén dat onderdeel opgehaald en omgezet.
 
-### 3. Documentupload
+### 3. Open overheid
+Kamerstukken, Kamervragen met antwoord, Handelingen, bijlagen en **Woo-documenten**. Twee werkwijzen:
+
+**Ophalen** — per regel of als geplakte lijst:
+- een **identifier** — `kst-36600-VII-1`, `ah-tk-20242025-100`, `h-tk-20242025-20-3`, `blg-1184123`;
+- een **dossiernotatie** — `36600-VII, nr. 1`, `Kamerstukken II 2024/25, 36600-VII, nr. 1`;
+- een **link** naar officielebekendmakingen.nl, tweedekamer.nl of open.overheid.nl;
+- een **D-nummer** uit de [open data van de Tweede Kamer](https://opendata.tweedekamer.nl) (`2024D40329`).
+
+**Zoeken** — in de volledige tekst van parlementaire stukken (zoekdienst van overheid.nl; een dossiernummer als `36600-VII` geeft alle stukken van dat dossier) of in de Woo-documenten van open.overheid.nl. Filter op soort en datum, sorteer op relevantie of datum, vink resultaten aan en haal ze in één keer op.
+
+Kamerstukken komen uit de **officiële XML**, dus met structuur: koppen (nummering en typografie bepalen het niveau), **voetnoten** (`[^1]`), **verwijzingen** als links, lijsten en tabellen, met een **herkomstbestand en bronbewijs** (de kennisbankbundel, zie onderaan); afbeeldingen worden niet opgehaald, de herkomst noemt ze. Bestaat er alleen een PDF (nieuwe publicaties en bijlagen), dan wordt die omgezet, met een notitie. Woo-documenten worden omgezet vanuit hun bestand (meestal PDF) met een kopblok met soort, organisatie, datum en thema; een scan zonder tekstlaag levert een waarschuwing.
+
+Bijlagen en gerelateerde documenten staan als **linklijst onderaan** het document; plak zo'n link bij Ophalen om dat document apart om te zetten. Na het ophalen klapt de zoeklijst in (hij blijft te openen).
+
+Twee subtabs naast **Stukken**:
+- **Consultaties** (internetconsultatie.nl) — zoeken op titel of tekst en periode. Een consultatie komt als Markdown met metadata en tekst; documenten en de wetgevingskalender staan als links, en **alle openbare reacties** zijn als één document op te halen (de tekst van elke reactie, bijlagen als link).
+- **Wetgevingskalender** (wetgevingskalender.overheid.nl) — zoeken op wet of AMvB, met filters op status, fase en soort. Een regeling komt als Markdown met voortgang, mijlpalen en alle documenten (adviezen, memorie van toelichting, …); een document is los om te zetten via zijn link.
+
+### Weergave van het resultaat
+Bij elk tabblad staat het resultaat in een viewer met drie standen: **Ruwe tekst** (met regelnummers, te bewerken), **Weergave** (de gerenderde Markdown) of **Naast elkaar**, waarbij het scrollen meeloopt.
+
+### 4. Documentupload
 - Sleep een of meer bestanden in het venster (of klik om te bladeren), **of plak een of meer links naar bestanden** (bv. directe PDF-links).
 - **Formex-XML** (`.xml`) van EUR-Lex → eigen structuur-parser (nette koppen, recitals, artikelen, lijsten, voetnoten).
 - **PDF** → via [pdf-inspector](https://github.com/firecrawl/pdf-inspector), met nette, layout-bewuste markdown (koppen, lijsten, tabellen). Bij een gescande/foto-PDF zonder tekstlaag valt de tool terug op MarkItDown.
@@ -28,7 +50,7 @@ Plak een ECLI of link; de tool herkent de bron automatisch:
 
 ### Meerdere documenten tegelijk
 
-Bij Jurisprudentie en Wetgeving kun je met **"+ Document toevoegen"** meerdere ECLI's/CELEX-
+Bij Jurisprudentie, Wetgeving en Kamerstukken kun je met **"+ Document toevoegen"** meerdere ECLI's/CELEX-
 nummers/links tegelijk invoeren; **Ophalen** haalt ze allemaal parallel op. Bij Documentupload
 kun je meerdere bestanden tegelijk slepen/kiezen en/of meerdere links toevoegen. Elk opgehaald
 document krijgt een eigen **tabblad** boven de uitvoer — je schakelt ertussen om te bekijken,
@@ -36,12 +58,12 @@ bewerken, opschonen met AI (elk document met zijn eigen profiel/model) en los te
 Mislukt een van de documenten (bv. een ongeldige ECLI), dan blijft de rest gewoon beschikbaar;
 de status onder de knop toont wat wel en niet is gelukt.
 
-Heb je een hele **lijst**? Bij zowel Jurisprudentie als Wetgeving plak je die in één keer in een
+Heb je een hele **lijst**? Bij Jurisprudentie, Wetgeving en Open overheid plak je die in één keer in een
 invoerregel (die splitst zich uit over losse regels) of via **Lijst plakken**, met één taalkeuze
-voor de hele lijst. Opsommingstekens, koppen en dubbele regels worden er zelf uitgehaald.
+voor de hele lijst (Open overheid heeft geen taalkeuze). Opsommingstekens, koppen en dubbele regels worden er zelf uitgehaald.
 
-De tool volgt automatisch de **licht/donker-instelling van je systeem** — er is geen knop,
-je hoeft niets te kiezen.
+De kleuren volgen de huisstijl van [Lex Digitalis](https://www.lexdigitalis.nl): een lichte
+pagina met blauwe en oranje accenten. Er is geen donkere modus.
 
 Uitvoer kun je kopiëren of downloaden als `.md`. Links naast de tekst staan **regelnummers**
 (altijd zichtbaar) — handig om een bepaalde regel terug te vinden of ernaar te verwijzen.
@@ -122,6 +144,30 @@ OPENROUTER_API_KEY=sk-or-...
 ```
 
 (sleutel aanmaken op <https://openrouter.ai/keys>). Een ander standaardmodel of endpoint kies je optioneel met `LLM_MODEL` / `OPENROUTER_BASE_URL` in `.env` (de dropdown in de UI overschrijft dit per keer). Zonder sleutel blijft het opschoon-paneel uitgeschakeld; de rest van de tool werkt gewoon.
+
+### Versie zonder AI
+
+In **Instellingen (⚙)** zet de schakelaar **AI-functies** alles uit wat een taalmodel
+aanroept: opschonen, vertalen, "Opmaken voor Obsidian" en de wiskunde-modus. De
+AI-instellingen verdwijnen dan ook; alleen de schakelaar blijft staan, zodat je AI later
+weer aan kunt zetten. Omschakelen herlaadt de pagina.
+
+De schakelaar zet direct `MDCONV_AI=off` in `.env` (en verwijdert die regel weer als je
+'m aanzet) — er is geen aparte instelling die uit de pas kan lopen met dat bestand.
+
+Wil je een installatie die AI **vast** uit heeft staan, zonder dat een gebruiker het weer
+aan kan zetten (bijvoorbeeld voor gebruik binnen een organisatie), zet dan zelf, vóórdat
+je de server start, in `.env`:
+
+```bash
+MDCONV_AI=off
+```
+
+Dan verdwijnen opschonen, vertalen, "Opmaken voor Obsidian", de wiskunde-modus en het
+hele instellingenpaneel (dus ook de schakelaar) uit de interface, en bestaan de bijbehorende API-routes niet meer
+(404). De gewone conversie naar markdown blijft volledig werken, net als lijsten
+plakken, meerdere documenten en "Alles downloaden". Het blijft dezelfde codebase als
+`main`, dus bijwerken is gewoon `git pull`.
 
 ## Starten
 

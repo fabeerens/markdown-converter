@@ -6,6 +6,7 @@ via de gedeelde sessie (zonder automatische retries, zie `mdconv.net`).
 
 from __future__ import annotations
 
+import base64
 import json
 import re
 import threading
@@ -245,6 +246,17 @@ def stream_chunk(
                 event = json.loads(payload)
             except ValueError:
                 continue
+            # OpenRouter heeft de HTTP-status (200) en headers dan al verzonden;
+            # een storing bij de onderliggende provider (tijdelijk niet
+            # beschikbaar, een providerspecifieke contextlimiet, moderatie) komt
+            # daarna alleen nog als een SSE-regel mét een `error`-veld in plaats
+            # van `choices` binnen. Zonder deze check verdween die regel
+            # stilzwijgend en kwam de stream leeg uit — met de nietszeggende
+            # "geen inhoud terug"-melding, die de eigenlijke oorzaak verborg.
+            if event.get("error"):
+                raise ConversionError(
+                    f"AI-opschoning mislukt (OpenRouter): {_error_message(event['error'])}"
+                )
             choice = (event.get("choices") or [{}])[0]
             delta_piece = choice.get("delta", {}).get("content")
             if delta_piece:
@@ -266,6 +278,98 @@ def stream_chunk(
         # zonder foutstatus. Zonder deze check zou dat stilletjes "niets"
         # opleveren in plaats van een duidelijke melding.
         raise ConversionError("AI-opschoning gaf geen inhoud terug.")
+
+
+def ocr_pages_stream(
+    images: list[bytes], *, model: str, system: str, request_id: str | None = None
+) -> Iterator[str | Usage]:
+    """Eén of meer gerenderde PDF-pagina's (PNG) → Markdown, streamend.
+
+    Als `stream_chunk`, maar de gebruikersboodschap draagt de pagina's als
+    afbeeldingen (`image_url` met een `data:`-URI) i.p.v. tekst — het model moet
+    dus multimodaal zijn. `finish_reason == "length"` betekent hier dat de
+    pagina's in dit verzoek niet in het uitvoerplafond pasten — nette melding met
+    het advies de deelgrootte te verlagen. Een lege stream is géén fout (een
+    blanco pagina levert legitiem niets op)."""
+    key = config.api_key()
+    if not key:
+        raise ConfigError(
+            "Wiskunde-modus niet beschikbaar: geen OpenRouter API-sleutel. "
+            "Zet de omgevingsvariabele OPENROUTER_API_KEY en herstart de tool."
+        )
+
+    parts = [{"type": "text",
+              "text": f"Transcribe these {len(images)} page image(s) to Markdown, in order."}]
+    for png in images:
+        uri = "data:image/png;base64," + base64.b64encode(png).decode("ascii")
+        parts.append({"type": "image_url", "image_url": {"url": uri}})
+
+    try:
+        resp = net.llm().post(
+            f"{config.base_url()}/chat/completions",
+            headers={
+                "Authorization": f"Bearer {key}",
+                "Content-Type": "application/json",
+                "X-Title": "Markdown converter",
+            },
+            json={
+                "model": model,
+                "temperature": 0,
+                "max_tokens": config.MAX_OUTPUT_TOKENS,
+                "stream": True,
+                "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": parts},
+                ],
+            },
+            timeout=_REQUEST_TIMEOUT,
+            stream=True,
+        )
+    except requests.exceptions.RequestException as e:
+        raise ConversionError(f"Wiskunde-modus mislukt (verbindingsfout): {e}") from e
+
+    if resp.status_code == 401:
+        raise ConfigError(
+            "Wiskunde-modus niet beschikbaar: ongeldige of ontbrekende OpenRouter API-sleutel. "
+            "Controleer OPENROUTER_API_KEY en herstart de tool."
+        )
+    if resp.status_code != 200:
+        raise ConversionError(
+            f"Wiskunde-modus mislukt (OpenRouter {resp.status_code}): {_error_detail(resp)}"
+        )
+
+    resp.encoding = "utf-8"
+    try:
+        for line in resp.iter_lines(decode_unicode=True):
+            if cancel.is_cancelled(request_id):
+                return
+            if not line or not line.startswith("data:"):
+                continue
+            payload = line[len("data:"):].strip()
+            if payload == "[DONE]":
+                break
+            try:
+                event = json.loads(payload)
+            except ValueError:
+                continue
+            if event.get("error"):
+                raise ConversionError(
+                    f"Wiskunde-modus mislukt (OpenRouter): {_error_message(event['error'])}"
+                )
+            choice = (event.get("choices") or [{}])[0]
+            delta_piece = choice.get("delta", {}).get("content")
+            if delta_piece:
+                yield delta_piece
+            if choice.get("finish_reason") == "length":
+                raise ConversionError(
+                    "Het antwoord werd afgekapt: te veel pagina's voor één verzoek. "
+                    "Verlaag 'pagina's per verzoek' in de instellingen."
+                )
+            usage = event.get("usage")
+            if usage:
+                yield Usage(usage)
+    finally:
+        resp.close()
 
 
 def strip_fence_stream(pieces: Iterator[str]) -> Iterator[str]:
@@ -312,3 +416,11 @@ def _error_detail(resp: requests.Response) -> str:
         return resp.json().get("error", {}).get("message", "") or resp.text[:200]
     except Exception:  # noqa: BLE001
         return resp.text[:200]
+
+
+def _error_message(error) -> str:
+    """Zoals `_error_detail`, maar voor een `error`-veld dat al als dict/str
+    binnenkomt (een mid-stream SSE-fout, geen HTTP-respons)."""
+    if isinstance(error, dict):
+        return str(error.get("message") or error)[:200]
+    return str(error)[:200]

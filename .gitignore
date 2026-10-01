@@ -3,7 +3,7 @@
 __pycache__/
 *.pyc
 .DS_Store
-.claude/settings.local.json
+.claude/
 .deploy-state/
 .pytest_cache/
 meetlat/cache/

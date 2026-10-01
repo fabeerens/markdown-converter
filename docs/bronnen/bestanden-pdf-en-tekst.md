@@ -9,10 +9,92 @@ architectuur en verwijst hiernaartoe.
   `result.pdf_type` classificeert de PDF (`text_based`/`scanned`/`image_based`/`mixed`); bij
   `scanned`/`image_based` (geen tekstlaag) of een lege/foutieve extractie valt de code terug op
   MarkItDown (die óók geen OCR doet, maar wel de bestaande gedrag is voor dat geval). Alle andere
-  formaten (Word/Excel/PowerPoint/HTML/CSV/JSON/EPUB/…) blijven altijd via MarkItDown lopen —
-  pdf-inspector kent alleen PDF. `files.convert()` geeft `(markdown, engine)`
-  terug zodat de UI kan tonen welke engine het document daadwerkelijk verwerkte
-  (`"pdf-inspector"` of `"MarkItDown"` in het bronveld).
+  formaten (Word/Excel/PowerPoint/HTML/CSV/JSON/…) blijven altijd via MarkItDown lopen — behalve
+  EPUB, zie hieronder. `files.convert()` geeft `(markdown, engine)` terug zodat de UI kan tonen
+  welke engine het document daadwerkelijk verwerkte (`"pdf-inspector"`/`"epub"`/`"MarkItDown"`
+  in het bronveld).
+  - **Onvertaalde glyphs worden niet stilzwijgend doorgelaten.** Sommige lettertypen slaan
+    een typografische ligatuur (bv. "fi", "ft", "th") op als één samengesteld glyph, zónder
+    tekstcodering (`ToUnicode`) naar de onderliggende letters — de PDF "weet" dan zelf niet
+    meer welke tekens het zijn, dus geen extractie-engine kan dat achteraf herstellen. Zowel
+    pdf-inspector als MarkItDown zetten daar dan een `�` (replacement character) neer,
+    bv. "these" → "�ese", "often" → "o�en". `files.warn_if_unmapped_glyphs()` (aangeroepen
+    vanuit `sources.from_file()`, op alle PDF-routes: gewoon, per-pagina-inline en de
+    MarkItDown-terugval) zet daarom een waarschuwing boven de tekst zodra `�` erin
+    voorkomt — anders zou een gebruiker een verkeerd citaat kunnen overnemen zonder dat te
+    weten. Geen poging tot giswerk-herstel: welke letters het precies waren staat nergens in
+    het bestand, dus alleen handmatig tegen het origineel controleren is betrouwbaar.
+- **EPUB-conversie** (`mdconv/sources/epub.py`, zonder AI): een EPUB is een zip met
+  XHTML-hoofdstukken plus een package-document (OPF) dat de leesvolgorde (`spine`) en de
+  bestanden (`manifest`) beschrijft. MarkItDown kan een EPUB al lezen (`_epub_converter.py`
+  in die dependency, zelf ook al container.xml/OPF/spine-bewust), maar behandelt elk
+  hoofdstuk als losse HTML: interne links (tussen hoofdstukken, voetnoten, de
+  inhoudsopgave) blijven dan gewone relatieve `href`'s — kapotte links zodra alle
+  hoofdstukken tot één Markdown-bestand worden samengevoegd. `files._convert_epub()`
+  probeert daarom eerst de eigen parser; lukt dat niet (geen geldige/ondersteunde
+  EPUB-structuur — bv. corrupte zip of ontbrekende OPF), dan valt de conversie terug op
+  MarkItDown, net als bij een PDF zonder tekstlaag.
+  - **Koppen: échte `<h1>`-`<h6>` tags, én koppromotie op typografie.** Echte kop-tags
+    komen via `markdownify` gewoon als `#`-`######` uit. Maar veel professioneel gezette
+    EPUB's (InDesign-export, bv. uitgeversboeken) hebben **géén** echte kop-tags —
+    hoofdstuktitels en paragraafkoppen zijn gewoon `<p class="...">` met een eigen
+    alinea-stijl. Bevestigd met een echt boek (CIPP-M, IAPP): zonder koppromotie leverde
+    dat **nul** koppen op in een boek van 750k tekens platte tekst. Tekstueel giswerk
+    ("lijkt deze zin op een titel?") zou hier onvoorspelbaar zijn op willekeurige
+    boektekst — precies waarom de structuurwoorden-aanpak van `render.promote_headings()`
+    (EUR-Lex: "HOOFDSTUK", "Artikel N", een vaste woordenlijst in de grote EU-talen) hier
+    niet herbruikt kan worden. Wat wél betrouwbaar is: de CSS zelf zegt hoe groot/vet/
+    welk lettertype elke alinea-stijl heeft — een meetbaar feit, geen gok.
+    - **`_load_css_classes()`** leest alle `.css`-bestanden in de zip met een simpele,
+      niet-geneste regex (`selector { declaraties }`) — de auto-gegenereerde CSS van
+      digitale-uitgeverssoftware heeft geen `@media`/geneste selectors, dus dat is
+      voldoende; `@font-face`/`@page`-blokken worden gewoon als (nooit matchende) "klasse"
+      meegelezen, geen probleem. Voor elke `.KlasseNaam` wordt `font-size` (naar een
+      em-equivalent: `px/16`, `pt/12`, `%/100`), `font-weight` (`bold`→700, `normal`→400,
+      cijfers direct) en het eerste `font-family`-token opgeslagen.
+    - **`_dominant_style()`** bepaalt de lettergrootte/lettertype die de méeste tekens in
+      het hele boek beslaat (over alle hoofdstukken se `<p>`'s heen, gewogen naar
+      tekstlengte) — in de praktijk de hoofdtekst, ongeacht hoe de uitgever die stijl
+      noemt. Dat is de baseline waar elke andere stijl tegen wordt afgezet; een aanpak die
+      werkt ongeacht de klassennamen-conventie van de specifieke uitgever/InDesign-sjabloon.
+    - **`_qualifying_heading_classes()`** promoveert een stijl alleen als hij **groter**
+      is dan de baseline (harde eis — sluit bv. een kleine "Chap-Num"-bijschriftstijl
+      altijd uit) én een samengestelde score van ≥2 haalt over drie signalen:
+      grootte-ratio (≥1,5× → 2 punten, ≥1,15× → 1 punt), `font-weight` ≥ 600 (1 punt), en
+      een ander lettertype dan de hoofdtekst (1 punt). Dit onderscheidt bv. een vette
+      auteursnaam-stijl (zelfde grootte als de hoofdtekst, dus 0 punten op grootte) van een
+      echte titelstijl (groter én vet én een ander lettertype) — puur op grootte of puur
+      op vet zou de auteursnaam ten onrechte ook promoveren.
+    - **Kopniveau via rangorde, niet via vaste ratio's**: de kwalificerende stijlen worden
+      gesorteerd op grootte (groot → `h1`, volgende → `h2`, …, maximaal `h6`) — vaste
+      ratio-afkappunten (bv. "≥2× = h1") zouden niet overdragen naar een ander boek met
+      een andere typografische schaal.
+    - **`_promote_headings_by_style()`** promoveert een `<p>` alleen als de tekst ≤ 150
+      tekens is — een hele alinea die toevallig een "kop"-stijlklasse hergebruikt (kan
+      voorkomen) blijft zo een alinea, geen kop.
+  - **Interne links → Obsidian-wikilinks, externe links blijven gewoon.** Vóór de
+    HTML→Markdown-conversie rewrite `_rewrite_links()` elke `<a>` met een relatieve `href`
+    (geen `scheme:` zoals `http:`/`mailto:`) naar de kop waar hij naar verwijst:
+    `[[#Kop]]`, of `[[#Kop|linktekst]]` als de linktekst afwijkt van de koptekst. Een link
+    zonder anker (naar het hele hoofdstuk) valt terug op de titel-kop van dat hoofdstuk; een
+    anker dat zelf geen kop is (bv. een voetnootmarkering) valt terug op de dichtstbijzijnde
+    voorafgaande kop — een betekenisvolle wikilink in plaats van een dode interne id. Is er
+    na die twee terugvallen nog niets te vinden, dan blijft de platte linktekst staan, geen
+    kapotte link. `_index_headings()` bouwt deze `(hoofdstuk, anker) → koptekst`-opzoektabel
+    in één keer over alle hoofdstukken vóór het herschrijven begint.
+  - **De nav/inhoudsopgave komt niet als apart "hoofdstuk" mee.** EPUB3 markeert die in de
+    spine met `linear="no"` (geen gewone leesvolgorde-pagina); `_spine_hrefs()` slaat zulke
+    `itemref`'s over.
+  - **Afbeeldingen worden weggelaten, niet als kapotte link.** Een `<img src="images/…">`
+    verwijst naar een pad binnen de zip; zonder een bijlage-mechanisme zoals bij PDF's zou
+    dat een dode `![alt](pad/in/de/zip.jpg)` opleveren. Buiten scope van deze functie (die
+    vroeg specifiek om koppen + wikilinks) — `<img>`-tags worden vóór de conversie
+    gedecomposet.
+  - **`BeautifulSoup(..., "xml")`** (lxml's XML-parser) voor container.xml/OPF, niet de
+    gewone `"lxml"` HTML-parser — die laatste zou de namespace-declaraties (`xmlns=`) in de
+    OPF niet betrouwbaar even goed verwerken. De hoofdstukken zelf gaan wél door `"lxml"`
+    (HTML-modus, vergevingsgezind bij ontbrekende `<body>` e.d.), zoals de rest van het
+    project al doet.
 - **Losse afbeeldingen extraheren** (`extract_images=1` op `/api/convert/file` en
   `/api/convert/file-url`, alleen voor `.pdf`, bij Documentupload): een **aanvulling** op de
   normale PDF-tekst (pdf-inspector/MarkItDown hierboven), geen alternatief — de UI-toggle
@@ -89,6 +171,45 @@ architectuur en verwijst hiernaartoe.
     archief is erger dan geen download, en zo raakte het bewijs ongemerkt incompleet.
     Voorstellen, documenten en geplakte tekst houden de platte download. De tokens
     verlopen lui na twee uur, net als afbeeldingtokens.
+- **Wiskunde-modus** (`mdconv/ocr.py`, endpoints `/api/convert/file/ocr` +
+  `/api/convert/file-url/ocr`): een **opt-in** route bij Documentupload (checkbox `#ocr-mode`),
+  alleen voor PDF en alleen met een OpenRouter-sleutel. De gewone tekstextractie
+  (pdf-inspector/MarkItDown) leest de tekstlaag lineair; LaTeX-wiskunde uit een Beamer-PDF
+  komt daar onbruikbaar uit (sub-/superscripts weg, `\underbrace`/grote accolades als
+  glyph-brij, de index *i* als Private-Use-glyph `U+EBE9` zonder `ToUnicode`). De semantische
+  wiskunde staat niet in de tekstlaag — alleen visueel herlezen helpt.
+  - **`pdf_images.render_pages()`** rastert elke pagina met `pdftoppm -png -r <dpi>` (poppler,
+    dezelfde binaries als `extract_images`; `render_available()` checkt `pdftoppm`/`pdfinfo`).
+    `page_count()` (via `pdfinfo`) weigert eerst een PDF > `_MAX_PAGES` (100) — een bewust
+    trage modus hoort een harde grens te hebben.
+    `_DPI` = 200, bij te stellen met de env-var `OCR_DPI`. Paginasortering is **numeriek**
+    (`page-2` vóór `page-10`), niet lexicaal.
+  - **`openrouter.ocr_pages_stream(images, …)`** is `stream_chunk` met één of meer
+    `image_url` data-URI's als user-content i.p.v. tekst — het model moet dus multimodaal
+    zijn. Géén "lege stream = fout"-check (een blanco pagina levert legitiem niets op);
+    `finish_reason == "length"` betekent dat de pagina's in dít verzoek niet in het
+    uitvoerplafond pasten → melding met het advies "pagina's per verzoek" te verlagen.
+  - **`ocr.ocr_pdf_stream()`** verdeelt de pagina's in groepen van
+    `config.get_ocr_pages_per_request()` (standaard 5, instelbaar in het paneel) en laat
+    tot `_MAX_PARALLEL_BATCHES` (3, env `OCR_PARALLEL`) van die verzoeken **parallel** lopen
+    (`ThreadPoolExecutor`, zoals `cleanup.clean()`), maar levert de tekst **in
+    documentvolgorde** uit — een groep die eerder klaar is wacht op zijn beurt, en zijn
+    tekst verschijnt dan in één keer. `\n\n` tussen groepen, één `Progress` per groep
+    (`produced_tokens` = pagina's tot nu toe), één opgeteld `Usage` aan het eind. Een fout
+    of `GeneratorExit` (client weg) zet de annuleringsvlag zodat de nog lopende groepen bij
+    hun eerstvolgende SSE-regel stoppen; `_cancel.clear(request_id)` in een `finally`.
+    Een korte PDF (≤ groepgrootte) is dus gewoon één verzoek.
+  - **Streaming + annuleren hergebruiken de opschoon-infrastructuur volledig**: dezelfde
+    `_frame`/`STREAM_ERROR_SENTINEL` met de `CLEAN_`-tagnamen (bewust niet hernoemd — dan
+    hoeft `makeStreamParser` niet te wijzigen), dezelfde proces-brede `mdconv.cleanup.cancel`-
+    set en hetzelfde `/api/clean/cancel`-endpoint, en aan de front-end de `activeCleans`-Map
+    + `#cancel-clean`-knop.
+  - **Modellen, prompt én pagina's-per-verzoek staan in het instellingenpaneel**
+    (`DEFAULT_OCR_MODELS`, `prompts.OCR`, `DEFAULT_OCR_PAGES_PER_REQUEST` = 5; keys
+    `ocr_models`/`ocr_prompt`/`ocr_pages_per_request` in `settings.json`) met dezelfde "leeg
+    = standaard"-semantiek als de opschoonmodellen. `DEFAULT_OCR_MODELS`:
+    `qwen/qwen3.7-flash` en `openai/gpt-5.6-luna-pro`. Env-terugval `OCR_MODEL`. Deze prompt
+    zit **niet** in `prompts.DEFAULTS`/`PROFILES` (dat stuurt de opschoon-dropdown).
 - **Tekst plakken** (`pasted_text.py`, endpoint `/api/convert/text`): de front-end stuurt
   zowel `html` (`element.innerHTML` van het `contenteditable`-vak, dus de klembord-opmaak
   zoals de browser die bij plakken invoegt) als `text` (`element.innerText`, kaal) mee.

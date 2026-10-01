@@ -6,14 +6,16 @@
   <title>Markdown converter</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
 </head>
-<body>
+<body data-ai="{{ 'on' if ai else 'off' }}">
   <header class="app-header glass">
     <div class="titles">
       <h1>Markdown converter</h1>
-      <p>Zet jurisprudentie, wetgeving of documenten om naar markdown.</p>
+      <p>Zet jurisprudentie, wetgeving, open overheidsinformatie of documenten om naar markdown.</p>
     </div>
+    {% if settings %}
     <button type="button" class="btn btn-ghost btn-icon" id="open-settings"
             title="Instellingen" aria-label="Instellingen">⚙</button>
+    {% endif %}
   </header>
 
   <main class="wrap">
@@ -23,6 +25,8 @@
               aria-selected="true" aria-controls="pane-jur">Jurisprudentie</button>
       <button type="button" class="tab" role="tab" data-tab="wet"
               aria-selected="false" aria-controls="pane-wet">Wetgeving</button>
+      <button type="button" class="tab" role="tab" data-tab="oo"
+              aria-selected="false" aria-controls="pane-oo">Open overheid</button>
       <button type="button" class="tab" role="tab" data-tab="doc"
               aria-selected="false" aria-controls="pane-doc">Documentupload</button>
       <button type="button" class="tab" role="tab" data-tab="tekst"
@@ -96,6 +100,124 @@
       </p>
     </section>
 
+    <!-- Open overheid -->
+    <section class="pane" data-pane="oo" id="pane-oo" role="tabpanel" aria-label="Open overheid" hidden>
+      <div class="subtabs" role="tablist" aria-label="Soort informatie">
+        <button type="button" class="subtab" role="tab" id="sub-stukken" data-sub="stukken" aria-selected="true">Stukken</button>
+        <button type="button" class="subtab" role="tab" id="sub-consultaties" data-sub="consultaties" aria-selected="false">Consultaties</button>
+        <button type="button" class="subtab" role="tab" id="sub-wgk" data-sub="wgk" aria-selected="false">Wetgevingskalender</button>
+      </div>
+
+      <div class="seg" id="oo-modes" role="group" aria-label="Werkwijze">
+        <button type="button" class="seg-btn" id="mode-oo-fetch" aria-pressed="true">Ophalen</button>
+        <button type="button" class="seg-btn" id="mode-oo-search" aria-pressed="false">Zoeken</button>
+      </div>
+
+      <div id="oo-fetch">
+        <div class="card">
+          <div class="seg" role="group" aria-label="Invoervorm">
+            <button type="button" class="seg-btn" id="mode-oo-rows" aria-pressed="true">Losse regels</button>
+            <button type="button" class="seg-btn" id="mode-oo-bulk" aria-pressed="false">Lijst plakken</button>
+          </div>
+          <div class="rows" id="rows-oo"></div>
+          <div class="bulk" id="bulk-oo" hidden>
+            <label class="visually-hidden" for="bulk-oo-text">Lijst met kamerstukken, open overheid-documenten, links of identifiers</label>
+            <textarea id="bulk-oo-text" spellcheck="false"
+                      placeholder="Eén per regel — plak hier een hele lijst:&#10;&#10;kst-36600-VII-1&#10;36180, nr. 133&#10;https://zoek.officielebekendmakingen.nl/ah-tk-20242025-100.html&#10;https://open.overheid.nl/documenten/3174ead9-a4cb-4eb9-a26c-c2d8cc619c35&#10;&#10;Opsommingstekens, omringende tekst en dubbele regels worden er zelf uitgehaald."></textarea>
+            <div class="bulk-bar">
+              <span class="count" id="bulk-oo-count"></span>
+            </div>
+          </div>
+          <div class="row-actions">
+            <button type="button" class="btn btn-dashed" id="add-oo">+ Document toevoegen</button>
+            <button type="button" class="btn btn-solid btn-lg" id="fetch-oo">Ophalen</button>
+          </div>
+        </div>
+        <p class="hint">
+          <strong>Kamerstukken</strong>, <strong>Kamervragen met antwoord</strong>,
+          <strong>Handelingen</strong> en <strong>bijlagen</strong> van de Tweede en Eerste Kamer
+          (officiële publicatie op officielebekendmakingen.nl) en <strong>Open overheid-documenten</strong>
+          van open.overheid.nl (waaronder Woo-besluiten). Vul een <strong>identifier</strong>
+          (<code>kst-36600-VII-1</code>, <code>ah-tk-20242025-100</code>, <code>blg-1184123</code>),
+          een <strong>dossiernotatie</strong> (<code>36600-VII, nr. 1</code>), een
+          <strong>link</strong> (officielebekendmakingen.nl, tweedekamer.nl of open.overheid.nl) of een
+          <strong>D-nummer</strong> van de Tweede Kamer in (<code>2024D40329</code>). Koppen,
+          voetnoten, verwijzingen, lijsten, tabellen en afbeeldingen blijven behouden; afbeeldingen
+          komen als bijlage mee in de zip. Bijlagen en gerelateerde documenten staan als linklijst
+          onderaan het document; plak zo'n link hierboven om ze zelf om te zetten. Weet je het nummer niet? Kies <strong>Zoeken</strong>.
+        </p>
+      </div>
+
+      <div id="oo-search" hidden>
+        <div class="card">
+          <form class="search-form" id="oo-form" role="search" autocomplete="off">
+            <div class="row">
+              <div class="field">
+                <input type="search" id="oo-q" aria-label="Zoekterm"
+                       placeholder="Zoekterm, dossiernummer (36600-VII) of onderwerp">
+              </div>
+              <select class="select" id="oo-scope" aria-label="Waarin zoeken">
+                <option value="alles">Alles — parlementaire stukken + Open overheid</option>
+                <option value="pub">Alleen parlementaire stukken</option>
+                <option value="woo">Alleen Open overheid-documenten</option>
+              </select>
+              <button type="submit" class="btn btn-solid" id="oo-go">Zoeken</button>
+            </div>
+            <div class="row filters">
+              <select class="select" id="oo-soort" aria-label="Soort"></select>
+              <span class="extra-filters" id="oo-extra"></span>
+              <select class="select" id="oo-sort" aria-label="Sorteren">
+                <option value="nieuwste">Nieuwste eerst</option>
+                <option value="relevantie">Meest relevant</option>
+                <option value="oudste">Oudste eerst</option>
+              </select>
+              <label class="date-field" id="oo-dates-from"><span>Vanaf</span>
+                <input type="date" id="oo-van" class="select"></label>
+              <label class="date-field" id="oo-dates-to"><span>Tot</span>
+                <input type="date" id="oo-tot" class="select"></label>
+            </div>
+          </form>
+          <button type="button" class="collapse-bar" id="oo-toggle" aria-expanded="true" aria-controls="oo-resultbox" hidden>
+            <span class="caret" aria-hidden="true">▾</span><span id="oo-toggle-text"></span>
+          </button>
+          <div id="oo-resultbox">
+          <div class="results-head" id="oo-results-head" hidden>
+            <label class="checkbox"><input type="checkbox" id="oo-select-all"><span id="oo-count"></span></label>
+            <button type="button" class="btn btn-solid" id="oo-fetch-selected" disabled>Geselecteerde ophalen</button>
+          </div>
+          <ol class="results" id="oo-results" aria-live="polite"></ol>
+          <div class="pager" id="oo-pager" hidden>
+            <button type="button" class="btn btn-outline" id="oo-prev">← Vorige</button>
+            <span id="oo-page"></span>
+            <button type="button" class="btn btn-outline" id="oo-next">Volgende →</button>
+          </div>
+          </div>
+        </div>
+        <p class="hint" id="oo-hint-stukken">
+          <strong>Alles</strong> doorzoekt twee bronnen tegelijk en toont één lijst, op datum:
+          <strong>parlementaire stukken</strong> (kamerstukken, Kamervragen, Handelingen; zoekdienst
+          van overheid.nl; een dossiernummer als <code>36600-VII</code> geeft alle stukken van dat
+          dossier) en <strong>Open overheid-documenten</strong> van open.overheid.nl (Woo-besluiten, adviezen,
+          beslisnota's, Kamerbrieven en meer). Staat hetzelfde stuk in beide, dan komt het één keer
+          voor. Kies één bron om op soort te filteren.
+        </p>
+        <p class="hint" id="oo-hint-consultaties" hidden>
+          <strong>Consultaties</strong> van internetconsultatie.nl: wetsvoorstellen en andere regelingen in
+          voorbereiding waarop je kunt reageren. Zoek op titel of op titel en tekst, en op
+          consultatieperiode. Een consultatie komt als Markdown met metadata en tekst; documenten,
+          de wetgevingskalender-fiche en <strong>alle openbare reacties</strong> (één document met de
+          tekst van elke reactie) staan als links onderaan en zijn zelf ook op te halen door de link
+          bij <em>Stukken → Ophalen</em> te plakken.
+        </p>
+        <p class="hint" id="oo-hint-wgk" hidden>
+          <strong>Wetgevingskalender</strong> (wetgevingskalender.overheid.nl): het traject van een wet of
+          AMvB van voorbereiding tot bekendmaking, met alle mijlpalen en documenten (adviezen,
+          memorie van toelichting, …). Filter op status, fase en soort. Plak een WGK-nummer
+          (<code>WGK027200</code>) of link bij <em>Stukken → Ophalen</em> om er direct één op te halen.
+        </p>
+      </div>
+    </section>
+
     <!-- Documentupload -->
     <section class="pane" data-pane="doc" id="pane-doc" role="tabpanel" aria-label="Documentupload" hidden>
       <div class="card">
@@ -111,8 +233,31 @@
           <input type="checkbox" id="extract-images">
           <span>Voor PDF's: losse ingesloten afbeeldingen meenemen als bijlagen</span>
         </label>
+        {% if ai %}
+        <div class="ocr-opts" id="ocr-opts" hidden>
+          <label class="checkbox" id="ocr-mode-wrap">
+            <input type="checkbox" id="ocr-mode">
+            <span>Wiskunde-modus: PDF's pagina-voor-pagina transcriberen met een vision-model
+              (Markdown + LaTeX-formules). Trager en kost OpenRouter-tokens; vervangt de snelle
+              tekstextractie.</span>
+          </label>
+          <select class="select" id="ocr-model" aria-label="Model voor de wiskunde-modus" hidden></select>
+        </div>
+        {% endif %}
         <div class="or">of plak een of meer links naar bestanden</div>
+        <div class="seg" role="group" aria-label="Invoervorm">
+          <button type="button" class="seg-btn" id="mode-doc-rows" aria-pressed="true">Losse regels</button>
+          <button type="button" class="seg-btn" id="mode-doc-bulk" aria-pressed="false">Lijst plakken</button>
+        </div>
         <div class="rows" id="rows-doc"></div>
+        <div class="bulk" id="bulk-doc" hidden>
+          <label class="visually-hidden" for="bulk-doc-text">Lijst met links naar bestanden</label>
+          <textarea id="bulk-doc-text" spellcheck="false"
+                    placeholder="Eén link per regel — plak hier een hele lijst:&#10;&#10;https://example.com/rapport.pdf&#10;https://example.com/bijlage.docx&#10;&#10;Opsommingstekens, omringende tekst en dubbele regels worden er zelf uitgehaald."></textarea>
+          <div class="bulk-bar">
+            <span class="count" id="bulk-doc-count"></span>
+          </div>
+        </div>
         <div class="row-actions">
           <button type="button" class="btn btn-dashed" id="add-doc">+ Link toevoegen</button>
           <button type="button" class="btn btn-solid btn-lg" id="fetch-doc">Ophalen</button>
@@ -121,11 +266,15 @@
       <p class="hint">
         PDF's gaan via <strong>pdf-inspector</strong> (layout-bewust: koppen, lijsten en
         tabellen). Heeft een PDF geen tekstlaag, bijvoorbeeld een scan, dan valt de conversie
-        terug op MarkItDown. Alle overige formaten gaan altijd via MarkItDown.
+        terug op MarkItDown. <strong>EPUB</strong>'s krijgen nette koppen én interne links
+        (tussen hoofdstukken, voetnoten, de inhoudsopgave) als Obsidian-wikilinks naar de
+        bijbehorende kop — zonder AI. Alle overige formaten gaan altijd via MarkItDown.
         Met de afbeeldingen-optie (indien beschikbaar) worden grafieken en screenshots uit
         de PDF gehaald (hele-pagina-scans uitgesloten) en als Obsidian wikilink-bijlagen
         onder een "Bijlagen"-sectie gezet; de download wordt dan een <strong>.zip</strong>
         met de markdown en een <code>attachments/</code>-map.
+        Heb je een <strong>lijst</strong> links? Plak die in één keer — in een invoerregel
+        (die splitst zich dan uit over losse regels) of via <strong>Lijst plakken</strong>.
       </p>
     </section>
 
@@ -144,8 +293,8 @@
       <p class="hint">
         Plak <strong>kale tekst</strong> (bv. uit een PDF-viewer) of <strong>verrijkte tekst</strong>
         met koppen, vetgedrukt of lijsten (bv. uit Word of een webpagina) — opmaak uit het
-        klembord wordt zo veel mogelijk overgenomen. Staat er een ECLI in de tekst, dan wordt
-        die herkend als rechtspraak (met de Obsidian-optie erbij).
+        klembord wordt zo veel mogelijk overgenomen.{% if ai %} Staat er een ECLI in de tekst, dan wordt
+        die herkend als rechtspraak (met de Obsidian-optie erbij).{% endif %}
       </p>
     </section>
 
@@ -155,6 +304,7 @@
     <section id="output" aria-label="Resultaat" hidden>
       <div class="doc-tabs" id="doc-tabs" aria-label="Opgehaalde documenten" hidden></div>
 
+      {% if ai %}
       <div class="clean-panel glass" id="clean-panel">
         <div class="clean-info">
           <strong id="clean-title">Opschonen met AI</strong>
@@ -175,24 +325,35 @@
           <button type="button" class="btn btn-solid" id="clean">Opschonen</button>
         </div>
       </div>
+      {% endif %}
 
       <div class="out-bar">
         <span class="src" id="src"></span>
+        <div class="seg view-seg" role="group" aria-label="Weergave van het resultaat">
+          <button type="button" class="seg-btn" id="view-raw" aria-pressed="false">Ruwe tekst</button>
+          <button type="button" class="seg-btn" id="view-split" aria-pressed="true">Naast elkaar</button>
+          <button type="button" class="seg-btn" id="view-preview" aria-pressed="false">Weergave</button>
+        </div>
         <button type="button" class="btn btn-outline" id="copy">Kopiëren</button>
         <button type="button" class="btn btn-outline" id="download">Download .md</button>
         <button type="button" class="btn btn-outline" id="download-all" hidden>Alles downloaden</button>
       </div>
       <div class="doc-warnings" id="doc-warnings" role="alert" hidden></div>
 
+      <div class="viewer" id="viewer" data-view="split">
       <div class="editor" id="editor">
         <div class="gutter" aria-hidden="true"><div class="gutter-inner" id="gutter-inner"></div></div>
         <label class="visually-hidden" for="md">Markdown</label>
         <textarea id="md" spellcheck="false"></textarea>
         <div class="line-mirror" id="line-mirror" aria-hidden="true"></div>
       </div>
+      <div class="md-preview" id="preview" tabindex="0" aria-label="Weergave van de Markdown"></div>
+      </div>
+
     </section>
   </main>
 
+  {% if settings %}
   <!-- Instellingen -->
   <div class="overlay" id="settings" role="dialog" aria-modal="true" aria-labelledby="settings-title">
     <div class="dialog glass">
@@ -200,14 +361,23 @@
         <div style="flex:1">
           <h2 id="settings-title">Instellingen</h2>
           <p class="sub">
-            Geldt voor alle volgende conversies op deze installatie. Laat een veld leeg
-            om terug te vallen op de standaardwaarde.
+            Geldt voor alle volgende conversies op deze installatie.{% if ai %} Laat een veld
+            leeg om terug te vallen op de standaardwaarde.{% endif %}
           </p>
         </div>
         <button type="button" class="btn btn-ghost btn-icon" id="settings-close"
                 aria-label="Sluiten">✕</button>
       </div>
 
+      <section>
+        <label class="checkbox">
+          <input type="checkbox" id="settings-ai" {% if ai %}checked{% endif %}>
+          <span><strong>AI-functies</strong> — opschonen, vertalen, opmaken voor Obsidian
+            en de wiskunde-modus. Uit = alleen de gewone omzetting naar markdown.</span>
+        </label>
+      </section>
+
+      {% if ai %}
       <section>
         <h3>AI-endpoints <button type="button" class="reset" id="reset-models">Standaardlijst</button></h3>
         <p class="hint" style="margin:0 0 8px">
@@ -218,6 +388,26 @@
         <div class="rows" id="settings-models"></div>
         <div class="row-actions">
           <button type="button" class="btn btn-dashed" id="settings-add-model">+ Endpoint toevoegen</button>
+        </div>
+      </section>
+
+      <section>
+        <h3>Wiskunde-OCR — modellen <button type="button" class="reset" id="reset-ocr-models">Standaardlijst</button></h3>
+        <p class="hint" style="margin:0 0 8px">
+          Modellen voor de wiskunde-modus bij Documentupload. Moeten multimodaal zijn
+          (afbeeldingen accepteren). Leeg = de standaardlijst.
+        </p>
+        <div class="rows" id="settings-ocr-models"></div>
+        <div class="row-actions">
+          <button type="button" class="btn btn-dashed" id="settings-add-ocr-model">+ Model toevoegen</button>
+        </div>
+        <p class="hint" style="margin:12px 0 4px">
+          Pagina's per verzoek — meer = minder verzoeken en minder rate-limiting, maar te veel
+          raakt afgekapt. Een paar verzoeken lopen parallel. Leeg = standaard (5).
+        </p>
+        <div class="field" style="max-width:160px">
+          <input type="number" id="settings-ocr-pages" min="1" max="20" step="1"
+                 placeholder="standaard (5)" aria-label="Pagina's per vision-verzoek">
         </div>
       </section>
 
@@ -237,7 +427,12 @@
         <h3 style="margin-top:16px">Prompt — Vertalen naar het Nederlands <button type="button" class="reset" id="reset-translate_nl">Standaard</button></h3>
         <label class="visually-hidden" for="prompt-translate_nl">Prompt voor de vertaling</label>
         <textarea id="prompt-translate_nl"></textarea>
+
+        <h3 style="margin-top:16px">Prompt — Wiskunde-modus (OCR) <button type="button" class="reset" id="reset-ocr">Standaard</button></h3>
+        <label class="visually-hidden" for="prompt-ocr">Prompt voor de wiskunde-transcriptie</label>
+        <textarea id="prompt-ocr"></textarea>
       </section>
+      {% endif %}
 
       <div class="dialog-actions">
         <span class="msg" id="settings-msg"></span>
@@ -247,10 +442,13 @@
     </div>
   </div>
 
+  {% endif %}
+
   <footer class="app-footer">
     Markdown converter · v{{ version }} (build {{ build }}) · geïnstalleerd op {{ installed_at }}
   </footer>
 
+  <script src="{{ url_for('static', filename='mdview.js') }}"></script>
   <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>

@@ -21,6 +21,8 @@ from ..source_structure import capture_source_documents, bind_structure, record_
 
 from . import (
     be_juportal,
+    common,
+    consultatie,
     de_openlegaldata,
     docx,
     eurlex,
@@ -29,11 +31,14 @@ from . import (
     fr_conseil_constitutionnel,
     html_document,
     hudoc,
+    kamerstuk,
     officiele_bekendmakingen,
     pasted_text,
     pdf_images,
     rechtspraak,
     wetten,
+    wgk,
+    woo,
 )
 
 # Nationale rechtspraak buiten NL/EU/EHRM, per ECLI-landcode. Uitbreidbaar: voeg
@@ -69,6 +74,9 @@ class Attachment:
 class Document:
     """Eén geconverteerd document, klaar voor de editor.
 
+    `bijlagen` zijn gerelateerde documenten (bijlagen bij een kamerstuk, relaties van een
+    open overheid-document); ze staan als linklijst in de Markdown zelf (`common.with_bijlagen`).
+
     `attachments` (losse afbeeldingen uit een PDF, zie `pdf_images.py`) gaat
     NIET mee in `as_json()` — binaire data hoort niet in de conversie-JSON.
     De API-laag slaat ze apart op (`mdconv.attachments`) en stuurt alleen een
@@ -85,6 +93,11 @@ class Document:
     warnings: tuple[str, ...] = ()
     # Waar dit vandaan komt; wordt naast de markdown als zijbestand geleverd.
     provenance: Herkomst | None = None
+    # Open overheid: de bijlagen (linklijst), het id waaronder de bron dit document
+    # kent (om "al geopend" te herkennen) en een voorstel voor de bestandsnaam.
+    bijlagen: tuple = ()
+    ident: str = ""
+    name: str = ""
 
     def as_json(self) -> dict:
         payload = {
@@ -95,6 +108,10 @@ class Document:
         }
         if self.provenance is not None:
             payload["provenance"] = self.provenance.as_json()
+        if self.ident:
+            payload["ident"] = self.ident
+        if self.name:
+            payload["name"] = self.name
         return payload
 
 
@@ -103,7 +120,8 @@ class Document:
 # --------------------------------------------------------------------------
 
 def detect_source(query: str) -> str | None:
-    """'rechtspraak', 'hudoc', 'wetten', 'officiele-bekendmakingen', of None (→ EUR-Lex).
+    """'kamerstuk', 'woo', 'consultatie', 'wgk', 'officiele-bekendmakingen', 'rechtspraak',
+    'hudoc', 'wetten', 'national' of None (→ EUR-Lex).
 
     De volgorde is bewust: een EHRM-ECLI of HUDOC-link wint van alles, want die
     bevat cijfergroepen die anders als iets anders gelezen worden. Een los
@@ -113,10 +131,20 @@ def detect_source(query: str) -> str | None:
     q = query.strip()
     low = q.lower()
 
-    # Een publicatie-id (`kst-34851-4`) of een link naar de Officiële Bekendmakingen. Voorop,
-    # want de herkenning is streng (volledig geankerd of op de host) en de rest is dat niet.
+    # Open overheid-vormen zijn ondubbelzinnig, dus eerst: de cijfergroepen in een
+    # publicatie-id (`kst-34851-4`) mogen niet als HUDOC-item-id of CELEX gelezen worden.
+    # De strenge herkenning van de kennisbankroute (volledig geankerd id of de host) gaat
+    # vóór de bredere van `kamerstuk` (tweedekamer.nl-links, nieuwe PDF-publicaties).
+    if consultatie.matches(q):
+        return "consultatie"
+    if wgk.matches(q):
+        return "wgk"
     if officiele_bekendmakingen.matches(q):
         return "officiele-bekendmakingen"
+    if kamerstuk.matches(q):
+        return "kamerstuk"
+    if woo.matches(q):
+        return "woo"
     if hudoc.ECHR_ECLI_RE.search(q) or "hudoc.echr.coe.int" in low:
         return "hudoc"
     if wetten.matches(q):
@@ -151,8 +179,10 @@ def _uitpakken(resultaat) -> tuple[str, str, Herkomst | None]:
 
 def from_link(query: str, lang: str = "NL") -> Document:
     """Los een link/identifier op naar een document."""
+    source = detect_source(query)
+    if source in ("kamerstuk", "woo", "consultatie", "wgk"):
+        return from_overheid(query)
     with capture_source_documents() as documents:
-        source = detect_source(query)
         if source == "rechtspraak":
             resultaat = rechtspraak.fetch(query)
         elif source == "hudoc":
@@ -201,6 +231,44 @@ def _als_document(resultaat, documents: list[dict], query: str, lang: str) -> Do
     )
 
 
+_UUID_ID = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?:_\d+)?$", re.I
+)
+
+
+def _document_from(fetched) -> Document:
+    return Document(
+        markdown=common.with_bijlagen(fetched.markdown, fetched.bijlagen), source=fetched.source, kind=KIND_DOCUMENT,
+        attachments=tuple(Attachment(filename=n, data=d) for n, d in fetched.images),
+        bijlagen=tuple(fetched.bijlagen), ident=fetched.ident, name=fetched.name,
+    )
+
+
+def from_overheid(query: str) -> Document:
+    """Open overheid: kamerstuk/aanhangsel/Handelingen/bijlage, een open overheid-document,
+    een consultatie (met documenten en reacties) of een wetgevingskalender-regeling.
+
+    Routering: een open.overheid.nl-link of id → Woo; een kale UUID is óók een
+    Tweede Kamer-Document-Id, dus die probeert eerst open.overheid.nl (één licht
+    verzoek) en valt anders terug op de Tweede Kamer-open data; de rest is een
+    kamerstuk (id, link, dossiernotatie of D-nummer)."""
+    q = query.strip()
+    if consultatie.matches(q):
+        return _document_from(consultatie.fetch(q))
+    if wgk.matches(q):
+        return _document_from(wgk.fetch(q))
+    if woo.matches(q):
+        return _document_from(woo.fetch(q))
+    if _UUID_ID.match(q) and (q.count("_") or woo.is_known_id(q)):
+        return _document_from(woo.fetch(q))
+    return _document_from(kamerstuk.fetch(q))
+
+
+def from_kamerstuk(query: str) -> Document:
+    """Kamerstuk, aanhangsel of handeling (id, link, dossiernotatie of D-nummer)."""
+    return _document_from(kamerstuk.fetch(query))
+
+
 # --------------------------------------------------------------------------
 # Bestanden
 # --------------------------------------------------------------------------
@@ -244,6 +312,11 @@ def from_file(data: bytes, filename: str, *, extract_images: bool = False,
     een gok. Bij elk ander bestandstype (of als poppler-utils niet
     geïnstalleerd is) wordt deze vlag genegeerd, precies zoals de UI 'm ook
     alleen bij PDF-invoer toont.
+
+    Bevat de geëxtraheerde tekst onvertaalde glyphs (`�`, zie
+    `files.warn_if_unmapped_glyphs`), dan krijgt de tekst een waarschuwing
+    boven zich i.p.v. de gebruiker stilzwijgend een gat in de tekst te laten
+    overnemen.
     """
     if document_id is not None and not DOCUMENT_ID.match(document_id):
         raise ConversionError(
@@ -296,6 +369,7 @@ def _omzetten(data: bytes, filename: str, *, extract_images: bool, document_id: 
         pages = files.convert_pdf_pages(data)
         if pages is not None:
             markdown, attachments = _attach_pdf_images_inline(pages, data)
+            markdown = files.warn_if_unmapped_glyphs(markdown)
             engine = files.ENGINE_PDF_INSPECTOR
             if attachments:
                 engine = f"{engine} + {len(attachments)} afbeelding(en)"
@@ -317,6 +391,7 @@ def _omzetten(data: bytes, filename: str, *, extract_images: bool, document_id: 
             markdown = f"{markdown.rstrip()}\n\n## Bijlagen\n\n{embeds}\n"
             engine = f"{engine} + {len(attachments)} afbeelding(en)"
 
+    markdown = files.warn_if_unmapped_glyphs(markdown)
     extra = {}
     if naam.endswith(".pdf"):
         extra = _leg_pdf_vast(data, markdown, source_url, document_id)

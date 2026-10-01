@@ -1545,6 +1545,34 @@ def test_stream_chunk_rejects_a_truncated_response(monkeypatch):
         list(openrouter.stream_chunk("tekst", model="x", system="y", profile="generic"))
 
 
+def test_stream_chunk_reports_a_mid_stream_provider_error_instead_of_swallowing_it(monkeypatch):
+    """Een storing bij de onderliggende provider komt, ná de HTTP 200, als een
+    SSE-regel mét een `error`-veld binnen (geen `choices`). Zonder expliciete
+    check verdween die regel stilzwijgend en kwam de stream leeg uit met de
+    nietszeggende "geen inhoud terug"-melding — de echte oorzaak moet
+    doorkomen."""
+    from mdconv.cleanup import openrouter
+    from mdconv.errors import ConversionError
+
+    class FakeStreamResp:
+        status_code = 200
+        close = staticmethod(lambda: None)
+
+        @staticmethod
+        def iter_lines(decode_unicode=True):
+            return iter([
+                'data: {"error":{"message":"Provider returned error","code":502}}',
+                "data: [DONE]",
+            ])
+
+    monkeypatch.setattr(openrouter.config, "api_key", lambda: "sk-test")
+    monkeypatch.setattr(openrouter.net, "llm",
+                         lambda: type("S", (), {"post": staticmethod(lambda *a, **k: FakeStreamResp())})())
+
+    with pytest.raises(ConversionError, match="Provider returned error"):
+        list(openrouter.stream_chunk("tekst", model="x", system="y", profile="generic"))
+
+
 def test_clean_chunk_returns_usage_alongside_the_text(monkeypatch):
     from mdconv.cleanup import openrouter
 
@@ -1935,6 +1963,230 @@ def test_pdf_upload_reports_the_engine_in_the_source():
     doc = from_file(_minimal_text_pdf(), "rapport.pdf")
     assert doc.source == "pdf-inspector • rapport.pdf"
     assert doc.kind == "document"
+
+
+def test_epub_upload_uses_its_own_parser_not_markitdown():
+    from mdconv.sources import from_file
+    doc = from_file(_minimal_epub(), "boek.epub")
+    assert doc.source == "epub • boek.epub"
+    assert "# Hoofdstuk 1: Het begin" in doc.markdown
+    assert "# Hoofdstuk 2: Het vervolg" in doc.markdown
+
+
+def test_epub_internal_links_become_obsidian_wikilinks_to_the_target_heading():
+    """De kern van de vraag: interne EPUB-links (tussen hoofdstukken, een
+    voetnootverwijzing, de inhoudsopgave) zijn na het samenvoegen tot één
+    Markdown-bestand kapotte relatieve paden — MarkItDown laat ze zo staan.
+    Deze eigen parser zet ze om in Obsidian-wikilinks naar de kop waar ze
+    naar verwijzen, wat na het samenvoegen wél blijft werken."""
+    from mdconv.sources.files import _convert_epub
+    markdown = _convert_epub(_minimal_epub())
+
+    # Link met anker naar een kop in een ander hoofdstuk → wikilink naar die kop,
+    # met de oorspronkelijke linktekst als alias.
+    assert "[[#2.1 Een subsectie|sectie 2.1]]" in markdown
+    # Link zonder anker (naar het hele hoofdstuk) → wikilink naar de titel-kop
+    # van dat hoofdstuk.
+    assert "[[#Hoofdstuk 1: Het begin|het begin]]" in markdown
+    # Externe link blijft een gewone Markdown-link, geen wikilink.
+    assert "[een externe link](https://example.com)" in markdown
+    # De inhoudsopgave (linear="no" in de spine) komt niet als apart "hoofdstuk" mee.
+    assert markdown.count("# Hoofdstuk 1") == 1
+
+
+def test_epub_drops_images_instead_of_leaving_a_dead_reference():
+    """Een <img> verwijst naar een pad binnen de zip — zonder een
+    bijlage-mechanisme (zoals bij PDF-afbeeldingen) zou dat een kapotte
+    `![alt](pad/in/de/zip.jpg)` opleveren. Beter weggelaten dan kapot."""
+    from mdconv.sources.files import _convert_epub
+    markdown = _convert_epub(_minimal_epub())
+    assert "cover.jpg" not in markdown
+    assert "omslag" not in markdown  # ook de alt-tekst komt niet los mee
+
+
+def test_epub_falls_back_to_markitdown_when_the_structure_is_invalid():
+    from mdconv.sources.files import convert
+    markdown, engine = convert(b"dit is geen geldige epub/zip", "kapot.epub")
+    assert engine == "MarkItDown"
+
+
+def test_epub_promotes_headings_based_on_css_typography_without_real_heading_tags():
+    """Veel professioneel gezette EPUB's (InDesign-export) hebben géén échte
+    <h1>-tags: hoofdstuktitels zijn gewoon <p class="..."> met een eigen,
+    grotere/vettere/anders-lettertype-stijl. Dit moest herkend worden zonder
+    op tekstinhoud te gokken — alleen op meetbare typografie t.o.v. de stijl
+    die de meeste tekens in het boek beslaat (de hoofdtekst). Vastgesteld met
+    een echt boek (CIPP-M, IAPP) dat zonder deze promotie nul koppen opleverde
+    en ermee 261, correct verdeeld over kopniveaus."""
+    from mdconv.sources.files import _convert_epub
+    markdown = _convert_epub(_indesign_style_epub())
+
+    assert "# Hoofdstuk 1: De titel" in markdown
+    assert "## 1.1 Een subsectie" in markdown
+    # Dezelfde grootte/gewicht als de hoofdtekst → geen kop, ook niet vet.
+    assert "# Jan Janssen" not in markdown
+    assert "Jan Janssen" in markdown
+    # Een gewone, lange alinea in de kop-stijlklasse blijft alinea — een hele
+    # alinea is geen titel, ongeacht de CSS-klasse erop.
+    assert "#" + " Dit is eigenlijk" not in markdown
+    assert "Dit is eigenlijk een hele lange alinea" in markdown
+
+
+def _indesign_style_epub() -> bytes:
+    """Eén hoofdstuk zonder échte kop-tags, met dezelfde soort CSS-opzet als
+    een InDesign-export: een hoofdtekststijl (klein, normaal gewicht, serif),
+    een titelstijl (groter, vet, sans-serif) en een auteursnaamstijl (vet,
+    zelfde grootte als de hoofdtekst — mag dus NIET als kop gelden)."""
+    import io
+    import zipfile
+
+    container_xml = """<?xml version="1.0"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>"""
+
+    content_opf = """<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:title>Testboek</dc:title>
+  </metadata>
+  <manifest>
+    <item id="css" href="style.css" media-type="text/css"/>
+    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine>
+    <itemref idref="ch1"/>
+  </spine>
+</package>"""
+
+    style_css = """
+p.Chap-Title { font-family:"Source Sans Pro", sans-serif; font-size:1.333em; font-weight:bold; }
+p.Chap-Author { font-family:"Arno Pro", serif; font-size:0.958em; font-weight:bold; }
+p.A-Head { font-family:"Source Sans Pro", sans-serif; font-size:1.25em; font-weight:bold; }
+p.Body { font-family:"Arno Pro", serif; font-size:0.958em; font-weight:normal; }
+"""
+
+    long_paragraph = " ".join(["Dit is eigenlijk een hele lange alinea die per ongeluk"] * 6)
+    chapter1 = f"""<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<body>
+<p class="Chap-Title">Hoofdstuk 1: De titel</p>
+<p class="Chap-Author">Jan Janssen</p>
+<p class="Body">{long_paragraph}</p>
+<p class="A-Head">1.1 Een subsectie</p>
+<p class="Body">Nog een gewone alinea.</p>
+<p class="Chap-Title">{long_paragraph}</p>
+</body></html>"""
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("mimetype", "application/epub+zip")
+        z.writestr("META-INF/container.xml", container_xml)
+        z.writestr("OEBPS/content.opf", content_opf)
+        z.writestr("OEBPS/style.css", style_css)
+        z.writestr("OEBPS/chapter1.xhtml", chapter1)
+    return buf.getvalue()
+
+
+def _minimal_epub() -> bytes:
+    """Een handgeschreven, geldige minimale EPUB met twee hoofdstukken, een
+    (in de spine als linear="no" gemarkeerde) navigatiepagina, een externe
+    link, een interne link met anker, een interne link zonder anker en een
+    losse afbeelding."""
+    import io
+    import zipfile
+
+    container_xml = """<?xml version="1.0"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>"""
+
+    content_opf = """<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:title>Testboek</dc:title>
+  </metadata>
+  <manifest>
+    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
+    <item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
+    <item id="ch2" href="chapter2.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine>
+    <itemref idref="nav" linear="no"/>
+    <itemref idref="ch1"/>
+    <itemref idref="ch2"/>
+  </spine>
+</package>"""
+
+    nav_xhtml = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
+<body><nav epub:type="toc"><ol>
+  <li><a href="chapter1.xhtml">Hoofdstuk 1</a></li>
+  <li><a href="chapter2.xhtml">Hoofdstuk 2</a></li>
+</ol></nav></body></html>"""
+
+    chapter1 = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<body>
+<h1>Hoofdstuk 1: Het begin</h1>
+<p>Dit is de inleiding. Zie ook <a href="chapter2.xhtml#sectie21">sectie 2.1</a> voor meer details,
+en <a href="https://example.com">een externe link</a> blijft gewoon behouden.</p>
+</body></html>"""
+
+    chapter2 = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<body>
+<h1>Hoofdstuk 2: Het vervolg</h1>
+<h2 id="sectie21">2.1 Een subsectie</h2>
+<p>Terug naar <a href="chapter1.xhtml">het begin</a>.</p>
+<img src="images/cover.jpg" alt="omslag"/>
+</body></html>"""
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("mimetype", "application/epub+zip")
+        z.writestr("META-INF/container.xml", container_xml)
+        z.writestr("OEBPS/content.opf", content_opf)
+        z.writestr("OEBPS/nav.xhtml", nav_xhtml)
+        z.writestr("OEBPS/chapter1.xhtml", chapter1)
+        z.writestr("OEBPS/chapter2.xhtml", chapter2)
+    return buf.getvalue()
+
+
+def test_warn_if_unmapped_glyphs_flags_the_replacement_character():
+    """Een `�` in de tekst betekent dat de extractie een glyph niet naar
+    tekens kon terugvertalen — vaak een typografische ligatuur ("fi", "ft",
+    "th") zonder tekstcodering. Stilzwijgend doorlaten zou een gebruiker een
+    verkeerd citaat kunnen laten overnemen, dus moet er een waarschuwing boven
+    de tekst komen i.p.v. de tekst ongewijzigd te laten."""
+    from mdconv.sources.files import warn_if_unmapped_glyphs
+
+    broken = "Dit gold. �ese diensten zijn o�en onderling verbonden."
+    warned = warn_if_unmapped_glyphs(broken)
+    assert warned.startswith("*Let op:")
+    assert broken in warned
+
+    clean = "Dit is gewone tekst zonder problemen."
+    assert warn_if_unmapped_glyphs(clean) == clean
+
+
+def test_from_file_warns_when_pdf_inspector_leaves_unmapped_glyphs(monkeypatch):
+    """De waarschuwing moet ook via `from_file()` doorkomen — zowel op de
+    gewone route als op de per-pagina/inline-afbeeldingenroute."""
+    import mdconv.sources as sources_mod
+    from mdconv.sources import from_file
+
+    monkeypatch.setattr(
+        sources_mod.files, "convert",
+        lambda data, filename: ("Tekst met � erin.", "pdf-inspector"),
+    )
+    doc = from_file(b"%PDF-fake%", "rapport.pdf")
+    assert doc.markdown.startswith("*Let op:")
+    assert "Tekst met � erin." in doc.markdown
 
 
 # ---------------------------------------------------------------------------
@@ -2420,19 +2672,25 @@ def test_download_bundle_without_documents_explains_itself_in_dutch(client):
     assert "documenten" in r.get_json()["error"]
 
 
-@pytest.mark.parametrize("kind", ["jur", "wet"])
-def test_list_tabs_offer_both_input_forms(kind):
+@pytest.mark.parametrize("kind, has_lang", [("jur", True), ("wet", True), ("oo", False), ("doc", False)])
+def test_tab_offers_both_input_forms(kind, has_lang):
     """De front-end bouwt de id's van het lijst-tekstvak per conventie op
     (`#bulk-${kind}-text` enz.). Wordt er in de template één omgenoemd, dan
-    faalt de JS stil — daarom staan ze hier vast, voor elk tabblad met lijstinvoer."""
+    faalt de JS stil — daarom staan ze hier vast. Documentupload ("doc") heeft
+    geen taalkeuze voor de lijst, Open overheid ("oo") ook niet; de rest wel."""
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     html = open(os.path.join(root, "templates", "index.html"), encoding="utf-8").read()
-    for element in (
+    elements = [
         f'id="mode-{kind}-rows"', f'id="mode-{kind}-bulk"',
-        f'id="bulk-{kind}"', f'id="bulk-{kind}-text"', f'id="bulk-{kind}-lang"',
-        f'id="bulk-{kind}-count"', 'id="download-all"',
-    ):
+        f'id="bulk-{kind}"', f'id="bulk-{kind}-text"', f'id="bulk-{kind}-count"',
+    ]
+    if has_lang:
+        elements.append(f'id="bulk-{kind}-lang"')
+    else:
+        assert f'id="bulk-{kind}-lang"' not in html
+    for element in elements:
         assert element in html, f"{element} ontbreekt in index.html"
+    assert 'id="download-all"' in html
 
 
 def test_list_paste_kinds_match_initialised_list_modes():
@@ -2456,3 +2714,429 @@ def test_frontend_has_one_celex_pattern():
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     js = open(os.path.join(root, "static", "app.js"), encoding="utf-8").read()
     assert js.count("[0-9][0-9]{4}[A-Z]{1,2}[0-9]{2,4}") == 1
+
+
+# ---------------------------------------------------------------------------
+# Wiskunde-modus: PDF pagina-voor-pagina door een vision-LLM (mdconv/ocr.py)
+# ---------------------------------------------------------------------------
+#
+# De gewone tekstextractie verliest LaTeX-wiskunde (sub-/superscripts,
+# `\underbrace`, de index i als Private-Use-glyph). De wiskunde-modus rendert
+# elke pagina naar een PNG en laat een vision-model die transcriberen. Deze
+# tests pinnen: paginasortering + paginagrens bij het rasteren, de
+# stream-orchestratie (join, voortgang, opgeteld tokengebruik, stil annuleren)
+# en de streaming-endpoint. Geen netwerk — `pdftoppm` en OpenRouter zijn
+# gemonkeypatcht.
+
+def _fake_poppler(monkeypatch, *, pages: int):
+    """Laat pdf_images denken dat poppler er is en `pdfinfo`/`pdftoppm` werken:
+    `pdfinfo` meldt `pages`, `pdftoppm` schrijft één PNG per pagina."""
+    import pathlib
+
+    from mdconv.sources import pdf_images
+
+    monkeypatch.setattr(pdf_images, "render_available", lambda: True)
+
+    def fake_run(args, *, timeout=None):
+        if args[0] == "pdfinfo":
+            return f"Title:  x\nPages:  {pages}\nPage size: 595 x 842 pts\n"
+        if args[0] == "pdftoppm":
+            prefix = pathlib.Path(args[-1])
+            for n in range(1, pages + 1):
+                prefix.with_name(f"{prefix.name}-{n}.png").write_bytes(f"PNG{n}".encode())
+            return ""
+        return ""
+
+    monkeypatch.setattr(pdf_images, "_run", fake_run)
+
+
+def test_render_pages_returns_one_png_per_page_in_order(monkeypatch):
+    from mdconv.sources import pdf_images
+
+    _fake_poppler(monkeypatch, pages=12)
+    pages = pdf_images.render_pages(b"%PDF-1.4", dpi=150, max_pages=100)
+    # 12 pagina's, en page-2 vóór page-10 (numeriek, niet lexicaal gesorteerd).
+    assert [p.decode() for p in pages] == [f"PNG{n}" for n in range(1, 13)]
+
+
+def test_render_pages_rejects_a_document_over_the_page_cap(monkeypatch):
+    from mdconv.errors import ConversionError
+    from mdconv.sources import pdf_images
+
+    _fake_poppler(monkeypatch, pages=250)
+    with pytest.raises(ConversionError, match="maximaal 100"):
+        pdf_images.render_pages(b"%PDF-1.4", dpi=150, max_pages=100)
+
+
+def _fake_ocr(monkeypatch, pages, pages_stream, *, per_request=None):
+    """render_pages → `pages` (list[bytes]); openrouter.ocr_pages_stream →
+    `pages_stream` (krijgt een lijst PNG's per verzoek); optioneel de
+    pagina's-per-verzoek forceren."""
+    import mdconv.cleanup as cleanup_pkg
+    from mdconv import ocr
+    from mdconv.cleanup import config, openrouter
+
+    monkeypatch.setattr(ocr.pdf_images, "render_pages", lambda data, **kw: pages)
+    monkeypatch.setattr(ocr.pdf_images, "render_available", lambda: True)
+    monkeypatch.setattr(openrouter, "ocr_pages_stream", pages_stream)
+    monkeypatch.setattr(config, "is_available", lambda: True)
+    # api.py roept cleanup.is_available aan (bij import gebonden aan config.is_available).
+    monkeypatch.setattr(cleanup_pkg, "is_available", lambda: True)
+    if per_request is not None:
+        monkeypatch.setattr(config, "get_ocr_pages_per_request", lambda: per_request)
+
+
+def test_ocr_pdf_stream_batches_pages_and_keeps_order(monkeypatch):
+    from mdconv import ocr
+    from mdconv.cleanup import openrouter
+
+    seen_sizes = []
+
+    def pages_stream(images, *, model, system, request_id=None):
+        seen_sizes.append(len(images))
+        yield "|".join(i.decode() for i in images)
+        yield openrouter.Usage({"prompt_tokens": 10, "completion_tokens": 4,
+                                "total_tokens": 14, "cost": 0.01})
+
+    twelve = [f"p{n}".encode() for n in range(1, 13)]
+    _fake_ocr(monkeypatch, twelve, pages_stream, per_request=5)
+    out = list(ocr.ocr_pdf_stream(b"%PDF", request_id="r1"))
+
+    # 12 pagina's, 5 per verzoek → groepen van 5, 5, 2 (volgorde van afronding
+    # is bij parallel niet vast, dus gesorteerd vergelijken).
+    assert sorted(seen_sizes) == [2, 5, 5]
+    text = "".join(x for x in out if isinstance(x, str))
+    assert text == (
+        "p1|p2|p3|p4|p5\n\np6|p7|p8|p9|p10\n\np11|p12"
+    )
+    progress = [dict(x)["produced_tokens"] for x in out if isinstance(x, openrouter.Progress)]
+    assert progress == [5, 10, 12]                      # pagina's tot nu toe, per groep
+    usage = [dict(x) for x in out if isinstance(x, openrouter.Usage)][-1]
+    assert usage["total_tokens"] == 42                  # 3 groepen × 14
+    assert usage["cost"] == pytest.approx(0.03)
+
+
+def test_ocr_pdf_stream_one_request_for_a_short_pdf(monkeypatch):
+    from mdconv import ocr
+
+    calls = []
+
+    def pages_stream(images, *, model, system, request_id=None):
+        calls.append(len(images))
+        yield "ok"
+        return
+
+    _fake_ocr(monkeypatch, [b"a", b"b", b"c"], pages_stream)  # standaard 5 per verzoek
+    list(ocr.ocr_pdf_stream(b"%PDF"))
+    assert calls == [3]                                 # alles in één verzoek
+
+
+def test_ocr_pdf_stream_stops_silently_on_cancel(monkeypatch):
+    from mdconv import ocr
+    from mdconv.cleanup import cancel, openrouter
+
+    def pages_stream(images, *, model, system, request_id=None):
+        yield f"group {images[0].decode()}"
+
+    monkeypatch.setattr(ocr, "_MAX_PARALLEL_BATCHES", 1)
+    _fake_ocr(monkeypatch, [b"p1", b"p2", b"p3"], pages_stream, per_request=1)
+
+    gen = ocr.ocr_pdf_stream(b"%PDF", request_id="rX")
+    first = next(gen)                                    # tekst van groep 1
+    cancel.request("rX")                                 # gelijktijdige /api/clean/cancel
+    rest = list(gen)
+
+    assert first == "group p1"
+    assert not any(isinstance(x, openrouter.Usage) for x in rest)  # geen afsluiting
+    assert not cancel.is_cancelled("rX")                 # de finally-clause heeft opgeruimd
+
+
+def test_ocr_pages_stream_truncation_advises_a_smaller_batch(monkeypatch):
+    from mdconv import ocr
+    from mdconv.errors import ConversionError
+
+    def pages_stream(images, *, model, system, request_id=None):
+        yield "begin"
+        raise ConversionError(
+            "Het antwoord werd afgekapt: te veel pagina's voor één verzoek. "
+            "Verlaag 'pagina's per verzoek' in de instellingen."
+        )
+
+    _fake_ocr(monkeypatch, [b"p1", b"p2"], pages_stream, per_request=5)
+    with pytest.raises(ConversionError, match="pagina's per verzoek"):
+        list(ocr.ocr_pdf_stream(b"%PDF"))
+
+
+def test_ocr_pdf_stream_requires_a_key(monkeypatch):
+    from mdconv import ocr
+    from mdconv.cleanup import config
+    from mdconv.errors import ConversionError
+
+    monkeypatch.setattr(config, "is_available", lambda: False)
+    with pytest.raises(ConversionError, match="OpenRouter API-sleutel"):
+        list(ocr.ocr_pdf_stream(b"%PDF"))
+
+
+def test_api_convert_file_ocr_streams_transcription(client, monkeypatch):
+    import re
+
+    from mdconv.cleanup import openrouter
+
+    def pages_stream(images, *, model, system, request_id=None):
+        yield "".join(f"$x_{i.decode()}$" for i in images)
+        yield openrouter.Usage({"prompt_tokens": 5, "completion_tokens": 2,
+                                "total_tokens": 7, "cost": 0.001})
+
+    _fake_ocr(monkeypatch, [b"1", b"2"], pages_stream)
+    r = client.post(
+        "/api/convert/file/ocr",
+        data={"file": (BytesIO(b"%PDF-1.4 fake"), "slides.pdf"),
+              "model": "qwen/qwen3.7-flash"},
+        content_type="multipart/form-data",
+    )
+    assert r.status_code == 200
+    body = r.get_data(as_text=True)
+    stripped = re.sub(r"\x00CLEAN_[A-Z]+\x00.*?\x00", "", body, flags=re.S)
+    assert stripped == "$x_1$$x_2$"                     # 2 pagina's in één groep
+    assert "\x00CLEAN_PROGRESS\x00" in body
+    assert "\x00CLEAN_USAGE\x00" in body
+
+
+def test_api_convert_file_ocr_rejects_non_pdf(client, monkeypatch):
+    from mdconv.cleanup import config
+    monkeypatch.setattr(config, "is_available", lambda: True)
+    r = client.post(
+        "/api/convert/file/ocr",
+        data={"file": (BytesIO(b"x"), "notes.docx")},
+        content_type="multipart/form-data",
+    )
+    assert r.status_code == 400
+    assert "PDF" in r.get_json()["error"]
+
+
+def test_api_convert_file_ocr_needs_a_key(client, monkeypatch):
+    from mdconv.cleanup import config
+    monkeypatch.setattr(config, "is_available", lambda: False)
+    r = client.post(
+        "/api/convert/file/ocr",
+        data={"file": (BytesIO(b"%PDF"), "a.pdf")},
+        content_type="multipart/form-data",
+    )
+    assert r.status_code == 400
+    assert "OpenRouter" in r.get_json()["error"]
+
+
+def test_config_and_settings_expose_ocr_models(client):
+    cfg = client.get("/api/config").get_json()
+    assert [m["id"] for m in cfg["ocr_models"]] == [
+        "qwen/qwen3.7-flash", "openai/gpt-5.6-luna-pro",
+    ]
+    assert "ocr_available" in cfg
+    settings = client.get("/api/settings").get_json()
+    assert settings["ocr_models"] and settings["ocr_prompt"]
+    assert settings["ocr_pages_per_request"] == 5
+    assert settings["defaults"]["ocr_models"] and settings["defaults"]["ocr_prompt"]
+    assert settings["defaults"]["ocr_pages_per_request"] == 5
+
+
+def test_ocr_settings_roundtrip_and_reset(isolated_settings):
+    cfg = isolated_settings
+    cfg.update_settings({
+        "ocr_models": [{"id": "vendor/vision-x", "label": "Vision X"}],
+        "ocr_prompt": "Transcribe carefully.",
+        "ocr_pages_per_request": 8,
+    })
+    assert [m["id"] for m in cfg.get_ocr_models()] == ["vendor/vision-x"]
+    assert cfg.resolve_ocr_model("vendor/vision-x") == "vendor/vision-x"
+    assert cfg.get_ocr_prompt() == "Transcribe carefully."
+    assert cfg.get_ocr_pages_per_request() == 8
+    # Leeg / buiten de grenzen = terug naar de ingebouwde standaard.
+    cfg.update_settings({"ocr_models": [], "ocr_prompt": "", "ocr_pages_per_request": 999})
+    assert cfg.get_ocr_models() == cfg.DEFAULT_OCR_MODELS
+    assert cfg.get_ocr_prompt() == cfg.prompts.OCR
+    assert cfg.get_ocr_pages_per_request() == cfg.DEFAULT_OCR_PAGES_PER_REQUEST
+
+
+def test_pane_doc_has_ocr_controls():
+    """De front-end bouwt de wiskunde-modus-id's per conventie op; komt er één
+    niet meer overeen met index.html, dan faalt de JS stil."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    html = open(os.path.join(root, "templates", "index.html"), encoding="utf-8").read()
+    for element in (
+        'id="ocr-opts"', 'id="ocr-mode"', 'id="ocr-model"',
+        'id="settings-ocr-models"', 'id="settings-add-ocr-model"', 'id="prompt-ocr"',
+        'id="settings-ocr-pages"',
+    ):
+        assert element in html, f"{element} ontbreekt in index.html"
+
+
+# ---------------------------------------------------------------------------
+# Versie zonder AI: MDCONV_AI=off (vergrendeld) of de schakelaar in de instellingen
+# ---------------------------------------------------------------------------
+
+_AI_ROUTES = [
+    ("post", "/api/estimate"),
+    ("post", "/api/clean"),
+    ("post", "/api/clean/stream"),
+    ("post", "/api/clean/cancel"),
+    ("post", "/api/convert/file/ocr"),
+    ("post", "/api/convert/file-url/ocr"),
+]
+_SETTINGS_ROUTES = [("get", "/api/settings"), ("post", "/api/settings")]
+
+# Wat er zonder AI nooit in de pagina mag staan, en wat er altijd moet blijven.
+_AI_ELEMENTS = ('id="clean-panel"', 'id="clean"', 'id="translate-nl"', 'id="obsidian"',
+                'id="ocr-mode"', 'id="settings-models"', 'id="prompt-generic"')
+_BASE_ELEMENTS = ('id="bulk-jur-text"', 'id="bulk-wet-text"', 'id="bulk-oo-text"', 'id="bulk-doc-text"',
+                  'id="paste-area"', 'id="drop"', 'id="download-all"')
+
+
+def _page(app, monkeypatch):
+    from mdconv import version
+
+    monkeypatch.setattr(version, "current", lambda: ("0.0.0", 1, "vandaag"))
+    return app.test_client().get("/").get_data(as_text=True)
+
+
+@pytest.fixture
+def isolated_ai_env(tmp_path, monkeypatch):
+    """Laat de schakelaar "AI-functies" naar een tijdelijke `.env` schrijven
+    i.p.v. het echte projectbestand, en isoleert MDCONV_AI in de omgeving —
+    zodat een test hem niet per ongeluk laat staan voor de volgende."""
+    from mdconv import features
+
+    monkeypatch.setattr(features, "_ENV_DIR", str(tmp_path))
+    monkeypatch.delenv("MDCONV_AI", raising=False)
+    return features
+
+
+def test_ai_lock_follows_the_environment(monkeypatch):
+    from mdconv.features import ai_locked_off
+
+    monkeypatch.delenv("MDCONV_AI", raising=False)
+    assert ai_locked_off() is False
+    for value in ("off", "0", "false", "Uit", " OFF "):
+        monkeypatch.setenv("MDCONV_AI", value)
+        assert ai_locked_off() is True, value
+    monkeypatch.setenv("MDCONV_AI", "on")
+    assert ai_locked_off() is False
+
+
+def test_locked_off_the_ai_and_settings_routes_do_not_exist():
+    from mdconv import create_app
+
+    client = create_app(ai_enabled=False).test_client()
+    for method, url in _AI_ROUTES + _SETTINGS_ROUTES:
+        r = getattr(client, method)(url, json={})
+        assert r.status_code == 404, url
+
+
+def test_locked_off_ignores_any_env_value(isolated_ai_env, monkeypatch):
+    """De expliciete `ai_enabled=False` bij het opstarten (zie create_app) wint
+    altijd — ook als MDCONV_AI op dat moment "on" zou zeggen. Dat is precies
+    de garantie voor een installatie die vóór het opstarten is vergrendeld."""
+    from mdconv import create_app
+
+    monkeypatch.setenv("MDCONV_AI", "on")
+    app = create_app(ai_enabled=False)
+    assert app.test_client().get("/api/config").get_json()["ai_enabled"] is False
+    html = _page(app, monkeypatch)
+    assert 'id="open-settings"' not in html and 'id="settings-ai"' not in html
+
+
+def test_with_ai_the_ai_routes_exist(isolated_settings):
+    from mdconv import create_app
+
+    client = create_app(ai_enabled=True).test_client()
+    for method, url in _AI_ROUTES + _SETTINGS_ROUTES:
+        r = getattr(client, method)(url, json={})
+        assert r.status_code != 404, url
+
+
+def test_switch_off_hides_ai_routes_but_keeps_settings(isolated_settings, isolated_ai_env):
+    from mdconv import create_app
+
+    client = create_app(ai_enabled=True).test_client()
+    assert client.post("/api/settings", json={"ai_enabled": False}).get_json()["ai_enabled"] is False
+    for method, url in _AI_ROUTES:
+        assert getattr(client, method)(url, json={}).status_code == 404, url
+    assert client.get("/api/config").get_json()["ai_enabled"] is False
+    # Terug aanzetten kan, want /api/settings blijft bestaan.
+    assert client.post("/api/settings", json={"ai_enabled": True}).get_json()["ai_enabled"] is True
+    assert client.post("/api/clean/cancel", json={}).status_code == 200
+
+
+def test_switch_writes_env_and_only_stores_off(isolated_ai_env):
+    """De schakelaar schrijft in `.env` (niet in settings.json): uitzetten een
+    expliciete `MDCONV_AI=off`-regel, aanzetten verwijdert die weer (leeg =
+    standaard). Werkt meteen door in os.environ van dit proces."""
+    features = isolated_ai_env
+
+    features.set_ai_enabled(False)
+    assert "MDCONV_AI=off" in open(features._env_path(), encoding="utf-8").read()
+    assert os.environ["MDCONV_AI"] == "off"
+
+    features.set_ai_enabled(True)
+    assert "MDCONV_AI" not in open(features._env_path(), encoding="utf-8").read()
+    assert "MDCONV_AI" not in os.environ
+
+
+def test_switch_preserves_other_env_lines(isolated_ai_env):
+    """Andere regels in .env (bv. OPENROUTER_API_KEY, commentaar) blijven
+    ongemoeid — de schakelaar raakt alleen zijn eigen MDCONV_AI-regel aan."""
+    features = isolated_ai_env
+    path = features._env_path()
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("OPENROUTER_API_KEY=sk-or-test\n# commentaar\nMDCONV_AI=off\n")
+
+    features.set_ai_enabled(True)
+
+    content = open(path, encoding="utf-8").read()
+    assert "OPENROUTER_API_KEY=sk-or-test" in content
+    assert "# commentaar" in content
+    assert "MDCONV_AI" not in content
+
+
+def test_without_ai_the_normal_conversion_still_works():
+    from mdconv import create_app
+
+    client = create_app(ai_enabled=False).test_client()
+    r = client.post("/api/convert/text", json={"text": "Hallo wereld."})
+    assert r.status_code == 200
+    assert r.get_json()["markdown"] == "Hallo wereld.\n"
+    # Foutmeldingen blijven netjes JSON, ook nu de errorhandler app-breed is.
+    r = client.post("/api/convert/link", json={"query": ""})
+    assert r.status_code == 400
+    assert "CELEX" in r.get_json()["error"]
+
+
+def test_without_ai_config_reports_no_ai():
+    from mdconv import create_app
+
+    cfg = create_app(ai_enabled=False).test_client().get("/api/config").get_json()
+    assert cfg["ai_enabled"] is False and cfg["ai_locked"] is True
+    assert cfg["llm_available"] is False
+    assert cfg["ocr_available"] is False
+    assert cfg["models"] == [] and cfg["ocr_models"] == []
+
+
+def test_page_per_ai_mode(isolated_ai_env, monkeypatch):
+    from mdconv import create_app
+
+    locked = _page(create_app(ai_enabled=False), monkeypatch)
+    on = _page(create_app(ai_enabled=True), monkeypatch)
+    isolated_ai_env.set_ai_enabled(False)
+    switched_off = _page(create_app(ai_enabled=True), monkeypatch)
+
+    assert 'data-ai="off"' in locked and 'data-ai="on"' in on and 'data-ai="off"' in switched_off
+    for element in _AI_ELEMENTS:
+        assert element in on, element
+        assert element not in locked, element
+        assert element not in switched_off, element
+    # Vergrendeld: geen instellingen. Via de schakelaar uit: alleen de schakelaar.
+    assert 'id="open-settings"' not in locked and 'id="settings"' not in locked
+    assert 'id="open-settings"' in switched_off and 'id="settings-ai"' in switched_off
+    assert 'id="settings-ai" checked' in on and 'id="settings-ai" checked' not in switched_off
+    for html in (locked, on, switched_off):
+        for element in _BASE_ELEMENTS:
+            assert element in html, element

@@ -6,8 +6,17 @@ regeleinde-reflow van hieronder niet nodig. Heeft de PDF geen tekstlaag
 (gescand/afbeelding) of mislukt de extractie, dan valt de conversie terug op
 **MarkItDown** — dat doet evenmin OCR, maar het is het bestaande gedrag.
 
-Alle andere formaten (Word, Excel, PowerPoint, HTML, CSV, JSON, EPUB, …) gaan
-altijd via MarkItDown; pdf-inspector kent alleen PDF.
+EPUB gaat eerst door de eigen parser in `epub.py`: die zet interne links
+(tussen hoofdstukken, voetnoten, de inhoudsopgave) om in Obsidian-wikilinks
+naar de kop waar ze naar verwijzen, iets wat MarkItDown niet doet (dat laat
+zulke links als kapotte relatieve paden staan zodra de hoofdstukken worden
+samengevoegd) — geen AI nodig, puur structuur uit de EPUB zelf. Lukt dat niet
+(geen geldige/ondersteunde EPUB-structuur), dan valt de conversie terug op
+MarkItDown.
+
+Alle andere formaten (Word, Excel, PowerPoint, HTML, CSV, JSON, …) gaan altijd
+via MarkItDown; pdf-inspector en de EPUB-parser kennen alleen hun eigen
+formaat.
 
 Beide engines worden **lui** geladen: `import markitdown` kost honderden
 milliseconden en trekt een flinke afhankelijkhedenboom mee. Dat gebeurde eerder
@@ -41,7 +50,32 @@ _REFLOW_EXTENSIONS = {".pdf", ".txt"}
 _NO_TEXT_LAYER = {"scanned", "image_based"}
 
 ENGINE_PDF_INSPECTOR = "pdf-inspector"
+ENGINE_EPUB = "epub"
 ENGINE_MARKITDOWN = "MarkItDown"
+
+# Substitutieteken dat een extractie-engine invult zodra een glyph geen
+# tekstcodering (`ToUnicode`) heeft. Komt vooral voor bij typografische
+# ligaturen ("fi", "ft", "th", …) die een lettertype als één samengesteld
+# glyph opslaat zonder onderliggende letters — de PDF "weet" dan zelf niet
+# meer welke tekens het zijn, dus geen extractie-engine (pdf-inspector,
+# MarkItDown) kan dat achteraf herstellen. Zwijgend zo'n plek laten staan zou
+# een gebruiker een verkeerd citaat kunnen laten overnemen; vandaar een
+# waarschuwing boven de tekst i.p.v. stil doorlaten.
+_REPLACEMENT_CHAR = "�"
+_UNMAPPED_GLYPHS_NOTE = (
+    "*Let op: dit document bevat een of meer onleesbare tekens (`�`) op de plek van "
+    "letters die de extractie niet kon achterhalen — vaak een typografische ligatuur "
+    "(bv. \"fi\", \"ft\", \"th\") die het lettertype alleen als samengesteld glyph opslaat, "
+    "zonder tekstcodering. Controleer de gemarkeerde plekken handmatig tegen het origineel.*"
+)
+
+
+def warn_if_unmapped_glyphs(markdown: str) -> str:
+    """Zet de waarschuwing hierboven boven de tekst als er onvertaalde glyphs
+    (`�`) in staan; anders `markdown` ongewijzigd."""
+    if _REPLACEMENT_CHAR not in markdown:
+        return markdown
+    return f"{_UNMAPPED_GLYPHS_NOTE}\n\n{markdown}"
 
 _engine_lock = threading.Lock()
 _markitdown = None
@@ -71,6 +105,11 @@ def convert(data: bytes, filename: str = "") -> tuple[str, str]:
         markdown = _convert_pdf(data)
         if markdown is not None:
             return markdown, ENGINE_PDF_INSPECTOR
+
+    if ext == ".epub":
+        markdown = _convert_epub(data)
+        if markdown is not None:
+            return markdown, ENGINE_EPUB
 
     try:
         result = _markitdown_engine().convert_stream(io.BytesIO(data), file_extension=ext)
@@ -112,6 +151,16 @@ def _geen_tekstlaag(pdf_type: str) -> ConversionError:
         f"Deze PDF heeft geen tekstlaag ({pdf_type}): het is een scan of een afbeelding, en "
         "deze tool doet geen OCR. Lever een PDF met tekstlaag, of het Word-bestand of de "
         "officiële XML van dit document.")
+
+
+def _convert_epub(data: bytes) -> str | None:
+    """EPUB via de eigen parser (`epub.py`, geen AI). None betekent: geen
+    geldige/ondersteunde EPUB-structuur, val terug op MarkItDown."""
+    from . import epub
+    try:
+        return epub.convert_epub(data)
+    except Exception:  # noqa: BLE001 — onverwacht kapotte EPUB: laat MarkItDown het proberen
+        return None
 
 
 def convert_pdf_pages(data: bytes) -> list[str] | None:

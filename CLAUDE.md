@@ -4,15 +4,21 @@ Lokale web-tool (Python/Flask) die jurisprudentie, wetgeving en documenten omzet
 Markdown, met optionele AI-opschoning. Draait volledig lokaal op de Mac van de gebruiker.
 De projectmap heet nog "EUR-lex naar md" (historisch); de tool zelf heet "Markdown converter".
 
-De UI heeft vier tabbladen: **Jurisprudentie** (HvJ EU / EHRM / NL via ECLI of link),
-**Wetgeving** (EU via CELEX/ELI/link, NL via wetten.overheid.nl/BWB), **Documentupload**
+De UI heeft vijf tabbladen: **Jurisprudentie** (HvJ EU / EHRM / NL via ECLI of link),
+**Wetgeving** (EU via CELEX/ELI/link, NL via wetten.overheid.nl/BWB), **Open overheid**
+(subtabs Stukken, Consultaties en Wetgevingskalender: ophalen via id/dossiernotatie/link/D-nummer
+óf zoeken — zie `docs/bronnen/open-overheid.md`),
+**Documentupload**
 (bestand(en) slepen óf link(s) naar een bestand plakken) en **Tekst plakken** (kale of
 verrijkte tekst rechtstreeks in een `contenteditable`-vak plakken/typen). Tabs 1 en 2
-posten beide naar `/api/convert/link` (auto-detectie); tab 3 naar `/api/convert/file` of
-`/api/convert/file-url`; tab 4 naar `/api/convert/text`. Tabs 1–3 ondersteunen **meerdere
-documenten tegelijk** (zie "Meerdere documenten" hieronder); tab 4 is één plakvak per keer
-— een batch van tekstvakken past niet bij hoe je knipt-en-plakt. Bij **Wetgeving** kun je
-bovendien een hele **lijst** in één keer aanleveren (zie "Batch-import" onder Front-end).
+posten beide naar `/api/convert/link` (auto-detectie); tab Open overheid naar
+`/api/convert/overheid` (geen taalkeuze) en zoekt via `/api/search`; Documentupload naar `/api/convert/file` of
+`/api/convert/file-url` (of, met de **wiskunde-modus** aan, naar de streaming-varianten
+`/api/convert/file/ocr` resp. `/api/convert/file-url/ocr` — zie `docs/bronnen/bestanden-pdf-en-tekst.md`);
+Tekst plakken naar `/api/convert/text`. De eerste vier bronnen-tabs (Jurisprudentie, Wetgeving, Open overheid, Documentupload) ondersteunen **meerdere
+documenten tegelijk** (zie "Meerdere documenten" in `docs/frontend-en-designsysteem.md`); Tekst plakken is één plakvak per keer
+— een batch van tekstvakken past niet bij hoe je knipt-en-plakt. Bij die vier kun je
+bovendien een hele **lijst** in één keer aanleveren (zie "Batch-import" in `docs/frontend-en-designsysteem.md`).
 
 ## Starten
 
@@ -33,6 +39,8 @@ mdconv/
   api.py                   ALLE routes, dun: valideren → één domeinfunctie → JSON
   errors.py                ConversionError/ConfigError/UpstreamError (+ .status)
   net.py                   gedeelde gepoolde requests-Sessions (retries alleen op GET)
+  ocr.py                   wiskunde-modus: PDF pagina-voor-pagina door een vision-LLM
+  search.py                zoeken in Open overheid (SRU + Woo) met één uniforme resultaatvorm
   state.py                 StateFile: mtime-gecachet lezen, flock + atomair schrijven
   render.py                gedeelde HTML→markdown: tidy, koppen promoveren, marker-tabellen
   version.py               lui berekend versienummer/buildteller voor de footer
@@ -52,6 +60,12 @@ mdconv/
     docx.py                Word-bestand → raw-vorm; generieke lezer met een `Kaart` per uitgever (HUDOC = `hudoc_docx.py`), koppen uit `outlineLvl`/`Heading N`, noten native, weigert wat het niet kent
     html_document.py       HTML-pagina → raw-vorm; container `<main>` → `<article>` → `[role=main]` en weigert als dat niet eenduidig is; bewaart alleen de gekozen inhoud als bron
     officiele_bekendmakingen.py  Kamerstuk (`kst-…`) → officiële XML van KOOP + `metadata.xml`; geen XML = weigeren, nooit terugval op de PDF
+    kamerstuk.py           Open overheid: invoerherkenning (id, link, dossiernotatie, D-nummer via OData) en de PDF-terugval; de XML gaat door officiele_bekendmakingen.py
+    woo.py                 documenten van open.overheid.nl (o.a. Woo): zoek-API, bestand → markdown, relaties
+    consultatie.py         internetconsultatie.nl: consultaties, documenten, reacties, zoeken (scraping)
+    wgk.py                 wetgevingskalender.overheid.nl: regeling-XML → markdown, zoeken
+    sru.py                 SRU-client (repository.overheid.nl): zoeken, record op id, bijlagen van een stuk
+    common.py              Fetched-dataclass, bijlage()-items (linklijst), header(), slug()
     pasted_text.py         handmatig geplakte tekst (kaal of verrijkte HTML) → markdown
     pdf_images.py           losse afbeeldingen uit een PDF (pdfimages/pdfinfo, poppler)
   attachments.py            tijdelijke, token-based opslag van geëxtraheerde afbeeldingen
@@ -85,6 +99,9 @@ soort), zodat de route niets over engines of classificatie hoeft te weten.
 | **Publicatie-id** (`kst-34851-4`) of officielebekendmakingen.nl-link | Officiële Bekendmakingen (alleen Kamerstukken; XML of weigering) |
 | HUDOC-link, item-id (`001-…`), **`ECLI:CE:ECHR:…`** | HUDOC (EHRM) |
 | wetten.overheid.nl-link of **BWB-nummer** (`BWBR0040940`) | wetten.overheid.nl |
+| **`kst-…`/`ah-tk-…`/`h-tk-…`/`blg-…`-id**, officielebekendmakingen.nl- of tweedekamer.nl-link | Open overheid → `kamerstuk.py` (staat bóvenaan `detect_source`) |
+| **open.overheid.nl-link**, `ronl-…`/`oep-…`-id | Open overheid → `woo.py` (idem) |
+| **internetconsultatie.nl-link**, **`WGK…`-nummer/wetgevingskalender-link** | Open overheid → `consultatie.py` resp. `wgk.py` (idem) |
 | **`ECLI:DE:…`** (Duitse rechtspraak) | OpenLegalData (terugval: rechtsprechung-im-internet.de) |
 | **`ECLI:BE:…`** (Belgische rechtspraak) | Juportal |
 | **`ECLI:FR:CC:…`** (Conseil constitutionnel) of **`ECLI:FR:CCASS:…`** (Cour de cassation); overige FR-gerechten: nette foutmelding | conseil-constitutionnel.fr resp. Judilibre |
@@ -105,11 +122,12 @@ bron waar je aan werkt vóór je iets wijzigt, want de details zijn er met hun m
 | Rechtspraak.nl (ECLI:NL, open data) | `docs/bronnen/rechtspraak-nl.md` |
 | wetten.overheid.nl (BWB-XML) | `docs/bronnen/wetten-nl.md` |
 | Duitse, Belgische en Franse rechtspraak; ES en AT | `docs/bronnen/buitenlandse-rechtspraak.md` |
-| PDF, losse afbeeldingen (poppler), geplakte tekst | `docs/bronnen/bestanden-pdf-en-tekst.md` |
+| PDF, EPUB, losse afbeeldingen (poppler), wiskunde-modus, geplakte tekst | `docs/bronnen/bestanden-pdf-en-tekst.md` |
 | Documenten voor de kennisbank (`documenten`) | `docs/documenten-profiel.md` |
-| AI-opschoning (OpenRouter) en de instellingen | `docs/ai-opschoning-en-instellingen.md` |
+| AI-opschoning (OpenRouter), de versie zonder AI (`MDCONV_AI`) en de instellingen | `docs/ai-opschoning-en-instellingen.md` |
 | Front-end (`app.js`, `app.css`) en designsysteem | `docs/frontend-en-designsysteem.md` |
 | Meetlat voor de Formex-dekking | `docs/meetlat-formex.md` |
+| Open overheid: Kamerstukken, Woo, zoeken, consultaties, wetgevingskalender, weergave | `docs/bronnen/open-overheid.md` |
 
 Wat er per versie veranderde, staat in `CHANGELOG.md`; de datums van de meetgevallen staan in de documenten hierboven.
 Verwijzingen als "zie Front-end hieronder" in die documenten wijzen naar het document uit de tabel.
@@ -141,12 +159,14 @@ Verwijzingen als "zie Front-end hieronder" in die documenten wijzen naar het doc
   minuten op OpenRouter wacht; met alleen processen bezet zo'n verzoek een hele worker en
   staat de tool stil. `docker-compose.yml` bindt bewust op
   `127.0.0.1` — de tool heeft **geen auth**; publiek ontsluiten alleen achter reverse proxy + auth
-  (het `/api/convert/file-url`-endpoint is een SSRF-vector).
+  (`/api/convert/file-url` én `/api/convert/file-url/ocr` zijn SSRF-vectoren).
 - **poppler-utils** (apt) wordt in de Dockerfile meegeïnstalleerd voor het extraheren van
-  losse afbeeldingen (`mdconv/sources/pdf_images.py`). Lokaal (macOS via `run.sh`):
-  `brew install poppler`.
-- Env-vars via compose: `OPENROUTER_API_KEY`, `LLM_MODEL`, `OPENROUTER_BASE_URL`. Code behandelt
-  lege strings als "niet gezet" (`or DEFAULT`), zodat compose's `${VAR:-}` de defaults niet breekt.
+  losse afbeeldingen én het rasteren van pagina's voor de wiskunde-modus
+  (`mdconv/sources/pdf_images.py` — `pdfimages`/`pdfinfo`/`pdftoppm`). Lokaal (macOS via
+  `run.sh`): `brew install poppler`.
+- Env-vars via compose: `OPENROUTER_API_KEY`, `LLM_MODEL`, `OPENROUTER_BASE_URL`, `OCR_MODEL`,
+  `OCR_DPI`, `MDCONV_AI` (zie "Versie zonder AI"). Code behandelt lege strings als "niet gezet" (`or DEFAULT`), zodat compose's
+  `${VAR:-}` de defaults niet breekt.
 
 ## Versienummer (footer) — git-onafhankelijk
 - `VERSION`-bestand = handmatige major.minor.patch. Build-nummer + installatiedatum komen
@@ -162,9 +182,18 @@ Verwijzingen als "zie Front-end hieronder" in die documenten wijzen naar het doc
 - `state.StateFile.write()` schrijft atomair (tmp + `os.replace`) en vergrendelt met
   `fcntl.flock`, zodat meerdere gunicorn-workers de teller niet dubbel ophogen en een half
   weggeschreven bestand nooit als geldige staat gelezen kan worden.
+- **`installed_at` staat vast op Europe/Amsterdam** (`datetime.now(_TZ)`, `_TZ =
+  ZoneInfo("Europe/Amsterdam")`), niet op de tijdzone van de host. Een kale
+  `datetime.now()` gaf op een server die zonder eigen `TZ`-instelling draait (de standaard
+  in Docker: UTC) twee uur het verkeerde tijdstip. `tzdata` (requirements.txt) levert de
+  tijdzonedatabase zelf mee, want een minimale Docker-image (`python:3.13-slim`) heeft
+  `/usr/share/zoneinfo` niet per se aan boord — zonder die dependency zou `ZoneInfo(...)`
+  daar een `ZoneInfoNotFoundError` geven in plaats van gewoon te werken.
 
 ## Tests
-`.venv/bin/python -m pytest tests/ -q` — 502 karakteriseringstests die het gedrag
+`.venv/bin/python -m pytest tests/ -q` — TESTAANTAL tests (`tests/test_kamerstuk.py`, `test_open_overheid.py` en
+`test_consultatie_wgk.py` zijn de Open-overheid-bronnen, het zoeken en de weergave; `test_kb_route_streng.py` de drie
+besluiten van WP-77; de rest karakteriseringstests) die het gedrag
 vastleggen in plaats van het te beschrijven: `detect_source`-precedentie, ELI→CELEX,
 de CLG-markupnormalisatie (lidnummers, lettermarkers, voetnootankers), de
 voetnootdefinities die met de preambule meereizen, de notitievorm die een intakepoort
@@ -173,10 +202,15 @@ terugvalpaden als dat niet lukt), de versie-terugvalladder (nieuwste versie op o
 gevraagde datum, nooit een latere, en een notitie die niet beweert dat een bestaande versie
 niet bestaat), de chunking-ladder (ook zonder witregels en met één te
 lang woord), de PDF-reflow, de losse Formex-parser en de Cellar-Formex-route (inclusief
-bronbytes, manifestidentiteit en fail-closed tabellen), de settings-semantiek (leeg wist terug naar
-standaard), de batch-zip (eigen naam en eigen `attachments/`-map per document) en de
-Nederlandse foutmeldingen. Twee tests pinnen de front-end vast waar Python niet bij de
-JS kan: de id's die `app.js` per conventie opbouwt (`#bulk-wet-text` enz.) moeten in
+bronbytes, manifestidentiteit en fail-closed tabellen), de EPUB-parser (koppen (échte tags én
+koppromotie op CSS-typografie voor EPUB's zonder kop-tags), interne links → wikilinks met
+de juiste terugvallen, de nav/inhoudsopgave overslaan, afbeeldingen weglaten, en de
+terugval naar MarkItDown bij een ongeldige structuur), de settings-semantiek (leeg wist terug naar
+standaard), de batch-zip (eigen naam en eigen `attachments/`-map per document), de wiskunde-modus
+(paginasortering + paginagrens bij het rasteren, de stream-orchestratie: `\n\n`-join, voortgang per
+pagina, opgeteld tokengebruik, stil annuleren, en de streaming-endpoint) en de
+Nederlandse foutmeldingen. Enkele tests pinnen de front-end vast waar Python niet bij de
+JS kan: de id's die `app.js` per conventie opbouwt (`#bulk-<kind>-text`, `#ocr-mode` enz.) moeten in
 `index.html` bestaan, en het CELEX-patroon mag maar één keer in `app.js` voorkomen. Ze raken geen netwerk. Verander je de structuur, dan hoeven alleen de
 imports mee te verhuizen; blijft de suite groen, dan is het gedrag identiek.
 

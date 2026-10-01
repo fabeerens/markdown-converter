@@ -43,6 +43,7 @@ requests==2.34.2
 six==1.17.0
 soupsieve==2.9.2
 typing_extensions==4.16.0
+tzdata==2026.4
 urllib3==2.7.0
 Werkzeug==3.1.8
 xlsxwriter==3.2.9

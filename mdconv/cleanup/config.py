@@ -75,6 +75,25 @@ DEFAULT_MODEL_CHOICES = [
      "label": "GPT-OSS 120B (nitro) — $0,036 / $0,18 per 1M", "chunk_tokens": None},
 ]
 
+# Modellen voor de wiskunde-modus (`mdconv/ocr.py`): één gerenderde PDF-pagina →
+# Markdown. Moeten **multimodaal** zijn (accepteren `image_url`-content), anders
+# geeft OpenRouter een 400. Geen `chunk_tokens` — er wordt niet gesplitst, één
+# verzoek per pagina. De gebruiker kan deze lijst in het instellingenpaneel
+# aanpassen (zelfde "leeg = standaard"-semantiek als `models`).
+DEFAULT_OCR_MODEL = "qwen/qwen3.7-flash"
+DEFAULT_OCR_MODELS = [
+    {"id": "qwen/qwen3.7-flash", "label": "Qwen3.7 Flash — snel en goedkoop"},
+    {"id": "openai/gpt-5.6-luna-pro", "label": "GPT-5.6 Luna Pro — hoogste kwaliteit"},
+]
+
+# Hoeveel PDF-pagina's in één vision-verzoek gaan. Meer = minder round-trips en
+# minder rate-limit-druk, maar het uitvoerplafond van het model begrenst het:
+# bij te veel pagina's raakt het antwoord afgekapt. Een paar van deze verzoeken
+# lopen parallel (`_MAX_PARALLEL_BATCHES` in `mdconv/ocr.py`).
+DEFAULT_OCR_PAGES_PER_REQUEST = 5
+MIN_OCR_PAGES_PER_REQUEST = 1
+MAX_OCR_PAGES_PER_REQUEST = 20
+
 _store = StateFile("settings.json")
 
 
@@ -118,6 +137,53 @@ def get_model_choices() -> list[dict]:
 
 def valid_model_ids() -> set[str]:
     return {m["id"] for m in get_model_choices()}
+
+
+def _clean_ocr_models(value) -> list[dict]:
+    """Als `_clean_models`, maar zonder `chunk_tokens` — de wiskunde-modus
+    splitst niet."""
+    if not isinstance(value, list):
+        return []
+    return [
+        {"id": str(m.get("id", "")).strip(), "label": str(m.get("label", "")).strip()}
+        for m in value
+        if isinstance(m, dict) and str(m.get("id", "")).strip()
+    ]
+
+
+def get_ocr_models() -> list[dict]:
+    return _clean_ocr_models(_stored().get("ocr_models")) or DEFAULT_OCR_MODELS
+
+
+def valid_ocr_model_ids() -> set[str]:
+    return {m["id"] for m in get_ocr_models()}
+
+
+def resolve_ocr_model(override: str | None = None) -> str:
+    """Het te gebruiken wiskunde-modus-model: keuze uit de UI (moet in de
+    geconfigureerde lijst staan), anders `OCR_MODEL`, anders de standaard."""
+    if override and override in valid_ocr_model_ids():
+        return override
+    return os.environ.get("OCR_MODEL") or DEFAULT_OCR_MODEL
+
+
+def get_ocr_prompt() -> str:
+    """De systeemprompt voor de wiskunde-modus: eigen tekst, anders de standaard."""
+    stored = _stored().get("ocr_prompt")
+    if isinstance(stored, str) and stored.strip():
+        return stored
+    return prompts.OCR
+
+
+def get_ocr_pages_per_request() -> int:
+    """Pagina's per vision-verzoek: eigen waarde binnen de grenzen, anders de standaard."""
+    try:
+        n = int(_stored().get("ocr_pages_per_request"))
+    except (TypeError, ValueError):
+        return DEFAULT_OCR_PAGES_PER_REQUEST
+    if MIN_OCR_PAGES_PER_REQUEST <= n <= MAX_OCR_PAGES_PER_REQUEST:
+        return n
+    return DEFAULT_OCR_PAGES_PER_REQUEST
 
 
 def get_chunk_tokens(model: str | None = None) -> int:
@@ -188,15 +254,23 @@ def settings_payload() -> dict:
     Geen los `chunk_tokens`-veld meer: dat staat nu per item in `models`
     (zie `_clean_models`). `min_chunk_tokens`/`max_chunk_tokens` blijven wél
     top-level — dat zijn de grenzen die voor élk endpoint gelden, voor de
-    validatie van het invoerveld per rij.
+    validatie van het invoerveld per rij. Geen `ai_enabled` hier: die
+    schakelaar schrijft rechtstreeks in `.env`, niet in dit bestand — zie
+    `mdconv/features.py` en `api.get_settings()`/`post_settings()`.
     """
     return {
         "models": get_model_choices(),
+        "ocr_models": get_ocr_models(),
+        "ocr_pages_per_request": get_ocr_pages_per_request(),
         "prompts": {p: get_prompt(p) for p in prompts.PROFILES},
+        "ocr_prompt": get_ocr_prompt(),
         "defaults": {
             "models": DEFAULT_MODEL_CHOICES,
+            "ocr_models": DEFAULT_OCR_MODELS,
+            "ocr_pages_per_request": DEFAULT_OCR_PAGES_PER_REQUEST,
             "chunk_tokens": DEFAULT_CHUNK_TOKENS,
             "prompts": dict(prompts.DEFAULTS),
+            "ocr_prompt": prompts.OCR,
             "min_chunk_tokens": MIN_CHUNK_TOKENS,
             "max_chunk_tokens": MAX_CHUNK_TOKENS,
         },
@@ -219,6 +293,30 @@ def update_settings(payload: dict) -> dict:
                 data["models"] = cleaned
             else:
                 data.pop("models", None)
+
+        if "ocr_models" in payload:
+            cleaned = _clean_ocr_models(payload["ocr_models"])
+            if cleaned:
+                data["ocr_models"] = cleaned
+            else:
+                data.pop("ocr_models", None)
+
+        if "ocr_prompt" in payload:
+            text = payload["ocr_prompt"]
+            if isinstance(text, str) and text.strip():
+                data["ocr_prompt"] = text
+            else:
+                data.pop("ocr_prompt", None)
+
+        if "ocr_pages_per_request" in payload:
+            try:
+                n = int(payload["ocr_pages_per_request"])
+            except (TypeError, ValueError):
+                n = None
+            if n is not None and MIN_OCR_PAGES_PER_REQUEST <= n <= MAX_OCR_PAGES_PER_REQUEST:
+                data["ocr_pages_per_request"] = n
+            else:
+                data.pop("ocr_pages_per_request", None)
 
         if isinstance(payload.get("prompts"), dict):
             stored = dict(data.get("prompts") or {})

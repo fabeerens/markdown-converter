@@ -17,8 +17,16 @@ import hashlib
 import os
 import threading
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from .state import StateFile, base_dir
+
+# "geïnstalleerd op" is voor de gebruiker (Lex Digitalis, Nederland) — vast op
+# Amsterdamse tijd, niet de tijdzone van de host. Zonder dit staat een
+# Docker-container (die zonder eigen TZ-instelling in UTC draait) er twee uur
+# naast in de winter en zomer. `tzdata` (requirements.txt) levert de
+# tijdzonedatabase zelf aan, voor het geval het image die niet al heeft.
+_TZ = ZoneInfo("Europe/Amsterdam")
 
 # Bestanden die het gedrag van de app bepalen. Wijzigt hier iets, dan is dat
 # "een nieuwe versie".
@@ -81,7 +89,7 @@ def _resolve() -> tuple[str, int, str]:
         state = {
             "fingerprint": fingerprint,
             "build": int(state.get("build", 0)) + 1,
-            "installed_at": datetime.now().strftime("%d-%m-%Y %H:%M"),
+            "installed_at": datetime.now(_TZ).strftime("%d-%m-%Y %H:%M"),
         }
         # StateFile vergrendelt met flock, zodat twee gunicorn-workers die
         # tegelijk opstarten de teller niet dubbel ophogen.

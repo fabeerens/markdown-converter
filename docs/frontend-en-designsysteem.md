@@ -29,10 +29,13 @@ document zelf stonden en uit elkaar liepen bij het wisselen van tabblad.
     ophalen niet meespringt met elk document dat binnenkomt (dat volgde de
     afrondingsvolgorde); pas `finishBatch()` opent het eerste document van de lijst. De
     tab verschijnt wél meteen (`renderDocTabs()`), zodat je de lijst ziet vollopen.
-- **Batch-import: een lijst aanleveren** (Wetgeving en Jurisprudentie; `LIST_PASTE_KINDS`
-  plus een `initListMode(kind)`-aanroep en de `#bulk-<kind>-*`-id's in `index.html` zijn
-  de plekken om dat uit te breiden — `test_list_paste_kinds_match_initialised_list_modes`
-  bewaakt dat ze gelijk blijven). Twee wegen naar dezelfde lijst:
+- **Batch-import: een lijst aanleveren** (Jurisprudentie, Wetgeving, Open overheid en Documentupload;
+  `LIST_PASTE_KINDS` plus een `initListMode(kind)`-aanroep en de `.seg`/`.bulk`-markup met de
+  `#bulk-<kind>-*`-id's in `index.html` zijn de plekken om dat uit te breiden —
+  `test_list_paste_kinds_match_initialised_list_modes` bewaakt dat ze gelijk blijven).
+  Documentupload ("doc") en Open overheid ("oo") hebben **geen taalkeuze** voor de lijst —
+  `#bulk-doc-lang` bestaat niet en de list-mode-helpers (`switchListMode`/`initListMode`/`readInput`)
+  gaan daar met een `?`-guard omheen. Twee wegen naar dezelfde lijst:
   - **Plakken splitst zich uit over de rijen.** Plak je meerdere regels in één
     invoerveld, dan vult regel 1 dat veld en verschijnt er voor elke volgende regel een
     nieuwe rij (`spreadList()`), met de taalkeuze van de rij waarin je plakte. Alleen bij
@@ -43,7 +46,7 @@ document zelf stonden en uit elkaar liepen bij het wisselen van tabblad.
     taalkeuze voor de hele lijst. Rijen en tekstvak zijn **twee weergaven van dezelfde
     lijst**: `switchListMode()` neemt de inhoud mee in beide richtingen, zodat je nooit
     werk kwijt bent en "Ophalen" altijd leest wat je op dat moment ziet. De gekozen
-    weergave blijft bewaard in `localStorage` (`listMode:wet` / `listMode:jur`). Enter maakt in een
+    weergave blijft bewaard in `localStorage` (`listMode:<kind>` / `listMode:jur`). Enter maakt in een
     tekstvak een regel, dus **Cmd/Ctrl+Enter** haalt op.
   - **De parser is vergevingsgezind maar voorspelbaar** (`parseList()`/
     `pickIdentifier()`), per regel in deze volgorde: een URL in de regel (dus een
@@ -73,6 +76,16 @@ document zelf stonden en uit elkaar liepen bij het wisselen van tabblad.
   `-2`-suffix (`_unique_name()`), anders zou het tweede het eerste overschrijven en was
   dat document stil verdwenen. `saveDownload()` is de gedeelde helper van
   `downloadActive()` en `downloadAll()`.
+- **Wiskunde-modus** (`#ocr-mode`-checkbox + `#ocr-model`-keuze bij Documentupload, alleen
+  zichtbaar bij `llm_available && ocr_available`): `uploadFiles()`/`fetchFileUrls()`
+  vertakken bij `ocrModeRequested()` naar `runOcr()`. Die verwerkt PDF's **ná elkaar** (niet
+  de 4-brede `runBatch`-pool — elke PDF is al N vision-verzoeken) via `streamOnePdf()`, dat
+  `runClean()` spiegelt: het document wordt **eerst leeg aangemaakt** (`addDoc({markdown:
+  "", activate: true})`) en loopt al streamend vol, met dezelfde `activeCleans`-Map,
+  `#cancel-clean`-knop, `makeStreamParser` en `setProgress` als het opschonen. De
+  bronvermelding (`wiskunde-OCR (<model>) • <naam>`) bouwt de front-end zelf op. Bij
+  annuleren blijft de tekst-tot-dan staan; komt er niets bruikbaars binnen, dan wordt het
+  lege tabblad weer opgeruimd (`closeDoc`).
 - **State per document**: `{id, title, filenameBase, source, kind, allowObsidian,
   obsidian, model, markdown, cleaned}` in `state.docs`. `obsidian`/`model` zijn **per
   document**, dus je kunt het ene document als Obsidian-notitie opschonen en het andere
@@ -109,17 +122,20 @@ document zelf stonden en uit elkaar liepen bij het wisselen van tabblad.
 De opmaak is **"liquid glass"**: het navigatie-chrome (kop, tabbalk, dialoog,
 statusregel, opschoonpaneel, documentchips, sleepzone) is vertaald glas —
 `backdrop-filter` + een lichtrand boven + een zachte specular highlight —
-dat drijft over een zacht gekleurde achtergrondgloed (`body::before`, drie
-vaste `radial-gradient`-vlekken). Het onderliggende kleurenpalet blijft de
-12-stapsschaal van Radix Themes, met de hand in platte CSS (geen React/npm),
+dat over de gewone paginakleur drijft (géén achtergrondgloed — die
+kleurige `body::before`-vlekken zijn op verzoek verwijderd; de pagina is nu
+gewoon `--bg`, en het glas vertaalt daardoor vooral de inhoud die er onder
+zit). Het onderliggende kleurenpalet blijft de 12-stapsschaal van Radix
+Themes, met de hand in platte CSS (geen React/npm),
 met de vaste betekenis per stap: 1 paginablad · 2 subtiel blad · 3 vulling ·
 4 hover · 5 actief · 6 zachte rand · 7 rand/ring · 8 hover-rand **en de
 focusring** · 9 volvlak · 10 volvlak-hover · 11 secundaire tekst ·
 12 primaire tekst.
 
 **Glas versus vlak — nooit stapelen.** De `.glass`-klasse (blur + lichtrand +
-specular-`::before`) staat alleen op drijvend chrome dat direct op de gloed
-zit. Inhoudspanelen (`.card`, invoervelden, de editor) blijven bewust
+specular-`::before`) staat alleen op drijvend chrome (kop, tabbalk, dialoog,
+statusregel, opschoonpaneel, documentchips, sleepzone). Inhoudspanelen
+(`.card`, invoervelden, de editor) blijven bewust
 **ondoorzichtig**: twee doorzichtige lagen op elkaar (bv. een glazen knop
 binnen een al glazen dialoog) laat de leesbaarheid instorten — exact de
 reden dat knoppen zelf geen `backdrop-filter` hebben, alleen een niet-
@@ -137,19 +153,70 @@ het geselecteerde tabblad en zet dat om in een `transform: translateX()` +
 `width` op de indicator — compositor-vriendelijk, werkt vanzelf mee bij elke
 schermbreedte.
 
-Dark/light volgt `prefers-color-scheme`; er is bewust **geen** knop. Drie dingen
-kantelen van betekenis tussen de modi — zonder die omkering leest het niet als Radix:
-
-1. Een paneel is in donker **lichter** dan de pagina (`--gray-2` op `--gray-1`), in licht
-   wit-op-wit met alleen een haarlijn.
-2. Een invoerveld is in licht een translucent **wit** (opgetild vlak) en in donker een
-   translucent **zwart** (verzonken vlak).
-3. Stap 9 is identiek in beide modi, maar stap 10 beweegt tegengesteld (donkerder in
-   licht, lichter in donker) — daardoor werkt "hover = stap 10" zonder conditionele CSS.
+**Kleuren: huisstijl van Lex Digitalis** (lexdigitalis.nl, afgelezen uit hun eigen
+CSS-variabelen `--bs-primary`/`--bs-secondary`/`--wp--preset--color--*`). **Alleen licht** —
+de donkere modus is op verzoek verwijderd; ook bij een donker systeemthema blijft de pagina
+licht. De accentschaal (stap 1–12) is opgebouwd rond hun indigo **`#191585`** (stap 9, en
+`#14116a` = hun eigen hover = stap 10), met hun helderblauw **`#4271ff`** als stap 8 en dus
+als focusring. Oranje **`#f9a935`** (`--orange-9`) is het tweede accent: de hover van de
+hoofdknoppen en de voortgangsbalk. **Hoofdknoppen** (`.btn-solid`) zijn indigo met witte
+tekst en worden bij hover oranje met witte tekst — uitdrukkelijke wens van de gebruiker, net
+als op hun site (wit op oranje haalt maar ~2:1 contrast; bewust zo gekozen, niet
+"corrigeren"). **Het kopvlak** (`.app-header.glass`) is het indigo→blauw-verloop van hun hero
+met witte titel/ondertitel/⚙; twee classes zodat het de glas-achtergrond van `.glass`
+verslaat. De pagina is `#f5f8fb` (lichter dan hun `#edf3f7`).
+**Diagonale hoeken**: vlakken zijn alleen **linksboven en rechtsonder** afgerond, de andere
+twee hoeken recht (`--diag-3`/`--diag-4`/`--diag-5` = `R 0 R 0`). Geldt voor kop, tabbalk,
+kaarten, statusregel, opschoonpaneel, sleepzone, plakvak, lijst-tekstvak, editor en dialoog;
+de gutter heeft alleen linksboven. **Nooit op knoppen** — uitdrukkelijke wens van de
+gebruiker: `.btn` blijft pil, en dus ook de vier tab-knoppen (Jurisprudentie/Wetgeving/
+Documentupload/Tekst plakken, `.tab`) én de schuivende `.tabs-indicator` erachter, die de
+vorm van die knoppen volgt. Alleen de omringende `.tabs`-balk zelf is een vlak en dus
+diagonaal. Invoervelden, selects en documentchips blijven ook bewust pil/klein-rond — het is
+een vlakkenstijl, geen knoppenstijl. Lettertype: `Ubuntu` voorop in
+`--font-sans`, bewust **niet** van Google Fonts geladen (lokale tool, geen externe verzoeken)
+— alleen wie het geïnstalleerd heeft krijgt het.
 
 **Toegankelijkheid is geen ander thema, maar dezelfde schakelaar.**
 `prefers-reduced-transparency: reduce` maakt elk `.glass`-element ondoorzichtig
-(geen blur, geen specular) en verbergt de achtergrondgloed helemaal — die
-bestaat immers alleen om door glas heen gezien te worden. `prefers-reduced-
-motion: reduce` zet alle transitie-/animatieduur op nagenoeg 0 (één globale
-regel), inclusief de vloeiende tabbalk-indicator.
+(geen blur, geen specular). Ook de blur op `.overlay` (zie hieronder) gaat er
+dan uit. `prefers-reduced-motion: reduce`
+zet alle transitie-/animatieduur op nagenoeg 0 (één globale regel), inclusief
+de vloeiende tabbalk-indicator en de specular-highlight hieronder.
+
+**Specular highlight die de cursor volgt** (de Apple-Liquid-Glass-verversing,
+macOS/iOS 26): op een scherm is er geen kijkhoek zoals bij een fysieke lens,
+maar de cursor is de dichtstbijzijnde analogie. `--mx`/`--my` zijn met
+`@property` als `<percentage>` geregistreerd (dus animeerbaar — een gewone
+custom property springt instant, deze glijdt mee dankzij `transition: --mx …`
+op `.glass` zelf); `initGlassSpecular()` in `app.js` zet ze als inline style
+op elk `.glass`-element bij `pointermove`, en `.glass::before` tekent daar een
+radiale highlight op (`radial-gradient(640px circle at var(--mx, 30%)
+var(--my, 10%), …)`). Zonder muis — aanraakscherm (`hover: hover` faalt),
+toetsenbord, of `prefers-reduced-motion` — blijft de `initial-value`
+(30%, 10%, ongeveer de oude vaste linksboven-highlight) gewoon staan: dit is
+verrijking, geen vereiste, en breekt nergens iets af.
+Bewust **niet** de WebGL/canvas-refractie-met-chromatic-aberration-aanpak van
+bv. `liquid-glass-react` gekopieerd: die tekent zelf pas iets in Chromium en
+laat Safari/Firefox leeg (bevestigd in die library's eigen documentatie) —
+voor een eenpersoons-lokale-tool zonder build-stap een te zware, te breekbare
+afhankelijkheid voor een puur cosmetisch effect.
+
+**De kop zweeft** (`position: sticky`, i.p.v. gewoon meescrollen): een
+Liquid-Glass-navigatiebalk blijft zichtbaar boven de inhoud die erdoorheen
+scrolt. `initHeaderElevation()` zet `.is-scrolled` zodra `window.scrollY > 4`
+— die class heeft een hogere specificiteit dan `.glass` alleen (twee classes
+i.p.v. één), dus de iets diepere schaduw daarin wint zonder `!important`.
+
+**`.overlay` (de instellingendialoog) vervaagt de inhoud erachter** i.p.v.
+'m alleen te verduisteren (`backdrop-filter: blur(6px) saturate(140%)`) —
+zoals een iOS-sheet, om duidelijker te maken dat de dialoog er letterlijk
+"boven" ligt. Gaat uit onder `prefers-reduced-transparency`, net als `.glass`.
+
+**Iets scherper en meer verzadigd dan de vorige "frosted glass"-versie**:
+`--glass-blur` ging van 24px naar 20px en `saturate()` van 180% naar 200%
+(plus een vaste `contrast(105%)`) — Liquid Glass blurt minder en laat de
+kleur van wat erachter zit sterker doorschijnen. Elk `.glass`-element kreeg
+ook een tweede, donkerdere randlijn onderaan (`--glass-rim-bottom`, naast de
+bestaande lichte `--glass-rim-top`) voor het gevoel van een materiaal met
+enige dikte, niet een plat vlak met alleen een hoogtelicht.
