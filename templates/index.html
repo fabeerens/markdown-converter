@@ -150,16 +150,17 @@
                        placeholder="Zoekterm, dossiernummer (36600-VII) of onderwerp">
               </div>
               <select class="select" id="oo-scope" aria-label="Waarin zoeken">
-                <option value="pub">Parlementaire stukken</option>
-                <option value="woo">Woo-documenten</option>
+                <option value="alles">Alles — parlementaire stukken + Woo</option>
+                <option value="pub">Alleen parlementaire stukken</option>
+                <option value="woo">Alleen Woo-documenten</option>
               </select>
               <button type="submit" class="btn btn-solid" id="oo-go">Zoeken</button>
             </div>
             <div class="row filters">
               <select class="select" id="oo-soort" aria-label="Soort"></select>
               <select class="select" id="oo-sort" aria-label="Sorteren">
-                <option value="relevantie">Meest relevant</option>
                 <option value="nieuwste">Nieuwste eerst</option>
+                <option value="relevantie">Meest relevant</option>
                 <option value="oudste">Oudste eerst</option>
               </select>
               <label class="date-field"><span>Vanaf</span>
@@ -180,11 +181,12 @@
           </div>
         </div>
         <p class="hint">
-          <strong>Parlementaire stukken</strong> (kamerstukken, Kamervragen, Handelingen) worden
-          doorzocht in de volledige tekst via de zoekdienst van overheid.nl; een dossiernummer als
-          <code>36600-VII</code> geeft alle stukken van dat dossier.
-          <strong>Woo-documenten</strong> komen uit open.overheid.nl (Woo-besluiten, adviezen,
-          beslisnota's, Kamerbrieven en meer; zoeken op volledige tekst).
+          <strong>Alles</strong> doorzoekt twee bronnen tegelijk en toont één lijst, op datum:
+          <strong>parlementaire stukken</strong> (kamerstukken, Kamervragen, Handelingen; zoekdienst
+          van overheid.nl; een dossiernummer als <code>36600-VII</code> geeft alle stukken van dat
+          dossier) en <strong>Woo-documenten</strong> van open.overheid.nl (Woo-besluiten, adviezen,
+          beslisnota's, Kamerbrieven en meer). Staat hetzelfde stuk in beide, dan komt het één keer
+          voor. Kies één bron om op soort te filteren.
         </p>
       </div>
     </section>

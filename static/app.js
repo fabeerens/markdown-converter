@@ -66,7 +66,7 @@ const RE_CELEX = /[0-9][0-9]{4}[A-Z]{1,2}[0-9]{2,4}(?:-[0-9]{8})?/i;
 const RE_HUDOC = /\b00\d-\d{3,}\b/;
 // Open overheid: publicatie-id's (kst-…, ah-tk-…, blg-…), het D-nummer van de
 // Tweede Kamer en de id's van open.overheid.nl (UUID, ronl-…, oep-…).
-const RE_KSTID = /\b(?:(?:kst|ah-tk|ah-ek|h-tk|h-ek)-[0-9A-Za-z]+(?:-[0-9A-Za-z]+)+|(?:blg|ah)-\d{4,}|(?:ronl|oep)-[0-9a-z-]+)\b/i;
+const RE_KSTID = /\b(?:(?:kst|ah-tk|ah-ek|h-tk|h-ek)-[0-9A-Za-z]+(?:-[0-9A-Za-z]+)+|(?:blg|ah)-\d{4,}|kst-\d{6,}|(?:ronl|oep)-[0-9a-z-]+)\b/i;
 const RE_UUID = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?:_\d+)?\b/i;
 const RE_DNUM = /\b\d{4}D\d{3,6}\b/i;
 
@@ -760,9 +760,13 @@ function renderBijlagen() {
 
 const oo = {
   mode: "fetch",            // "fetch" | "search"
-  scope: "pub",             // "pub" (SRU) | "woo" (open.overheid.nl)
-  q: "", soort: "", sort: "relevantie", van: "", tot: "",
+  scope: "alles",           // "alles" (beide samengevoegd) | "pub" (SRU) | "woo" (open.overheid.nl)
+  q: "", soort: "", sort: "nieuwste", van: "", tot: "",
   start: 0, n: 20, total: 0,
+  /** Hoe diep er te bladeren valt (bij "alles" begrensd), en de totalen per bron. */
+  limit: 0, totals: null,
+  /** Gezet als de zoekterm een dossiernummer was: dan is het resultaat het hele dossier. */
+  dossier: "",
   results: [], selected: new Set(),
   soorten: { pub: [], woo: [] },
   loading: false, searched: false,
@@ -788,7 +792,7 @@ function renderOO() {
   const soort = $("#oo-soort");
   const options = oo.scope === "woo"
     ? [{ key: "", label: "Alle soorten" }, ...oo.soorten.woo]
-    : oo.soorten.pub;
+    : oo.scope === "pub" ? oo.soorten.pub : [];
   soort.replaceChildren(
     ...options.map((o) => {
       const opt = document.createElement("option");
@@ -798,7 +802,9 @@ function renderOO() {
     })
   );
   soort.value = options.some((o) => o.key === oo.soort) ? oo.soort : options[0]?.key ?? "";
-  oo.soort = soort.value;
+  oo.soort = oo.scope === "alles" ? "" : soort.value;
+  // Soorten verschillen per bron; bij "alles" is er dus geen soortfilter.
+  soort.hidden = oo.scope === "alles";
   $("#oo-go").disabled = oo.loading;
   renderResults();
 }
@@ -821,8 +827,12 @@ function renderResults() {
 
   const from = oo.start + 1;
   const to = oo.start + oo.results.length;
-  $("#oo-count").textContent =
-    `${oo.total.toLocaleString("nl-NL")} resultaten — ${from}–${to} getoond`;
+  const split = oo.totals
+    ? ` (publicaties ${oo.totals.pub?.toLocaleString("nl-NL") ?? "–"} · Woo ${oo.totals.woo?.toLocaleString("nl-NL") ?? "–"})`
+    : "";
+  $("#oo-count").textContent = oo.dossier
+    ? `Dossier ${oo.dossier} — ${oo.total.toLocaleString("nl-NL")} stukken, oudste eerst — ${from}–${to} getoond`
+    : `${oo.total.toLocaleString("nl-NL")} resultaten${split} — ${from}–${to} getoond`;
   const allSelected = oo.results.every((r) => oo.selected.has(r.id));
   $("#oo-select-all").checked = allSelected;
   const nSel = oo.selected.size;
@@ -830,9 +840,10 @@ function renderResults() {
   fetchSel.disabled = nSel === 0;
   fetchSel.textContent = nSel ? `Geselecteerde ophalen (${nSel})` : "Geselecteerde ophalen";
   $("#oo-prev").disabled = oo.loading || oo.start === 0;
-  $("#oo-next").disabled = oo.loading || oo.start + oo.n >= oo.total;
+  const reach = oo.limit || oo.total;
+  $("#oo-next").disabled = oo.loading || oo.start + oo.n >= reach;
   $("#oo-page").textContent =
-    `Pagina ${Math.floor(oo.start / oo.n) + 1} van ${Math.max(1, Math.ceil(oo.total / oo.n))}`;
+    `Pagina ${Math.floor(oo.start / oo.n) + 1} van ${Math.max(1, Math.ceil(reach / oo.n))}`;
 
   list.replaceChildren(
     ...oo.results.map((r) => {
@@ -859,6 +870,20 @@ function renderResults() {
       title.textContent = r.titel;
       const meta = document.createElement("div");
       meta.className = "result-meta";
+      // Bij "alles" staat het meteen bij elk resultaat uit welke bron het komt.
+      if (oo.scope === "alles") {
+        const bron = document.createElement("span");
+        bron.className = `chip chip-${r.bronsoort}`;
+        bron.textContent = r.bronsoort === "woo" ? "Woo" : "Officiële publicatie";
+        meta.appendChild(bron);
+        if (r.ook_woo) {
+          const ook = document.createElement("span");
+          ook.className = "chip chip-woo";
+          ook.title = "Dit stuk staat ook bij open.overheid.nl (Woo)";
+          ook.textContent = "ook Woo";
+          meta.appendChild(ook);
+        }
+      }
       if (r.soort) {
         const chip = document.createElement("span");
         chip.className = "chip";
@@ -896,6 +921,9 @@ async function runSearch(start = 0) {
     setStatus("De begindatum ligt na de einddatum.", "err");
     return;
   }
+  // Een nieuwe zoekopdracht begint weer met de gewone paginagrootte; een dossier-
+  // antwoord zet 'm zo nodig hoger (en blijft dan gelden voor de volgende pagina's).
+  if (start === 0) oo.n = 20;
   oo.start = start;
   oo.loading = true;
   const token = ++oo.token;
@@ -904,20 +932,29 @@ async function runSearch(start = 0) {
     scope: oo.scope, q: oo.q, soort: oo.soort, sort: oo.sort,
     van: oo.van, tot: oo.tot, start: String(start), n: String(oo.n),
   });
+
   setStatus("Zoeken…", "info", { busy: true });
   try {
     const data = await api(`/api/search?${params}`);
     if (token !== oo.token) return;           // een nieuwere zoekopdracht is al onderweg
     oo.results = data.results;
     oo.total = data.total;
+    oo.limit = data.limit ?? data.total;
+    oo.totals = data.totals || null;
+    oo.dossier = data.dossier || "";
+    oo.n = data.n || oo.n;            // een dossier komt in grotere pagina's
     oo.searched = true;
-    oo.soorten[data.scope] = data.soorten.filter((o) => o.key !== "");
-    // Bij pub zit "alles" al in de lijst; bij woo is "Alle soorten" de vaste eerste.
-    clearStatus();
+    if (data.scope !== "alles") oo.soorten[data.scope] = data.soorten.filter((o) => o.key !== "");
+    // Eén bron die uitvalt mag de andere niet verbergen: tonen, maar wel melden.
+    if (data.waarschuwing) setStatus(data.waarschuwing, "info");
+    else clearStatus();
   } catch (e) {
     if (token !== oo.token) return;
     oo.results = [];
     oo.total = 0;
+    oo.limit = 0;
+    oo.totals = null;
+    oo.dossier = "";
     oo.searched = false;
     setStatus(e.message, "err");
   } finally {

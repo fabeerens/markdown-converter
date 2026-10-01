@@ -60,10 +60,12 @@ _MAX_IMAGE_TOTAL = 50 * 1024 * 1024
 # --------------------------------------------------------------------------
 
 # De publicatiefamilies die dezelfde XML-structuur delen en hier bedoeld zijn.
-# Daarnaast de nieuwe, niet-gestructureerde vormen: `blg-1184123` (bijlage) en
-# `ah-1271549` (aanhangsel dat alleen als PDF is gepubliceerd).
+# Daarnaast de nieuwe, niet-gestructureerde vormen: `blg-1184123` (bijlage),
+# `ah-1271549` (aanhangsel) en `kst-1268678` (kamerstuk zonder dossiernummer in het
+# id) — alleen als PDF gepubliceerd. Die laatste moet vóór de dossiernotatie
+# herkend worden, anders leest "kst-1268678" als dossier 12686, nr. 78.
 _ID_RE = re.compile(
-    r"\b((?:kst|ah-tk|ah-ek|h-tk|h-ek)-[0-9A-Za-z]+(?:-[0-9A-Za-z]+)+|(?:blg|ah)-\d{4,})\b", re.I
+    r"\b((?:kst|ah-tk|ah-ek|h-tk|h-ek)-[0-9A-Za-z]+(?:-[0-9A-Za-z]+)+|(?:blg|ah)-\d{4,}|kst-\d{6,})\b", re.I
 )
 _DNUM_RE = re.compile(r"\b(\d{4}D\d{3,6})\b", re.I)
 _GUID_RE = re.compile(
@@ -296,8 +298,8 @@ def fetch(query: str) -> Fetched:
 
     xml, meta, bijlagen = None, {}, []
     if ident:
-        # Nieuwe publicaties (`blg-…`, `ah-<nummer>`) bestaan alleen als PDF: geen XML proberen.
-        pdf_only = bool(re.fullmatch(r"(?:blg|ah)-\d+", ident))
+        # Nieuwe publicaties (`blg-…`, `ah-<nummer>`, `kst-<nummer>`) bestaan alleen als PDF: geen XML proberen.
+        pdf_only = bool(re.fullmatch(r"(?:blg|ah|kst)-\d+", ident))
         with ThreadPoolExecutor(max_workers=3) as pool:
             xml_future = None if pdf_only else pool.submit(_get_xml, ident)
             meta_future = None if pdf_only else pool.submit(_get_metadata, ident)

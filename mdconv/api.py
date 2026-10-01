@@ -199,7 +199,7 @@ def search_overheid():
             return default
 
     return jsonify(search.search(
-        args.get("scope", "pub"), args.get("q", ""),
+        args.get("scope", "alles"), args.get("q", ""),
         soort=args.get("soort", ""), van=args.get("van", ""), tot=args.get("tot", ""),
         sort=args.get("sort", "relevantie"),
         start=number("start", 0, 0, 100_000), n=number("n", 20, 10, 50),
