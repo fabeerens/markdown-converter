@@ -57,7 +57,7 @@ mdconv/
     consultatie.py         internetconsultatie.nl: consultaties, documenten, reacties, zoeken (scraping)
     wgk.py                 wetgevingskalender.overheid.nl: regeling-XML → markdown, zoeken
     sru.py                 SRU-client (repository.overheid.nl): zoeken, record op id, bijlagen van een stuk
-    common.py              Fetched-dataclass, bijlage()-items voor het paneel, header(), slug()
+    common.py              Fetched-dataclass, bijlage()-items (linklijst), header(), slug()
     pasted_text.py         handmatig geplakte tekst (kaal of verrijkte HTML) → markdown
     pdf_images.py           losse afbeeldingen uit een PDF (pdfimages/pdfinfo, poppler)
   attachments.py            tijdelijke, token-based opslag van geëxtraheerde afbeeldingen
@@ -167,9 +167,9 @@ accountregistratie namens de gebruiker):
     XML-poging voor `blg-`/`ah-<cijfers>` over en valt voor andere ids terug op het SRU-record
     (`sru.by_identifier`) → de `pdf`-manifestatie → `files.convert`, met kopblok uit het record en een
     cursieve notitie ("geen gestructureerde XML"). Download is begrensd op 100 MB.
-  - **Bijlagen voor het paneel**: `sru.attachments_of(id)` (CQL `w.hoofddocument==<id>`) geeft de
+  - **Bijlagen**: `sru.attachments_of(id)` (CQL `w.hoofddocument==<id>`) geeft de
     `blg-…`-bijlagen mét titel; een bijlage wijst zelf terug naar zijn hoofddocument. Best-effort
-    (een storing geeft een leeg paneel, nooit een mislukte conversie); zonder SRU-resultaat vallen
+    (een storing geeft een lege lijst, nooit een mislukte conversie); zonder SRU-resultaat vallen
     we terug op `OVERHEIDop.bijlage` uit metadata.xml. Elk item is `{query, titel, rol, open_url}`;
     `query` gaat weer naar `/api/convert/overheid`, dus een bijlage is zelf een volwaardig document.
   - Niet gebouwd: bijlagen van bijlagen volgen, Handelingen-structuur (sprekers) verder dan platte
@@ -189,7 +189,7 @@ accountregistratie namens de gebruiker):
     `_pick_file` kiest PDF/Office/tekst en slaat zips over; geen bruikbaar bestand → duidelijke fout.
   - Gescande pdf's zonder tekstlaag geven vrijwel geen tekst: dan een cursieve waarschuwing met het
     advies de OCR-/wiskunde-modus bij Documentupload te gebruiken.
-  - **Relaties** (`documentrelaties`) worden het bijlagenpaneel: rollen uit de TOOI-thesaurus
+  - **Relaties** (`documentrelaties`) worden de bijlagenlijst: rollen uit de TOOI-thesaurus
     (`c_05f4a5f3` = "heeft bijlage", `c_4d1ea9ba` = "is bijlage bij", plus bundel/onderdeel; de
     identiteitsgroep valt weg). Titels worden parallel opgehaald (max. 30).
   - Een **kale UUID** is ook een Tweede Kamer-Document-Id: `sources.from_overheid` vraagt het aan
