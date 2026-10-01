@@ -73,7 +73,7 @@ class _Sessie:
     def __init__(self, antwoorden):
         self.antwoorden, self.verzoeken = antwoorden, []
 
-    def get(self, url, timeout=None):
+    def get(self, url, timeout=None, **kwargs):
         self.verzoeken.append(url)
         return self.antwoorden.get(url, _Antwoord(404))
 
@@ -93,7 +93,7 @@ def test_recognition_is_strict_and_does_not_open_links():
     assert ob.matches("https://zoek.officielebekendmakingen.nl/blg-1014762.pdf")
     assert not ob.matches("kst")
     assert not ob.matches("32016R0679") and not ob.matches("BWBR0040940") and not ob.matches("ECLI:NL:HR:2017:316")
-    assert detect_source("kst-34851-4") == "officiele-bekendmakingen"
+    assert detect_source("kst-34851-4") == "kamerstuk"
     assert detect_source("BWBR0040940") == "wetten"
     assert ob.publicatie_id("https://zoek.officielebekendmakingen.nl/kst-34851-4.html") == "kst-34851-4"
 
@@ -138,9 +138,12 @@ def test_fetch_takes_both_files_and_ends_up_as_a_kb_bundle(monkeypatch):
 
 
 def test_no_xml_is_a_refusal_and_never_a_fallback_to_the_pdf(monkeypatch):
+    """De strenge route zelf valt nooit terug. Dat `from_link` zonder bundel wél op de PDF mag
+    terugvallen (besluit 1 van WP-77), staat in `test_kb_route_streng.py`; voor de kennisbank
+    blijft het een weigering (besluit 2)."""
     sessie = _netwerk(monkeypatch)   # alles geeft 404, zoals bij een `blg-`-bijlage
-    with pytest.raises(ConversionError) as fout:
-        from_link("blg-1014762")
+    with pytest.raises(ob.GeenXml) as fout:
+        ob.fetch("blg-1014762")
     assert "geen officiële XML" in str(fout.value) and "geen terugval" in str(fout.value)
     assert all(not u.endswith(".pdf") for u in sessie.verzoeken)
 

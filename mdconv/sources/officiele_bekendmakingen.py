@@ -99,12 +99,21 @@ def slug(pub_id: str, metadata: dict) -> str:
         f"{dossier!r}, ondernummer {onder!r}); omzetting geweigerd.")
 
 
+class GeenXml(ConversionError):
+    """De publicatie heeft geen officiële XML (404).
+
+    Een eigen soort, zodat de losse download (`kamerstuk.fetch`) dit geval kan
+    onderscheiden van een inhoudelijke weigering: zonder XML mag hij op de PDF terugvallen,
+    bij een weigering is de reden het antwoord. Voor de kennisbank blijft het een weigering.
+    """
+
+
 def fetch(query: str) -> tuple[str, str, Herkomst]:
     pub_id = publicatie_id(query)
     url = f"{_BASIS}/{pub_id}.xml"
     r = net.documents().get(url, timeout=_TIMEOUT)
     if r.status_code == 404:
-        raise ConversionError(
+        raise GeenXml(
             f"{pub_id} heeft geen officiële XML (404). Een bijlage of een stuk zonder "
             "gestructureerde bron kan alleen als PDF; die route is een bewuste keuze en geen "
             "terugval. Upload de PDF met een documentnummer.")

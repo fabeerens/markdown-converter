@@ -12,7 +12,7 @@ voorstelt.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from ..errors import ConversionError
 from ..herkomst import Herkomst
@@ -120,8 +120,8 @@ class Document:
 # --------------------------------------------------------------------------
 
 def detect_source(query: str) -> str | None:
-    """'kamerstuk', 'woo', 'consultatie', 'wgk', 'officiele-bekendmakingen', 'rechtspraak',
-    'hudoc', 'wetten', 'national' of None (→ EUR-Lex).
+    """'kamerstuk', 'woo', 'consultatie', 'wgk', 'rechtspraak', 'hudoc', 'wetten', 'national'
+    of None (→ EUR-Lex).
 
     De volgorde is bewust: een EHRM-ECLI of HUDOC-link wint van alles, want die
     bevat cijfergroepen die anders als iets anders gelezen worden. Een los
@@ -133,15 +133,15 @@ def detect_source(query: str) -> str | None:
 
     # Open overheid-vormen zijn ondubbelzinnig, dus eerst: de cijfergroepen in een
     # publicatie-id (`kst-34851-4`) mogen niet als HUDOC-item-id of CELEX gelezen worden.
-    # De strenge herkenning van de kennisbankroute (volledig geankerd id of de host) gaat
-    # vóór de bredere van `kamerstuk` (tweedekamer.nl-links, nieuwe PDF-publicaties).
+    # Een Kamerstuk heeft twee herkenningen (de strenge van de kennisbankroute: een volledig
+    # geankerd id of de host; de bredere van `kamerstuk`: tweedekamer.nl-links, nieuwe
+    # PDF-publicaties, een dossiernotatie in volledige vorm) en één route (`_kamerstuk`,
+    # besluit 1 van WP-77).
     if consultatie.matches(q):
         return "consultatie"
     if wgk.matches(q):
         return "wgk"
-    if officiele_bekendmakingen.matches(q):
-        return "officiele-bekendmakingen"
-    if kamerstuk.matches(q):
+    if officiele_bekendmakingen.matches(q) or kamerstuk.matches(q) or kamerstuk.is_dossiernotatie(q):
         return "kamerstuk"
     if woo.matches(q):
         return "woo"
@@ -189,8 +189,6 @@ def from_link(query: str, lang: str = "NL") -> Document:
             resultaat = hudoc.fetch(query, lang)
         elif source == "wetten":
             resultaat = wetten.fetch(query)
-        elif source == "officiele-bekendmakingen":
-            resultaat = officiele_bekendmakingen.fetch(query)
         elif source == "national":
             resultaat = _national_source(query).fetch(query)
         else:
@@ -237,11 +235,29 @@ _UUID_ID = re.compile(
 
 
 def _document_from(fetched) -> Document:
+    """Een losse download van een Open overheid-bron: zonder herkomst, dus zonder bundel."""
     return Document(
         markdown=common.with_bijlagen(fetched.markdown, fetched.bijlagen), source=fetched.source, kind=KIND_DOCUMENT,
         attachments=tuple(Attachment(filename=n, data=d) for n, d in fetched.images),
+        warnings=tuple(fetched.warnings),
         bijlagen=tuple(fetched.bijlagen), ident=fetched.ident, name=fetched.name,
     )
+
+
+def _kamerstuk(query: str) -> Document:
+    """De ene Kamerstukroute (besluit 1 van WP-77), voor `from_link` én het tabblad Open overheid.
+
+    Komt de tekst uit de officiële XML, dan heeft het resultaat herkomst en bronbewijs, zoals
+    elke kennisbankroute: dezelfde Markdown als `kb_fetch` levert, zonder bijlagenlijst erin
+    (de bijlage-id's staan in de herkomst; de tekst moet byte-gelijk blijven aan wat de
+    kennisbank bewaart). Komt de tekst uit een terugval, dan is het een losse download.
+    """
+    with capture_source_documents() as documents:
+        fetched = kamerstuk.fetch(query)
+    if fetched.herkomst is None:
+        return _document_from(fetched)
+    doc = _als_document((fetched.markdown, fetched.source, fetched.herkomst), documents, query, "NL")
+    return replace(doc, ident=fetched.ident, name=fetched.name)
 
 
 def from_overheid(query: str) -> Document:
@@ -261,12 +277,12 @@ def from_overheid(query: str) -> Document:
         return _document_from(woo.fetch(q))
     if _UUID_ID.match(q) and (q.count("_") or woo.is_known_id(q)):
         return _document_from(woo.fetch(q))
-    return _document_from(kamerstuk.fetch(q))
+    return _kamerstuk(q)
 
 
 def from_kamerstuk(query: str) -> Document:
     """Kamerstuk, aanhangsel of handeling (id, link, dossiernotatie of D-nummer)."""
-    return _document_from(kamerstuk.fetch(query))
+    return _kamerstuk(query)
 
 
 # --------------------------------------------------------------------------
