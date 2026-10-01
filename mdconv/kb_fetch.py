@@ -59,6 +59,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path, PurePosixPath
 
 from . import kb_bundle, sources
+from .errors import ConversionError
 
 # Meer dan twee tegelijk is vragen om een blokkade van de Cellar of HUDOC; het
 # ophalen is eenmalig, dus snelheid is hier geen doel.
@@ -120,7 +121,14 @@ def zet_neer(document, uit: Path) -> dict:
     """Bouw de bundel van één omgezet document en pak hem uit onder `uit`."""
     herkomst = document.provenance
     if herkomst is None:
-        raise ValueError("de bron levert geen herkomst; zonder herkomst is er geen kennisbankbundel")
+        # Een bron zonder bronbewijs (Woo, een consultatie, de terugval van een Kamerstuk op
+        # de PDF) is voor de kennisbank een weigering met reden, geen crash: `haal_op()` maakt
+        # van een ConversionError `geweigerd` (besluit 2 van WP-77). De waarschuwingen van de
+        # bron zeggen waarom er geen bundel is, en gaan mee in de melding.
+        melding = "de bron levert geen bronbewijs; zonder bronbewijs is er geen kennisbankbundel"
+        if document.warnings:
+            melding += " (" + "; ".join(document.warnings) + ")"
+        raise ConversionError(melding)
     token = kb_bundle.store(herkomst.as_json())
     if token is None:
         raise ValueError("de herkomst draagt geen kennisbankidentiteit (BWB, CELEX, ECLI of slug)")
@@ -170,8 +178,6 @@ def haal_op(vraag: str, uit: Path, lang: str) -> dict:
     (iets anders dan een `ConversionError`) is erger dan een weigering en houdt
     daarom de naam van het uitzonderingstype.
     """
-    from .errors import ConversionError
-
     begin = time.perf_counter()
     try:
         document = sources.from_link(vraag, lang)
@@ -265,8 +271,6 @@ def lees_hudoc_map(map_: Path) -> tuple[list[tuple[dict, Path]], list[dict], str
 def zet_hudoc_neer(record: dict, bestand: Path, records: list[dict], records_sha256: str,
                    uit: Path) -> dict:
     """Eén lokaal Word-bestand door dezelfde omzetting en bundel als een online vraag."""
-    from .errors import ConversionError
-
     begin = time.perf_counter()
     try:
         document = sources.from_hudoc_file(

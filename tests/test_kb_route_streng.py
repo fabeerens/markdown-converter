@@ -87,3 +87,42 @@ def test_without_xml_from_link_falls_back_for_the_download(monkeypatch):
     doc = from_link("blg-1014762")
     assert doc.provenance is None and doc.markdown.rstrip().endswith("Pdf-tekst")
     assert "geen gestructureerde XML" in doc.warnings[0] and "geen kennisbankbundel" in doc.warnings[0]
+
+
+# ---------------------------------------------------------------------------
+# Besluit 2
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("vraag, module", [
+    ("ronl-abc123", "woo"),
+    ("https://www.internetconsultatie.nl/wetdigitaleoverheid", "consultatie"),
+])
+def test_a_source_without_provenance_is_refused_by_kb_fetch_with_the_reason(tmp_path, monkeypatch, vraag, module):
+    from mdconv import kb_fetch
+    from mdconv.sources import common, consultatie, woo
+
+    bron = {"woo": woo, "consultatie": consultatie}[module]
+    assert detect_source(vraag) == module
+    monkeypatch.setattr(bron, "fetch", lambda q: common.Fetched("# Tekst\n", "Bron", ident="x", name="x"))
+    uitkomst = kb_fetch.haal_op(vraag, tmp_path, "NL")
+    assert uitkomst["status"] == "geweigerd"
+    assert "bronbewijs" in uitkomst["melding"] and "geen kennisbankbundel" in uitkomst["melding"]
+    assert not (tmp_path / "raw").exists()
+
+
+def test_a_kamerstuk_fallback_is_refused_by_kb_fetch_and_names_why(tmp_path, monkeypatch):
+    from mdconv import kb_fetch
+    from mdconv.sources import files, sru
+
+    _netwerk(monkeypatch)   # alles 404
+    rec = sru.Record(ident="blg-1014762", title="Bijlage", files={"pdf": "https://repository.overheid.nl/x.pdf"})
+    monkeypatch.setattr(kamerstuk, "_bijlagen", lambda ident: [])
+    monkeypatch.setattr(sru, "by_identifier", lambda ident: rec)
+    monkeypatch.setattr(kamerstuk, "_download", lambda url: b"%PDF")
+    monkeypatch.setattr(files, "convert", lambda data, name: ("Pdf-tekst", "pdf-inspector"))
+    assert kb_fetch.main(["--uit", str(tmp_path), "blg-1014762"]) == 1
+    ophaal = json.loads((tmp_path / "ophaal.json").read_text(encoding="utf-8"))
+    regel = ophaal["blg-1014762"]
+    assert regel["status"] == "geweigerd" and "ValueError" not in regel["melding"]
+    assert "bronbewijs" in regel["melding"] and "geen gestructureerde XML" in regel["melding"]
+    assert not (tmp_path / "raw").exists()
