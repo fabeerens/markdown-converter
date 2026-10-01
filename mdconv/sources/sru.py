@@ -44,7 +44,20 @@ SOORTEN: tuple[tuple[str, str, str, str], ...] = (
     ("handelingen", "Handelingen", _PUBLICATIES["handelingen"], ""),
 )
 
-_DOSSIER = re.compile(r"^\s*(\d{1,2})[ .]?(\d{3})(?:[\s\-–]+([IVXLC]+[A-Z]?))?\s*$", re.I)
+# Een dossiernummer is (vrijwel) altijd vijfcijferig: "36600", "36 600", "36600-VII",
+# eventueel voorafgegaan door "dossier"/"kamerstuk(ken)". Vier cijfers ("2026") is een jaar.
+_DOSSIER = re.compile(
+    r"^\s*(?:(?:dossier|kamerstuk(?:ken)?)\s+)?(\d{2})[ .]?(\d{3})(?:[\s\-–]+([IVXLC]+[A-Z]?))?\s*$",
+    re.I,
+)
+
+
+def dossier_of(q: str) -> str | None:
+    """"36 600 vii" → "36600-VII"; None als de zoekterm geen dossiernummer is."""
+    m = _DOSSIER.match(q or "")
+    if not m:
+        return None
+    return m.group(1) + m.group(2) + (f"-{m.group(3).upper()}" if m.group(3) else "")
 
 
 @dataclass(frozen=True)
@@ -133,13 +146,11 @@ def build_query(q: str, soort: str, van: str, tot: str, sort: str) -> str:
                               (SOORTEN[0][2], SOORTEN[0][3]))
     parts = [_BASE, cql_soort]
     q = (q or "").strip()
-    if q:
-        m = _DOSSIER.match(q)
-        if m:
-            dossier = m.group(1) + m.group(2) + (f"-{m.group(3).upper()}" if m.group(3) else "")
-            parts.append(f'w.dossiernummer=="{dossier}"')
-        else:
-            parts.append(f'cql.textAndIndexes="{_quote(q)}"')
+    dossier = dossier_of(q)
+    if dossier:
+        parts.append(f'w.dossiernummer=="{dossier}"')
+    elif q:
+        parts.append(f'cql.textAndIndexes="{_quote(q)}"')
     if re.fullmatch(r"\d{4}-\d{2}-\d{2}", van or ""):
         parts.append(f"dt.date>={van}")
     if re.fullmatch(r"\d{4}-\d{2}-\d{2}", tot or ""):
@@ -148,8 +159,9 @@ def build_query(q: str, soort: str, van: str, tot: str, sort: str) -> str:
     if exclude:
         cql += f" NOT {exclude}"
     # Zonder zoektekst is "nieuwste eerst" de enige zinnige volgorde.
+    # Een dossier leest chronologisch (oudste eerst) tenzij je zelf anders kiest.
     order = {"nieuwste": "descending", "oudste": "ascending"}.get(
-        sort, "descending" if not q else None)
+        sort, "ascending" if dossier else "descending" if not q else None)
     if order:
         cql += f" sortBy dt.date/sort.{order}"
     return cql

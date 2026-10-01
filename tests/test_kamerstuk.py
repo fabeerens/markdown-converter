@@ -36,6 +36,9 @@ from mdconv.sources import kamerstuk  # noqa: E402
     ("36836 D", "kst-36836-D"),
     ("Kamerstukken I 2023/24, 36200, A", "kst-36200-A"),
     ("36600-12", "kst-36600-12"),
+    ("kst-1268678", "kst-1268678"),          # nieuw formaat: geen dossier in het id
+    ("blg-1184123", "blg-1184123"),
+    ("ah-1271549", "ah-1271549"),
     ("ah-tk-20242025-100", "ah-tk-20242025-100"),
     ("AH-TK-20242025-100", "ah-tk-20242025-100"),
     ("h-tk-20242025-20-3", "h-tk-20242025-20-3"),

@@ -192,8 +192,9 @@ accountregistratie namens de gebruiker):
   - Een **kale UUID** is ook een Tweede Kamer-Document-Id: `sources.from_overheid` vraagt het aan
     open.overheid.nl (`woo.is_known_id`, één verzoek) en valt anders terug op de TK-open data; een
     `_n`-suffix of link is altijd Woo.
-- **Zoeken** (`mdconv/search.py`, `GET /api/search`, `GET /api/search/soorten`): twee bronnen,
-  één resultaatvorm `{id, query, titel, soort, datum, bron, meta, snippet, open_url}` — `query`
+- **Zoeken** (`mdconv/search.py`, `GET /api/search`, `GET /api/search/soorten`): standaard
+  **`alles`** = beide bronnen samengevoegd tot één lijst (`_search_all`); daarnaast `pub` en `woo`
+  apart. Eén resultaatvorm `{id, query, titel, soort, datum, bron, meta, snippet, open_url}` — `query`
   gaat direct naar `/api/convert/overheid`.
   - `pub` = SRU (`https://repository.overheid.nl/sru`, keyless; `sru.py`). CQL die werkt:
     `cql.textAndIndexes="…"` (volledige tekst), `w.dossiernummer=="36600-VII"` (een invoer die op een
@@ -203,6 +204,20 @@ accountregistratie namens de gebruiker):
     alleen tussen quotes mee nadat `"` en `\` eruit zijn. Zonder zoektekst is "nieuwste eerst" de
     standaard. De "soorten" (`sru.SOORTEN`) zijn vast; sluit Staatscourant e.d. uit omdat de
     converter daar niets mee kan.
+  - **`alles`**: per bron de eerste `start + n` resultaten (parallel; `MERGE_LIMIT` = 200 per bron,
+    daarom bladert de UI niet dieper), samengevoegd en gesneden. Bij "nieuwste/oudste" sorteert het op
+    datum; bij "relevantie" worden de bronnen afwisselend gelegd (scores zijn niet vergelijkbaar).
+    **Dubbelen** (`_merge`): dezelfde titel binnen 21 dagen — Woo zet "dossier, nr. X - " voor de titel
+    (`_WOO_PREFIX`, wordt eraf gehaald) en een kamerstuk heeft "dossiertitel; soort; stuktitel", dus
+    er wordt ook op het laatste deel vergeleken — blijft één keer staan, als officiële publicatie met
+    `ook_woo: true`. Valt één bron uit, dan komt de rest mét een `waarschuwing`; beide uit = fout.
+    Geen soortfilter (de soorten verschillen per bron).
+  - **Dossiernummer als zoekterm** (`sru.dossier_of`: `36600`, `36 600-VII`, `dossier 36600`; vijf
+    cijfers, want vier is een jaar): geen tekstzoekopdracht maar de **hele dossierlijst** uit de
+    officiële publicaties (`w.dossiernummer`), oudste eerst, pagina's van 50, in `alles` én `pub`
+    (Woo-kopieën zijn dubbelen, dus Woo blijft erbuiten). Het antwoord heeft `dossier`; de UI toont
+    "Dossier X — n stukken". `_stuk_label` zet "36600-VII, nr. 1 - " voor de titel zodat een lange
+    lijst leesbaar is.
   - `woo` = `woo.search`; het soortfilter komt uit de facetten van het laatste antwoord (meeste
     eerst, max. 40). Zonder zoekterm én zonder filter weigert de zoekfunctie (anders 700k treffers).
   - Front-end (`oo`-state + `renderOO`/`renderResults`/`runSearch` in `app.js`): modus "Ophalen" ↔

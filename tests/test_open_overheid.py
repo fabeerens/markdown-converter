@@ -38,6 +38,20 @@ def test_sru_query_treats_a_dossier_number_as_a_dossier_search():
     assert "cql.textAndIndexes" not in sru.build_query("36600", "alles", "", "", "relevantie")
 
 
+@pytest.mark.parametrize("q, dossier", [
+    ("36600", "36600"), ("36 600", "36600"), ("36600-VII", "36600-VII"), ("36600 vii", "36600-VII"),
+    ("dossier 36600", "36600"), ("Kamerstukken 36 600-XV", "36600-XV"),
+    ("2026", None), ("klimaat", None), ("36600 klimaat", None), ("", None),
+])
+def test_dossier_number_is_recognised_in_the_search_term(q, dossier):
+    assert sru.dossier_of(q) == dossier
+
+
+def test_a_dossier_search_reads_chronologically_unless_told_otherwise():
+    assert sru.build_query("36600", "alles", "", "", "relevantie").endswith("sortBy dt.date/sort.ascending")
+    assert sru.build_query("36600", "alles", "", "", "nieuwste").endswith("sortBy dt.date/sort.descending")
+
+
 def test_sru_query_sorting_and_quote_safety():
     assert sru.build_query("", "aanhangsel", "", "", "relevantie").endswith("sortBy dt.date/sort.descending")
     assert sru.build_query("x", "alles", "", "", "oudste").endswith("sortBy dt.date/sort.ascending")
@@ -254,10 +268,19 @@ def test_search_pub_maps_records_to_results(monkeypatch):
     out = search.search("pub", "klimaat")
     assert out["total"] == 1 and out["soorten"][0]["key"] == "alles"
     assert out["results"][0] == {
-        "id": "kst-36180-133", "query": "kst-36180-133", "titel": "Brief", "soort": "Brief regering",
+        "id": "kst-36180-133", "query": "kst-36180-133", "titel": "36180, nr. 133 - Brief",
+        "soort": "Brief regering",
         "datum": "2025-02-20", "bron": "Tweede Kamer",
         "meta": "Vergaderjaar 2024-2025 · dossier 36180 · R.J. Klever", "snippet": "",
-        "open_url": "https://zoek.officielebekendmakingen.nl/kst-36180-133.html"}
+        "open_url": "https://zoek.officielebekendmakingen.nl/kst-36180-133.html", "bronsoort": "pub"}
+
+
+def test_stuk_label_makes_dossier_lists_scannable():
+    assert search._stuk_label("kst-36600-VII-1") == "36600-VII, nr. 1"
+    assert search._stuk_label("kst-21501-02-3174") == "21501-02, nr. 3174"
+    assert search._stuk_label("kst-36836-D") == "36836, nr. D"
+    for ident in ("kst-1268678", "blg-1184123", "ah-tk-20242025-100"):
+        assert search._stuk_label(ident) == ""
 
 
 def test_search_woo_maps_results_strips_highlight_markup_and_lists_facets(monkeypatch):
@@ -273,6 +296,129 @@ def test_search_woo_maps_results_strips_highlight_markup_and_lists_facets(monkey
     assert r["snippet"] == "over klimaat en energie" and r["meta"] == "PDF · 13 p. · 0.14 MB"
     assert r["query"] == _UUID and r["bron"] == "ministerie van EZK"
     assert [s["key"] for s in out["soorten"]] == ["advies", "brief"]       # meeste eerst
+
+
+# -- Alles: één samengevoegde lijst ------------------------------------------
+
+def _pub(i, titel, datum, **kw):
+    return {"id": i, "query": i, "titel": titel, "soort": "", "datum": datum, "bron": "Tweede Kamer",
+            "meta": "", "snippet": "", "open_url": "", "bronsoort": "pub", **kw}
+
+
+def _wo(i, titel, datum):
+    return {"id": i, "query": i, "titel": titel, "soort": "", "datum": datum, "bron": "ministerie",
+            "meta": "", "snippet": "", "open_url": "", "bronsoort": "woo"}
+
+
+def _stub_sources(monkeypatch, pub, woo_, pub_total=None, woo_total=None, seen=None):
+    def fake_pub(q, soort, van, tot, sort, start, n):
+        if seen is not None:
+            seen.append(("pub", start, n))
+        if isinstance(pub, Exception):
+            raise pub
+        return (pub_total or len(pub)), pub[start:start + n]
+
+    def fake_woo(q, soort, van, tot, sort, start, n):
+        if seen is not None:
+            seen.append(("woo", start, n))
+        if isinstance(woo_, Exception):
+            raise woo_
+        return (woo_total or len(woo_)), woo_[start:start + n], {}
+
+    monkeypatch.setattr(search, "_search_pub", fake_pub)
+    monkeypatch.setattr(search, "_search_woo", fake_woo)
+
+
+def test_all_merges_both_sources_into_one_list_sorted_by_date(monkeypatch):
+    _stub_sources(monkeypatch,
+                  [_pub("kst-1", "A", "2026-09-10"), _pub("kst-2", "B", "2026-09-01")],
+                  [_wo("w1", "C", "2026-09-20"), _wo("w2", "D", "2026-09-05")])
+    out = search.search("alles", "x", sort="nieuwste")
+    assert [r["id"] for r in out["results"]] == ["w1", "kst-1", "w2", "kst-2"]
+    assert out["total"] == 4 and out["totals"] == {"pub": 2, "woo": 2}
+    out = search.search("alles", "x", sort="oudste")
+    assert [r["id"] for r in out["results"]] == ["kst-2", "w2", "kst-1", "w1"]
+
+
+def test_all_interleaves_by_relevance_so_neither_source_takes_over(monkeypatch):
+    _stub_sources(monkeypatch,
+                  [_pub(f"p{i}", f"P{i}", "2026-01-01") for i in range(3)],
+                  [_wo(f"w{i}", f"W{i}", "2026-01-01") for i in range(3)])
+    out = search.search("alles", "x", sort="relevantie")
+    assert [r["id"] for r in out["results"]] == ["p0", "w0", "p1", "w1", "p2", "w2"]
+
+
+def test_all_lists_a_document_that_is_in_both_sources_once_and_says_so(monkeypatch):
+    _stub_sources(monkeypatch,
+                  [_pub("blg-9", "Begroting en beheerplan Nationale Politie 2027-2031", "2026-09-15"),
+                   _pub("kst-5", "Evaluatie Wet openbare manifestaties; Brief regering; Kabinetsreactie op rapporten",
+                        "2026-09-04")],
+                  [_wo("oep-1", "37020-VI, nr. 2 - Begroting en beheerplan Nationale Politie 2027-2031", "2026-09-18"),
+                   _wo("oep-2", "34324, nr. 42 - Kabinetsreactie op rapporten", "2026-09-04"),
+                   # Zelfde titel, maar een jaar eerder: een ander document.
+                   _wo("oep-3", "Begroting en beheerplan Nationale Politie 2027-2031", "2025-09-15")])
+    out = search.search("alles", "x", sort="nieuwste")
+    assert sorted(r["id"] for r in out["results"]) == ["blg-9", "kst-5", "oep-3"]
+    by_id = {r["id"]: r for r in out["results"]}
+    assert by_id["blg-9"]["ook_woo"] and by_id["kst-5"]["ook_woo"]      # officiële publicatie wint
+    assert "ook_woo" not in by_id["oep-3"]
+    assert "oep-1" not in by_id and "oep-2" not in by_id
+
+
+def test_all_pages_through_the_merged_list_and_caps_the_depth(monkeypatch):
+    seen = []
+    pub = [_pub(f"p{i:03d}", f"P{i}", f"2026-06-{(i % 28) + 1:02d}") for i in range(30)]
+    woo_ = [_wo(f"w{i:03d}", f"W{i}", f"2026-07-{(i % 28) + 1:02d}") for i in range(30)]
+    _stub_sources(monkeypatch, pub, woo_, pub_total=5000, woo_total=7000, seen=seen)
+    page2 = search.search("alles", "x", sort="nieuwste", start=20, n=20)
+    assert len(page2["results"]) == 20 and page2["total"] == 12000
+    assert page2["limit"] == search.MERGE_LIMIT
+    # Per bron de eerste start+n resultaten (en niet méér).
+    assert ("pub", 0, 40) in seen and ("woo", 0, 40) in seen
+    # Een pagina voorbij de begrenzing vraagt nooit meer dan MERGE_LIMIT per bron.
+    seen.clear()
+    search.search("alles", "x", sort="nieuwste", start=190, n=50)
+    assert max(st + k for _s, st, k in seen) <= search.MERGE_LIMIT
+
+
+def test_all_survives_one_failing_source_but_says_so(monkeypatch):
+    _stub_sources(monkeypatch, RuntimeError("SRU down"), [_wo("w1", "C", "2026-09-20")])
+    out = search.search("alles", "x")
+    assert [r["id"] for r in out["results"]] == ["w1"] and out["totals"] == {"woo": 1}
+    assert "parlementaire stukken mislukte" in out["waarschuwing"] and "SRU down" in out["waarschuwing"]
+    _stub_sources(monkeypatch, RuntimeError("a"), RuntimeError("b"))
+    with pytest.raises(ConversionError, match="mislukte"):
+        search.search("alles", "x")
+
+
+def test_all_needs_a_term_or_a_date_and_is_the_default_scope(client, monkeypatch):
+    with pytest.raises(ConversionError, match="zoekterm"):
+        search.search("alles", " ")
+    seen = {}
+    monkeypatch.setattr(search, "search", lambda scope, q, **kw: seen.setdefault("scope", scope) and
+                        {"scope": scope, "total": 0, "start": 0, "n": 20, "results": [], "soorten": []})
+    client.get("/api/search?q=x")
+    assert seen["scope"] == "alles"
+
+
+def test_a_dossier_number_lists_the_whole_dossier_from_the_official_publications(monkeypatch):
+    seen = []
+
+    def fake_pub(q, soort, van, tot, sort, start, n):
+        seen.append((q, soort, sort, start, n))
+        return 218, [_pub("kst-36600-VII-1", "Voorstel van wet", "2024-09-17")]
+
+    monkeypatch.setattr(search, "_search_pub", fake_pub)
+    monkeypatch.setattr(search, "_search_woo", lambda *a: pytest.fail("Woo hoort niet bij een dossierlijst"))
+    out = search.search("alles", "36600-VII", sort="relevantie", n=20)
+    assert out["dossier"] == "36600-VII" and out["total"] == 218 and out["limit"] == 218
+    assert out["n"] == 50 and seen == [("36600-VII", "", "relevantie", 0, 50)]    # grotere pagina's
+    # Eén bron gekozen: het soortfilter blijft bruikbaar.
+    out = search.search("pub", "36600", soort="bijlage")
+    assert out["dossier"] == "36600" and seen[-1][1] == "bijlage"
+    # In de Woo-bron zelf blijft het een gewone tekstzoekopdracht.
+    monkeypatch.setattr(search, "_search_woo", lambda *a: (1, [], {}))
+    assert "dossier" not in search.search("woo", "36600")
 
 
 def test_search_woo_needs_a_term_or_a_filter_and_unknown_scopes_are_rejected():

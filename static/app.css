@@ -864,6 +864,8 @@ body {
   white-space: nowrap;
 }
 
+.chip-woo { background: var(--orange-a3, var(--accent-a3)); color: var(--orange-a11, var(--accent-text)); }
+
 /* Zoekformulier — vlak, binnen de ondoorzichtige kaart. */
 .search-form .row { margin-bottom: var(--space-2); flex-wrap: wrap; }
 .search-form .select { width: auto; min-width: 140px; max-width: 320px; }
