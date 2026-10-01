@@ -1,0 +1,354 @@
+"""Tests voor zoeken (SRU + open.overheid.nl), de Woo-bron en de routering.
+
+Geen netwerk: de HTTP-laag en de bronnen worden vervangen.
+"""
+
+from __future__ import annotations
+
+import os
+import sys
+
+import pytest
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from mdconv import search  # noqa: E402
+from mdconv.errors import ConversionError  # noqa: E402
+from mdconv.sources import sru, woo  # noqa: E402
+
+
+# ---------------------------------------------------------------------------
+# SRU
+# ---------------------------------------------------------------------------
+
+_BASE = "c.product-area==officielepublicaties"
+
+
+def test_sru_query_for_fulltext_search_with_dates_and_exclusion():
+    cql = sru.build_query("klimaat energie", "kamerstuk", "2026-01-01", "2026-06-30", "relevantie")
+    assert cql == (
+        f'{_BASE} AND w.publicatienaam==Kamerstuk AND cql.textAndIndexes="klimaat energie" '
+        "AND dt.date>=2026-01-01 AND dt.date<=2026-06-30 NOT dt.type==Bijlage"
+    )
+
+
+def test_sru_query_treats_a_dossier_number_as_a_dossier_search():
+    assert 'w.dossiernummer=="36600"' in sru.build_query("36 600", "alles", "", "", "relevantie")
+    assert 'w.dossiernummer=="36600-VII"' in sru.build_query("36600-vii", "alles", "", "", "relevantie")
+    assert "cql.textAndIndexes" not in sru.build_query("36600", "alles", "", "", "relevantie")
+
+
+def test_sru_query_sorting_and_quote_safety():
+    assert sru.build_query("", "aanhangsel", "", "", "relevantie").endswith("sortBy dt.date/sort.descending")
+    assert sru.build_query("x", "alles", "", "", "oudste").endswith("sortBy dt.date/sort.ascending")
+    assert "sortBy" not in sru.build_query("x", "alles", "", "", "relevantie")
+    cql = sru.build_query('a" OR w.publicatienaam==Staatscourant "b\\', "alles", "", "", "relevantie")
+    # Alleen onze eigen quotes: twee om "Kamervragen (Aanhangsel)", twee om de zoektekst.
+    assert cql.count('"') == 4
+    # Een ongeldige datum komt nooit in de query.
+    assert "dt.date" not in sru.build_query("x", "alles", "morgen", "'; drop", "relevantie")
+
+
+_SRU_XML = """<?xml version="1.0"?>
+<sru:searchRetrieveResponse xmlns:sru="http://docs.oasis-open.org/ns/search-ws/sruResponse"
+  xmlns:dcterms="http://purl.org/dc/terms/" xmlns:gzd="http://standaarden.overheid.nl/sru"
+  xmlns:overheidwetgeving="http://standaarden.overheid.nl/wetgeving/">
+ <sru:numberOfRecords>2</sru:numberOfRecords>
+ <sru:records>
+  <sru:record><sru:recordData><gzd:gzd><gzd:originalData><overheidwetgeving:meta>
+    <overheidwetgeving:owmskern>
+      <dcterms:identifier>blg-1184123</dcterms:identifier>
+      <dcterms:title>Beslisnota</dcterms:title>
+      <dcterms:type scheme="OVERHEIDop.Parlementair">Bijlage</dcterms:type>
+      <dcterms:creator scheme="OVERHEID.StatenGeneraal">Tweede Kamer der Staten-Generaal</dcterms:creator>
+    </overheidwetgeving:owmskern>
+    <overheidwetgeving:owmsmantel><dcterms:date>2025-02-20</dcterms:date></overheidwetgeving:owmsmantel>
+    <overheidwetgeving:tpmeta>
+      <overheidwetgeving:hoofddocument>kst-36180-133</overheidwetgeving:hoofddocument>
+      <overheidwetgeving:vergaderjaar>2024-2025</overheidwetgeving:vergaderjaar>
+      <overheidwetgeving:publicatienaam>Kamerstuk</overheidwetgeving:publicatienaam>
+    </overheidwetgeving:tpmeta>
+  </overheidwetgeving:meta></gzd:originalData>
+  <gzd:enrichedData>
+    <gzd:preferredUrl>https://zoek.officielebekendmakingen.nl/blg-1184123.html</gzd:preferredUrl>
+    <gzd:itemUrl manifestation="metadata">https://r/metadata.xml</gzd:itemUrl>
+    <gzd:itemUrl manifestation="pdf">https://r/blg-1184123.pdf</gzd:itemUrl>
+  </gzd:enrichedData></gzd:gzd></sru:recordData></sru:record>
+  <sru:record><sru:recordData><gzd:gzd><gzd:originalData><overheidwetgeving:meta>
+    <overheidwetgeving:owmskern>
+      <dcterms:identifier>kst-36180-133</dcterms:identifier>
+      <dcterms:type scheme="OVERHEIDop.Parlementair">Kamerstuk</dcterms:type>
+      <dcterms:type scheme="OVERHEIDop.KamerstukTypen">Brief regering</dcterms:type>
+    </overheidwetgeving:owmskern>
+  </overheidwetgeving:meta></gzd:originalData></gzd:gzd></sru:recordData></sru:record>
+ </sru:records>
+</sru:searchRetrieveResponse>""".encode()
+
+
+def test_sru_response_is_parsed_into_records():
+    total, records = sru._records(_SRU_XML)
+    assert total == 2 and [r.ident for r in records] == ["blg-1184123", "kst-36180-133"]
+    blg, kst = records
+    assert (blg.title, blg.soort, blg.date, blg.hoofddocument, blg.vergaderjaar) == (
+        "Beslisnota", "Bijlage", "2025-02-20", "kst-36180-133", "2024-2025")
+    assert blg.pdf_url == "https://r/blg-1184123.pdf" and blg.page_url.endswith("blg-1184123.html")
+    assert kst.subsoort == "Brief regering" and kst.pdf_url is None
+
+
+def test_sru_diagnostics_become_a_dutch_error():
+    xml = (b'<diagnostics><diagnostic xmlns="http://www.loc.gov/zing/srw/diagnostic/">'
+           b"<details>cql.x</details><message>Unsupported index</message></diagnostic></diagnostics>")
+    with pytest.raises(ConversionError, match="weigerde"):
+        sru._records(xml)
+
+
+# ---------------------------------------------------------------------------
+# Woo (open.overheid.nl)
+# ---------------------------------------------------------------------------
+
+_UUID = "3174ead9-a4cb-4eb9-a26c-c2d8cc619c35"
+
+
+def test_woo_recognises_links_and_prefixed_ids_but_not_a_bare_uuid():
+    assert woo.matches(f"https://open.overheid.nl/documenten/{_UUID}")
+    assert woo.matches("ronl-c714589f8b6e27c74faa33435ecc3e87c5abdfd4_2")
+    assert woo.matches("oep-d2030ec85652675cd")
+    # Een kale UUID is ook een Tweede Kamer-Document-Id: de routering vraagt het aan de bron.
+    assert not woo.matches(_UUID)
+    assert not woo.matches("kst-36600-VII-1")
+
+
+def test_woo_parse_id():
+    assert woo.parse_id(f"https://open.overheid.nl/documenten/{_UUID}") == _UUID
+    assert woo.parse_id(f"{_UUID}_2") == f"{_UUID}_2"
+    assert woo.parse_id("https://open.overheid.nl/documenten/ronl-abc123_2?x=1") == "ronl-abc123_2"
+    with pytest.raises(ConversionError, match="open.overheid.nl"):
+        woo.parse_id("https://open.overheid.nl/over")
+
+
+def test_woo_picks_the_convertible_file_and_skips_zips():
+    det = {"versies": [{"bestanden": [
+        {"mime-type": "application/zip", "bestandsnaam": "alles.zip"},
+        {"mime-type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "bestandsnaam": "a.docx"},
+        {"mime-type": "application/pdf", "bestandsnaam": "a.pdf"},
+    ]}]}
+    assert woo._pick_file(det)["bestandsnaam"] == "a.pdf"
+    assert woo._pick_file({"versies": [{"bestanden": [{"mime-type": "application/zip"}]}]}) is None
+    assert woo._pick_file({"versies": []}) is None
+
+
+def test_woo_version_suffix_is_stripped_for_the_file_and_untrusted_hosts_are_ignored(monkeypatch):
+    seen = []
+
+    class Resp:
+        status_code = 200
+        headers = {"Content-Type": "application/pdf"}
+
+        def iter_content(self, n):
+            yield b"%PDF"
+
+    monkeypatch.setattr(woo, "_get", lambda url, **kw: seen.append(url) or Resp())
+    woo._download("abc_2", {"mime-type": "application/pdf"})
+    woo._download("abc_2", {"url": "https://evil.example/x.pdf"})
+    woo._download("abc_2", {"url": "https://opendata.rijksoverheid.nl/x.pdf"})
+    assert seen == [f"{woo.API}/documenten/abc", f"{woo.API}/documenten/abc",
+                    "https://opendata.rijksoverheid.nl/x.pdf"]
+
+
+def test_woo_relations_become_bijlagen_with_their_titles(monkeypatch):
+    det = {"documentrelaties": [
+        {"relation": f"{woo.SITE}/aaa", "role": "https://identifier.overheid.nl/tooi/def/thes/kern/c_05f4a5f3"},
+        {"relation": f"{woo.SITE}/bbb", "role": "https://identifier.overheid.nl/tooi/def/thes/kern/c_4d1ea9ba",
+         "titel": "Reservetitel"},
+        {"relation": f"{woo.SITE}/ccc", "role": "https://identifier.overheid.nl/plooi/def/thes/documentrelatie/identiteitsgroep"},
+    ]}
+    monkeypatch.setattr(woo, "detail", lambda rid: {"document": {"titelcollectie": {"officieleTitel": f"Titel {rid}"}}}
+                        if rid == "aaa" else None)
+    items = woo._related(det)
+    assert [(i["query"], i["titel"], i["rol"]) for i in items] == [
+        ("aaa", "Titel aaa", "Bijlage"), ("bbb", "Reservetitel", "Is bijlage bij")]   # identiteitsgroep valt weg
+    assert items[0]["open_url"] == f"{woo.SITE}/aaa"
+
+
+def test_woo_fetch_builds_header_and_warns_about_scans(monkeypatch):
+    from mdconv.sources import files
+
+    det = {
+        "document": {
+            "titelcollectie": {"officieleTitel": "Beslisnota X"},
+            "publisher": {"label": "ministerie van Y"},
+            "omschrijvingen": ["Korte omschrijving."],
+            "classificatiecollectie": {"documentsoorten": [{"label": "beslisnota"}], "themas": [{"label": "klimaat"}]},
+        },
+        "versies": [{"openbaarmakingsdatum": "2026-09-30",
+                     "bestanden": [{"mime-type": "application/pdf", "bestandsnaam": "n.pdf",
+                                    "grootte": 1048576, "paginas": 3}]}],
+        "documentrelaties": [],
+    }
+    monkeypatch.setattr(woo, "detail", lambda i: det)
+    monkeypatch.setattr(woo, "_download", lambda i, e: (b"%PDF", "application/pdf"))
+    monkeypatch.setattr(files, "convert", lambda data, name: ("", "MarkItDown"))
+    got = woo.fetch(f"https://open.overheid.nl/documenten/{_UUID}")
+    assert got.markdown.startswith("# Beslisnota X")
+    for line in ("- **Soort:** beslisnota", "- **Organisatie:** ministerie van Y",
+                 "- **Openbaarmakingsdatum:** 30 september 2026", "- **Thema:** klimaat",
+                 "- **Bestand:** n.pdf (1.00 MB, 3 p.)", f"<{woo.SITE}/{_UUID}>"):
+        assert line in got.markdown
+    assert "> Korte omschrijving." in got.markdown and "scan" in got.markdown
+    assert got.ident == _UUID and got.name == "Woo-Beslisnota-X"
+    assert got.source == f"open.overheid.nl • Beslisnota X ({_UUID}) • MarkItDown"
+
+
+def test_woo_fetch_without_a_convertible_file_explains_itself(monkeypatch):
+    monkeypatch.setattr(woo, "detail", lambda i: {"document": {}, "versies": [{"bestanden": []}]})
+    with pytest.raises(ConversionError, match="geen bestand"):
+        woo.fetch(f"https://open.overheid.nl/documenten/{_UUID}")
+    monkeypatch.setattr(woo, "detail", lambda i: None)
+    with pytest.raises(ConversionError, match="niet gevonden"):
+        woo.fetch(f"https://open.overheid.nl/documenten/{_UUID}")
+
+
+def test_woo_search_url_double_encodes_filters_and_converts_dates(monkeypatch):
+    seen = {}
+
+    class Resp:
+        status_code = 200
+
+        def json(self):
+            return {"totaal": 0, "resultaten": [], "filters": {}}
+
+    monkeypatch.setattr(woo, "_get", lambda url, **kw: seen.setdefault("url", url) and Resp())
+    woo.search("klimaat & energie", soort="Woo-verzoek of -besluit", van="2026-01-31", sort="oudste", n=50, start=50)
+    url = seen["url"]
+    assert "zoektekst=klimaat%20%26%20energie" in url
+    assert "documentsoort=Woo-verzoek%2520of%2520-besluit" in url      # dubbel gecodeerd, zoals de site
+    assert "publicatiedatumVan=31-01-2026" in url
+    assert "sort=publicatiedatum" in url and "order=asc" in url
+    assert "aantalResultaten=50" in url and "start=50" in url
+
+
+def test_woo_search_falls_back_to_a_valid_page_size(monkeypatch):
+    seen = {}
+
+    class Resp:
+        status_code = 200
+
+        def json(self):
+            return {}
+
+    monkeypatch.setattr(woo, "_get", lambda url, **kw: seen.setdefault("url", url) and Resp())
+    woo.search("x", n=25)
+    assert "aantalResultaten=20" in seen["url"]
+
+
+# ---------------------------------------------------------------------------
+# Zoeken: uniforme resultaten
+# ---------------------------------------------------------------------------
+
+def test_search_pub_maps_records_to_results(monkeypatch):
+    rec = sru.Record(ident="kst-36180-133", title="Brief", soort="Kamerstuk", subsoort="Brief regering",
+                     creator="Tweede Kamer der Staten-Generaal", date="2025-02-20", vergaderjaar="2024-2025",
+                     dossiernummer="36180", indiener="R.J. Klever",
+                     page_url="https://zoek.officielebekendmakingen.nl/kst-36180-133.html")
+    monkeypatch.setattr(sru, "search", lambda q, **kw: (1, [rec]))
+    out = search.search("pub", "klimaat")
+    assert out["total"] == 1 and out["soorten"][0]["key"] == "alles"
+    assert out["results"][0] == {
+        "id": "kst-36180-133", "query": "kst-36180-133", "titel": "Brief", "soort": "Brief regering",
+        "datum": "2025-02-20", "bron": "Tweede Kamer",
+        "meta": "Vergaderjaar 2024-2025 · dossier 36180 · R.J. Klever", "snippet": "",
+        "open_url": "https://zoek.officielebekendmakingen.nl/kst-36180-133.html"}
+
+
+def test_search_woo_maps_results_strips_highlight_markup_and_lists_facets(monkeypatch):
+    raw = {"totaal": 2, "resultaten": [{
+        "document": {"id": _UUID, "titel": "Antwoorden", "openbaarmakingsdatum": "2026-09-30",
+                     "publisher": "ministerie van EZK", "pid": f"{woo.SITE}/{_UUID}"},
+        "bestandsType": "application/pdf", "aantalPaginas": 13, "bestandsgrootte": "0.14 MB",
+        "highlightedText": "over <b>klimaat</b> en energie"}],
+        "filters": {"documentsoort": [{"naam": "brief", "aantal": 5}, {"naam": "advies", "aantal": 9}]}}
+    monkeypatch.setattr(woo, "search", lambda q, **kw: raw)
+    out = search.search("woo", "klimaat")
+    r = out["results"][0]
+    assert r["snippet"] == "over klimaat en energie" and r["meta"] == "PDF · 13 p. · 0.14 MB"
+    assert r["query"] == _UUID and r["bron"] == "ministerie van EZK"
+    assert [s["key"] for s in out["soorten"]] == ["advies", "brief"]       # meeste eerst
+
+
+def test_search_woo_needs_a_term_or_a_filter_and_unknown_scopes_are_rejected():
+    with pytest.raises(ConversionError, match="zoekterm"):
+        search.search("woo", "  ")
+    with pytest.raises(ConversionError, match="Onbekende zoekbron"):
+        search.search("elders", "x")
+
+
+# ---------------------------------------------------------------------------
+# Routering en HTTP
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def client():
+    from mdconv import create_app
+
+    return create_app(ai_enabled=False).test_client()
+
+
+def test_detect_source_routes_open_overheid_links_and_ids():
+    from mdconv.sources import detect_source
+
+    assert detect_source(f"https://open.overheid.nl/documenten/{_UUID}") == "woo"
+    assert detect_source("ronl-abc_2") == "woo"
+    assert detect_source("blg-1184123") == "kamerstuk"
+    assert detect_source("ah-1271549") == "kamerstuk"
+
+
+def test_from_overheid_routes_bare_uuids_by_asking_the_source(monkeypatch):
+    from mdconv import sources
+    from mdconv.sources import kamerstuk
+    from mdconv.sources.common import Fetched
+
+    monkeypatch.setattr(woo, "fetch", lambda q: Fetched("woo", "W"))
+    monkeypatch.setattr(kamerstuk, "fetch", lambda q: Fetched("kst", "K"))
+    monkeypatch.setattr(woo, "is_known_id", lambda q: True)
+    assert sources.from_overheid(_UUID).markdown == "woo"
+    monkeypatch.setattr(woo, "is_known_id", lambda q: False)
+    assert sources.from_overheid(_UUID).markdown == "kst"           # TK Document-Id
+    assert sources.from_overheid(f"{_UUID}_2").markdown == "woo"    # versiesuffix: alleen Woo
+    assert sources.from_overheid(f"https://open.overheid.nl/documenten/{_UUID}").markdown == "woo"
+    assert sources.from_overheid("kst-36600-VII-1").markdown == "kst"
+
+
+def test_search_endpoint_passes_parameters_and_clamps_numbers(client, monkeypatch):
+    seen = {}
+
+    def fake(scope, q, **kw):
+        seen.update(scope=scope, q=q, **kw)
+        return {"scope": scope, "total": 0, "start": kw["start"], "n": kw["n"], "results": [], "soorten": []}
+
+    monkeypatch.setattr(search, "search", fake)
+    r = client.get("/api/search?scope=woo&q=klimaat&soort=brief&van=2026-01-01&sort=nieuwste&start=-5&n=999")
+    assert r.status_code == 200
+    assert seen == {"scope": "woo", "q": "klimaat", "soort": "brief", "van": "2026-01-01", "tot": "",
+                    "sort": "nieuwste", "start": 0, "n": 50}
+    client.get("/api/search?start=abc&n=x")
+    assert seen["start"] == 0 and seen["n"] == 20
+
+
+def test_search_endpoint_errors_are_dutch_json(client):
+    r = client.get("/api/search?scope=elders&q=x")
+    assert r.status_code == 400 and "zoekbron" in r.get_json()["error"]
+
+
+def test_search_soorten_endpoint_lists_the_fixed_parliamentary_kinds(client):
+    keys = [s["key"] for s in client.get("/api/search/soorten").get_json()["soorten"]]
+    assert keys == ["alles", "kamerstuk", "bijlage", "aanhangsel", "handelingen"]
+
+
+def test_open_overheid_tab_and_panel_exist_in_the_page(client):
+    html = client.get("/").get_data(as_text=True)
+    for element in ('data-tab="oo"', "Open overheid", 'id="oo-form"', 'id="oo-q"', 'id="oo-scope"',
+                    'id="oo-results"', 'id="bijlagen"', 'id="bijlagen-list"', 'id="fetch-oo"'):
+        assert element in html, element
+    assert 'data-tab="kst"' not in html and "Kamerstukken</button>" not in html
+    # Tabvolgorde: tussen Wetgeving en Documentupload.
+    assert html.index('data-tab="wet"') < html.index('data-tab="oo"') < html.index('data-tab="doc"')

@@ -20,7 +20,7 @@ from flask import (
     Blueprint, Response, abort, current_app, jsonify, render_template, request, send_file,
 )
 
-from . import attachments, cleanup, features, net, ocr, sources, version
+from . import attachments, cleanup, features, net, ocr, search, sources, version
 from .errors import ConversionError
 from .sources import pdf_images
 
@@ -168,7 +168,42 @@ def convert_link():
     lang = (data.get("lang") or "NL").strip()
     if not query:
         raise ConversionError("Voer een CELEX-nummer, ECLI, of link in.")
-    return jsonify(sources.from_link(query, lang).as_json())
+    return jsonify(_doc_payload(sources.from_link(query, lang)))
+
+
+@bp.post("/api/convert/overheid")
+def convert_overheid():
+    """Open overheid: kamerstuk, aanhangsel, Handelingen, bijlage of Woo-document."""
+    data = _payload()
+    query = (data.get("query") or "").strip()
+    if not query:
+        raise ConversionError("Voer een kamerstuk, Woo-document, link of identifier in.")
+    return jsonify(_doc_payload(sources.from_overheid(query)))
+
+
+@bp.get("/api/search/soorten")
+def search_soorten():
+    """De vaste soorten voor het filter bij parlementaire publicaties (zonder zoekopdracht)."""
+    return jsonify(soorten=[{"key": k, "label": label} for k, label, _c, _x in search.sru.SOORTEN])
+
+
+@bp.get("/api/search")
+def search_overheid():
+    """Zoeken in de Open-overheid-bronnen (parlementaire publicaties via SRU, Woo)."""
+    args = request.args
+
+    def number(name: str, default: int, low: int, high: int) -> int:
+        try:
+            return max(low, min(high, int(args.get(name, default))))
+        except ValueError:
+            return default
+
+    return jsonify(search.search(
+        args.get("scope", "pub"), args.get("q", ""),
+        soort=args.get("soort", ""), van=args.get("van", ""), tot=args.get("tot", ""),
+        sort=args.get("sort", "relevantie"),
+        start=number("start", 0, 0, 100_000), n=number("n", 20, 10, 50),
+    ))
 
 
 @bp.post("/api/convert/text")

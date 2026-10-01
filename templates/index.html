@@ -10,7 +10,7 @@
   <header class="app-header glass">
     <div class="titles">
       <h1>Markdown converter</h1>
-      <p>Zet jurisprudentie, wetgeving of documenten om naar markdown.</p>
+      <p>Zet jurisprudentie, wetgeving, open overheidsinformatie of documenten om naar markdown.</p>
     </div>
     {% if settings %}
     <button type="button" class="btn btn-ghost btn-icon" id="open-settings"
@@ -25,6 +25,8 @@
               aria-selected="true" aria-controls="pane-jur">Jurisprudentie</button>
       <button type="button" class="tab" role="tab" data-tab="wet"
               aria-selected="false" aria-controls="pane-wet">Wetgeving</button>
+      <button type="button" class="tab" role="tab" data-tab="oo"
+              aria-selected="false" aria-controls="pane-oo">Open overheid</button>
       <button type="button" class="tab" role="tab" data-tab="doc"
               aria-selected="false" aria-controls="pane-doc">Documentupload</button>
       <button type="button" class="tab" role="tab" data-tab="tekst"
@@ -95,6 +97,96 @@
         (die splitst zich dan uit over losse regels) of via <strong>Lijst plakken</strong>
         hierboven, met één taalkeuze voor de hele lijst.
       </p>
+    </section>
+
+    <!-- Open overheid -->
+    <section class="pane" data-pane="oo" id="pane-oo" role="tabpanel" aria-label="Open overheid" hidden>
+      <div class="seg" role="group" aria-label="Werkwijze">
+        <button type="button" class="seg-btn" id="mode-oo-fetch" aria-pressed="true">Ophalen</button>
+        <button type="button" class="seg-btn" id="mode-oo-search" aria-pressed="false">Zoeken</button>
+      </div>
+
+      <div id="oo-fetch">
+        <div class="card">
+          <div class="seg" role="group" aria-label="Invoervorm">
+            <button type="button" class="seg-btn" id="mode-oo-rows" aria-pressed="true">Losse regels</button>
+            <button type="button" class="seg-btn" id="mode-oo-bulk" aria-pressed="false">Lijst plakken</button>
+          </div>
+          <div class="rows" id="rows-oo"></div>
+          <div class="bulk" id="bulk-oo" hidden>
+            <label class="visually-hidden" for="bulk-oo-text">Lijst met kamerstukken, Woo-documenten, links of identifiers</label>
+            <textarea id="bulk-oo-text" spellcheck="false"
+                      placeholder="Eén per regel — plak hier een hele lijst:&#10;&#10;kst-36600-VII-1&#10;36180, nr. 133&#10;https://zoek.officielebekendmakingen.nl/ah-tk-20242025-100.html&#10;https://open.overheid.nl/documenten/3174ead9-a4cb-4eb9-a26c-c2d8cc619c35&#10;&#10;Opsommingstekens, omringende tekst en dubbele regels worden er zelf uitgehaald."></textarea>
+            <div class="bulk-bar">
+              <span class="count" id="bulk-oo-count"></span>
+            </div>
+          </div>
+          <div class="row-actions">
+            <button type="button" class="btn btn-dashed" id="add-oo">+ Document toevoegen</button>
+            <button type="button" class="btn btn-solid btn-lg" id="fetch-oo">Ophalen</button>
+          </div>
+        </div>
+        <p class="hint">
+          <strong>Kamerstukken</strong>, <strong>Kamervragen met antwoord</strong>,
+          <strong>Handelingen</strong> en <strong>bijlagen</strong> van de Tweede en Eerste Kamer
+          (officiële publicatie op officielebekendmakingen.nl) en <strong>Woo-documenten</strong>
+          van open.overheid.nl. Vul een <strong>identifier</strong>
+          (<code>kst-36600-VII-1</code>, <code>ah-tk-20242025-100</code>, <code>blg-1184123</code>),
+          een <strong>dossiernotatie</strong> (<code>36600-VII, nr. 1</code>), een
+          <strong>link</strong> (officielebekendmakingen.nl, tweedekamer.nl of open.overheid.nl) of een
+          <strong>D-nummer</strong> van de Tweede Kamer in (<code>2024D40329</code>). Koppen,
+          voetnoten, verwijzingen, lijsten, tabellen en afbeeldingen blijven behouden; afbeeldingen
+          komen als bijlage mee in de zip. Bijlagen en gerelateerde documenten staan in het paneel
+          rechts van het resultaat. Weet je het nummer niet? Kies <strong>Zoeken</strong>.
+        </p>
+      </div>
+
+      <div id="oo-search" hidden>
+        <div class="card">
+          <form class="search-form" id="oo-form" role="search" autocomplete="off">
+            <div class="row">
+              <div class="field">
+                <input type="search" id="oo-q" aria-label="Zoekterm"
+                       placeholder="Zoekterm, dossiernummer (36600-VII) of onderwerp">
+              </div>
+              <select class="select" id="oo-scope" aria-label="Waarin zoeken">
+                <option value="pub">Parlementaire stukken</option>
+                <option value="woo">Woo-documenten</option>
+              </select>
+              <button type="submit" class="btn btn-solid" id="oo-go">Zoeken</button>
+            </div>
+            <div class="row filters">
+              <select class="select" id="oo-soort" aria-label="Soort"></select>
+              <select class="select" id="oo-sort" aria-label="Sorteren">
+                <option value="relevantie">Meest relevant</option>
+                <option value="nieuwste">Nieuwste eerst</option>
+                <option value="oudste">Oudste eerst</option>
+              </select>
+              <label class="date-field"><span>Vanaf</span>
+                <input type="date" id="oo-van" class="select"></label>
+              <label class="date-field"><span>Tot</span>
+                <input type="date" id="oo-tot" class="select"></label>
+            </div>
+          </form>
+          <div class="results-head" id="oo-results-head" hidden>
+            <label class="checkbox"><input type="checkbox" id="oo-select-all"><span id="oo-count"></span></label>
+            <button type="button" class="btn btn-solid" id="oo-fetch-selected" disabled>Geselecteerde ophalen</button>
+          </div>
+          <ol class="results" id="oo-results" aria-live="polite"></ol>
+          <div class="pager" id="oo-pager" hidden>
+            <button type="button" class="btn btn-outline" id="oo-prev">← Vorige</button>
+            <span id="oo-page"></span>
+            <button type="button" class="btn btn-outline" id="oo-next">Volgende →</button>
+          </div>
+        </div>
+        <p class="hint">
+          <strong>Parlementaire stukken</strong> (kamerstukken, Kamervragen, Handelingen) worden
+          doorzocht in de volledige tekst via de zoekdienst van overheid.nl; een dossiernummer als
+          <code>36600-VII</code> geeft alle stukken van dat dossier.
+          <strong>Woo-documenten</strong> komen uit open.overheid.nl (Woo-besluiten, adviezen,
+          beslisnota's, Kamerbrieven en meer; zoeken op volledige tekst).
+        </p>
+      </div>
     </section>
 
     <!-- Documentupload -->
@@ -181,6 +273,7 @@
 
     <!-- Uitvoer -->
     <section id="output" aria-label="Resultaat" hidden>
+      <div class="out-main">
       <div class="doc-tabs" id="doc-tabs" aria-label="Opgehaalde documenten" hidden></div>
 
       {% if ai %}
@@ -219,6 +312,16 @@
         <textarea id="md" spellcheck="false"></textarea>
         <div class="line-mirror" id="line-mirror" aria-hidden="true"></div>
       </div>
+      </div>
+
+      <aside class="side" id="bijlagen" aria-labelledby="bijlagen-title">
+        <div class="side-head">
+          <h2 id="bijlagen-title">Bijlagen</h2>
+          <button type="button" class="btn btn-outline btn-sm" id="bijlagen-all" hidden>Alles ophalen</button>
+        </div>
+        <p class="side-empty" id="bijlagen-empty">Dit document heeft geen bijlagen of gerelateerde documenten.</p>
+        <ul class="side-list" id="bijlagen-list"></ul>
+      </aside>
     </section>
   </main>
 

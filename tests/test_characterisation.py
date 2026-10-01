@@ -2364,12 +2364,12 @@ def test_download_bundle_without_documents_explains_itself_in_dutch(client):
     assert "documenten" in r.get_json()["error"]
 
 
-@pytest.mark.parametrize("kind, has_lang", [("jur", True), ("wet", True), ("doc", False)])
+@pytest.mark.parametrize("kind, has_lang", [("jur", True), ("wet", True), ("oo", False), ("doc", False)])
 def test_tab_offers_both_input_forms(kind, has_lang):
     """De front-end bouwt de id's van het lijst-tekstvak per conventie op
     (`#bulk-${kind}-text` enz.). Wordt er in de template één omgenoemd, dan
     faalt de JS stil — daarom staan ze hier vast. Documentupload ("doc") heeft
-    geen taalkeuze voor de lijst; de rest wel."""
+    geen taalkeuze voor de lijst, Open overheid ("oo") ook niet; de rest wel."""
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     html = open(os.path.join(root, "templates", "index.html"), encoding="utf-8").read()
     elements = [
@@ -2666,7 +2666,7 @@ _SETTINGS_ROUTES = [("get", "/api/settings"), ("post", "/api/settings")]
 # Wat er zonder AI nooit in de pagina mag staan, en wat er altijd moet blijven.
 _AI_ELEMENTS = ('id="clean-panel"', 'id="clean"', 'id="translate-nl"', 'id="obsidian"',
                 'id="ocr-mode"', 'id="settings-models"', 'id="prompt-generic"')
-_BASE_ELEMENTS = ('id="bulk-jur-text"', 'id="bulk-wet-text"', 'id="bulk-doc-text"',
+_BASE_ELEMENTS = ('id="bulk-jur-text"', 'id="bulk-wet-text"', 'id="bulk-oo-text"', 'id="bulk-doc-text"',
                   'id="paste-area"', 'id="drop"', 'id="download-all"')
 
 
