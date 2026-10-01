@@ -18,6 +18,7 @@ from urllib.parse import unquote, urlparse
 import requests
 from flask import (
     Blueprint, Response, abort, current_app, jsonify, render_template, request, send_file,
+    send_from_directory,
 )
 
 from . import attachments, cleanup, features, net, ocr, search, sources, version
@@ -181,6 +182,17 @@ def convert_overheid():
     return jsonify(_doc_payload(sources.from_overheid(query)))
 
 
+@bp.get("/api/attachments/<token>/<path:name>")
+def attachment_file(token: str, name: str):
+    """Een geëxtraheerde afbeelding tonen in de weergave (`![[p01.png]]`); alleen uit de eigen set."""
+    directory = attachments.get(token)
+    if directory is None:
+        abort(404)
+    response = send_from_directory(directory, name)      # safe_join: geen paden buiten de map
+    response.headers["Cache-Control"] = "private, max-age=3600"
+    return response
+
+
 @bp.get("/api/search/soorten")
 def search_soorten():
     """De vaste soorten voor het filter bij parlementaire publicaties (zonder zoekopdracht)."""
@@ -203,6 +215,8 @@ def search_overheid():
         soort=args.get("soort", ""), van=args.get("van", ""), tot=args.get("tot", ""),
         sort=args.get("sort", "relevantie"),
         start=number("start", 0, 0, 100_000), n=number("n", 20, 10, 50),
+        status=args.get("status", ""), fase=args.get("fase", ""), type_=args.get("type", ""),
+        zoekin=args.get("zoekin", ""),
     ))
 
 
