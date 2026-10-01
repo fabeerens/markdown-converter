@@ -6,8 +6,8 @@ De projectmap heet nog "EUR-lex naar md" (historisch); de tool zelf heet "Markdo
 
 De UI heeft vijf tabbladen: **Jurisprudentie** (HvJ EU / EHRM / NL via ECLI of link),
 **Wetgeving** (EU via CELEX/ELI/link, NL via wetten.overheid.nl/BWB), **Open overheid**
-(kamerstukken, Kamervragen, Handelingen, bijlagen en Woo-documenten: ophalen via
-id/dossiernotatie/link/D-nummer óf zoeken — zie "Open overheid" onder "Belangrijke details"),
+(subtabs Stukken, Consultaties en Wetgevingskalender: ophalen via id/dossiernotatie/link/D-nummer
+óf zoeken — zie "Open overheid" onder "Belangrijke details"),
 **Documentupload**
 (bestand(en) slepen óf link(s) naar een bestand plakken) en **Tekst plakken** (kale of
 verrijkte tekst rechtstreeks in een `contenteditable`-vak plakken/typen). Tabs 1 en 2
@@ -53,9 +53,11 @@ mdconv/
     formex.py              Formex-XML → markdown (context expliciet, dus thread-safe)
     files.py               PDF via pdf-inspector, rest via MarkItDown (beide lui geladen)
     kamerstuk.py           kamerstukken/Kamervragen/Handelingen/bijlagen: officiële XML (of PDF) → markdown
-    woo.py                 Woo-documenten van open.overheid.nl: zoek-API, bestand → markdown, relaties
+    woo.py                 documenten van open.overheid.nl (o.a. Woo): zoek-API, bestand → markdown, relaties
+    consultatie.py         internetconsultatie.nl: consultaties, documenten, reacties, zoeken (scraping)
+    wgk.py                 wetgevingskalender.overheid.nl: regeling-XML → markdown, zoeken
     sru.py                 SRU-client (repository.overheid.nl): zoeken, record op id, bijlagen van een stuk
-    common.py              Fetched-dataclass, bijlage()-items voor het paneel, header(), slug()
+    common.py              Fetched-dataclass, bijlage()-items (linklijst), header(), slug()
     pasted_text.py         handmatig geplakte tekst (kaal of verrijkte HTML) → markdown
     pdf_images.py           losse afbeeldingen uit een PDF (pdfimages/pdfinfo, poppler)
   attachments.py            tijdelijke, token-based opslag van geëxtraheerde afbeeldingen
@@ -88,6 +90,7 @@ soort), zodat de route niets over engines of classificatie hoeft te weten.
 | wetten.overheid.nl-link of **BWB-nummer** (`BWBR0040940`) | wetten.overheid.nl |
 | **`kst-…`/`ah-tk-…`/`h-tk-…`/`blg-…`-id**, officielebekendmakingen.nl- of tweedekamer.nl-link | Open overheid → `kamerstuk.py` (staat bóvenaan `detect_source`) |
 | **open.overheid.nl-link**, `ronl-…`/`oep-…`-id | Open overheid → `woo.py` (idem) |
+| **internetconsultatie.nl-link**, **`WGK…`-nummer/wetgevingskalender-link** | Open overheid → `consultatie.py` resp. `wgk.py` (idem) |
 | **`ECLI:DE:…`** (Duitse rechtspraak) | OpenLegalData (terugval: rechtsprechung-im-internet.de) |
 | **`ECLI:BE:…`** (Belgische rechtspraak) | Juportal |
 | **`ECLI:FR:CC:…`** (Conseil constitutionnel) of **`ECLI:FR:CCASS:…`** (Cour de cassation); overige FR-gerechten: nette foutmelding | conseil-constitutionnel.fr resp. Judilibre |
@@ -164,9 +167,9 @@ accountregistratie namens de gebruiker):
     XML-poging voor `blg-`/`ah-<cijfers>` over en valt voor andere ids terug op het SRU-record
     (`sru.by_identifier`) → de `pdf`-manifestatie → `files.convert`, met kopblok uit het record en een
     cursieve notitie ("geen gestructureerde XML"). Download is begrensd op 100 MB.
-  - **Bijlagen voor het paneel**: `sru.attachments_of(id)` (CQL `w.hoofddocument==<id>`) geeft de
+  - **Bijlagen**: `sru.attachments_of(id)` (CQL `w.hoofddocument==<id>`) geeft de
     `blg-…`-bijlagen mét titel; een bijlage wijst zelf terug naar zijn hoofddocument. Best-effort
-    (een storing geeft een leeg paneel, nooit een mislukte conversie); zonder SRU-resultaat vallen
+    (een storing geeft een lege lijst, nooit een mislukte conversie); zonder SRU-resultaat vallen
     we terug op `OVERHEIDop.bijlage` uit metadata.xml. Elk item is `{query, titel, rol, open_url}`;
     `query` gaat weer naar `/api/convert/overheid`, dus een bijlage is zelf een volwaardig document.
   - Niet gebouwd: bijlagen van bijlagen volgen, Handelingen-structuur (sprekers) verder dan platte
@@ -186,7 +189,7 @@ accountregistratie namens de gebruiker):
     `_pick_file` kiest PDF/Office/tekst en slaat zips over; geen bruikbaar bestand → duidelijke fout.
   - Gescande pdf's zonder tekstlaag geven vrijwel geen tekst: dan een cursieve waarschuwing met het
     advies de OCR-/wiskunde-modus bij Documentupload te gebruiken.
-  - **Relaties** (`documentrelaties`) worden het bijlagenpaneel: rollen uit de TOOI-thesaurus
+  - **Relaties** (`documentrelaties`) worden de bijlagenlijst: rollen uit de TOOI-thesaurus
     (`c_05f4a5f3` = "heeft bijlage", `c_4d1ea9ba` = "is bijlage bij", plus bundel/onderdeel; de
     identiteitsgroep valt weg). Titels worden parallel opgehaald (max. 30).
   - Een **kale UUID** is ook een Tweede Kamer-Document-Id: `sources.from_overheid` vraagt het aan
@@ -220,15 +223,53 @@ accountregistratie namens de gebruiker):
     lijst leesbaar is.
   - `woo` = `woo.search`; het soortfilter komt uit de facetten van het laatste antwoord (meeste
     eerst, max. 40). Zonder zoekterm én zonder filter weigert de zoekfunctie (anders 700k treffers).
-  - Front-end (`oo`-state + `renderOO`/`renderResults`/`runSearch` in `app.js`): modus "Ophalen" ↔
-    "Zoeken" (onthouden in `localStorage`), selectievakjes + "Geselecteerde ophalen", een
-    verzoek-token zodat alleen het laatste antwoord de lijst bijwerkt, paginering. Een document dat al
-    open staat (`doc.ident`) wordt getoond i.p.v. dubbel opgehaald.
-- **Bijlagenpaneel** (`#bijlagen`, `renderBijlagen()`): rechts naast het resultaat, toont
-  `doc.bijlagen` van het actieve document. Per item "Naar Markdown" (→ nieuw tabblad), "Tonen" als het
-  al open staat, "Origineel ↗", en "Alles ophalen (n)". Vanaf 1100px breed staat het in een grid
-  naast de editor (het resultaat is dan breder dan de rest van de pagina, max. 1360px);
-  daaronder staat het onder de editor. Opaak, niet glas (inhoudspaneel, zie Designsysteem).
+  - Front-end (`oo`-state + `renderOO`/`renderResults`/`runSearch` in `app.js`): drie **subtabs**
+    (Stukken | Consultaties | Wetgevingskalender; `oo.sub`, onthouden) — `ooScope()` leidt de
+    zoekbron af (bij Stukken de keuze alles/pub/woo). Bron-specifieke filters staan data-gedreven in
+    `OO_FILTERS` (consultaties: titel/tekst; wgk: status, fase, soort). Bij Stukken modus "Ophalen" ↔
+    "Zoeken"; selectievakjes + "Geselecteerde ophalen"; een verzoek-token zodat alleen het laatste
+    antwoord de lijst bijwerkt; paginering. Een document dat al open staat (`doc.ident`) wordt
+    getoond i.p.v. dubbel opgehaald. **Na ophalen klapt de resultaatlijst in** (`oo.collapsed`, de
+    lijst blijft in de DOM; balk "Zoekresultaten tonen (n)"); een nieuwe zoekopdracht klapt hem uit.
+- **Bijlagen = linklijst in de Markdown** (`common.bijlagen_section`/`with_bijlagen`): er is geen
+  paneel meer (eerst gebouwd, bleek weinig toe te voegen). Elke bron levert `Fetched.bijlagen`
+  (`{query, titel, rol, open_url}`); `sources._document_from` zet die onderaan als
+  `## Bijlagen en gerelateerde documenten` (tenzij de bron de lijst al op de juiste plek heeft
+  gezet, zoals kamerstukken vóór de voetnoten). Elke link is een adres dat de tool zelf begrijpt:
+  plakken bij Stukken → Ophalen zet dat document apart om. Zit niet in de JSON-respons.
+- **Consultaties** (`mdconv/sources/consultatie.py`, subtab "Consultaties"): internetconsultatie.nl is
+  server-gerenderde HTML zonder API, dus scrapen met BeautifulSoup. Adresvormen en de zoek-URL staan
+  in de module-docstring. Wat je moet weten:
+  - De consultatie wordt Markdown vanaf "In het kort" (titel/labels erboven en de feitentabel zitten
+    in het kopblok; **voorouders van die kop blijven staan** bij het wegknippen, anders verdwijnt de
+    hele inhoud). Bijlagenlijst: documenten (`/document/{id}`), "Alle reacties (n)" en de
+    wetgevingskalender-fiche (uit de link op de pagina).
+  - **Reacties** (`fetch_reacties`): één Markdown-document met de tekst van elke openbare reactie.
+    De lijst is te pagineren met `/reacties/datum/{pagina}/100` (de site laat 10/25/100 toe; met
+    10 per pagina duurde het veel langer). Elke reactie is een eigen pagina (12 parallel, 144 stuks
+    ≈ 1 minuut — de site is traag); max. `MAX_REACTIES` (400), meer wordt gemeld. De standaardvraag
+    "Wilt u reageren…" valt weg, specifieke vragen blijven (vet) staan; een bijlage wordt een link.
+  - **Zoeken**: `GET /zoeken/resultaat?Trefwoorden=…&TrefwoordenSearchScope=Titel|TitelEnTekst`
+    `&ConsultatiedatumVan=d-m-jjjj 00:00:00&…TotEnMet=…&Pagina=n`, vast 10 per pagina (de UI neemt
+    `n` uit het antwoord over). De filters kwamen uit de redirect van het POST-formulier
+    (ASP.NET-viewstate niet nodig). Zoekterm leeg mag.
+- **Wetgevingskalender** (`mdconv/sources/wgk.py`, subtab "Wetgevingskalender"): per regeling is er een
+  **XML-versie** (`/Regeling/WGKnnn/xml`, `regelgevingFiche`) met metadata, fasen, mijlpalen en
+  documenten (download-url) — die is de bron, niet de HTML. Zoeken: `/Regeling/ZoekResultaten?
+  Zinsdeel=…&Type=Regeling&Status=inwording|naderend|beeindigd&Fase=…&RegelgevingType=Wet|Amvb
+  &Pagina&Paginagrootte=10|25|100` (de site gebruikt GET-parameters die uit de formuliervelden
+  komen; filterwaarden worden gevalideerd tegen vaste lijsten). **Eén treffer** stuurt de site door
+  naar de regeling zelf; de titel komt dan uit `<title>`. Een document-download-URL (`…/Download/guid.pdf`)
+  wordt omgezet via `consultatie.fetch_file`, met de titel uit de fiche in plaats van de GUID.
+- **Weergave** (`static/mdview.js`, schakelaar "Ruwe tekst | Naast elkaar | Weergave" in de uitvoerbalk,
+  dus voor alle vijf de tabbladen): een eigen kleine Markdown→HTML-renderer zonder dependency (geen
+  build, geen externe verzoeken). Alles wordt geëscaped; alleen `<br>`, `<sup>`, `<sub>` blijven;
+  links alleen http(s)/mailto/relatief (nooit `javascript:`/`data:`). Dekt koppen, lijsten (genest),
+  tabellen, citaten, code, voetnoten (met terugkeerlink), links, Obsidian-embeds
+  (`![[p01.png]]` → `/api/attachments/<token>/<naam>`) en -wikilinks. Alleen gerenderd als hij
+  zichtbaar is; tijdens typen/streamen debounced (max. 600 ms oud), scrollen loopt evenredig mee,
+  de keuze staat in `localStorage` (`mdView`). Een Node-gestuurde test (`skipif` zonder `node`)
+  draait de renderer op vaste gevallen, incl. XSS-pogingen.
 - **EUR-Lex fetch**: de portal-HTML (`/legal-content/…/HTML/`) blokkeert bots (HTTP 202, lege body;
   inmiddels een AWS WAF-JS-challenge, dus ook met retries permanent 202 — de portal is in de praktijk
   dood voor een simpele `requests`-scraper). Gebruik het **Cellar-archief** via content negotiation,
@@ -1139,7 +1180,7 @@ enige dikte, niet een plat vlak met alleen een hoogtelicht.
   daar een `ZoneInfoNotFoundError` geven in plaats van gewoon te werken.
 
 ## Tests
-`.venv/bin/python -m pytest tests/ -q` — 297 tests (`tests/test_kamerstuk.py` en `tests/test_open_overheid.py` zijn de Open-overheid-bronnen en het zoeken; de rest karakteriseringstests) die het gedrag
+`.venv/bin/python -m pytest tests/ -q` — 357 tests (`tests/test_kamerstuk.py`, `test_open_overheid.py` en `test_consultatie_wgk.py` zijn de Open-overheid-bronnen, het zoeken en de weergave; de rest karakteriseringstests) die het gedrag
 vastleggen in plaats van het te beschrijven: `detect_source`-precedentie, ELI→CELEX,
 de geconsolideerde-CELEX-afhandeling (datum behouden, preambule invoegen, en de vier
 terugvalpaden als dat niet lukt), de versie-terugvalladder (nieuwste versie op of vóór de

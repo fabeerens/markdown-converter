@@ -33,7 +33,14 @@ Kamerstukken, Kamervragen met antwoord, Handelingen, bijlagen en **Woo-documente
 
 Kamerstukken komen uit de **officiële XML**, dus met structuur: koppen (nummering en typografie bepalen het niveau), **voetnoten** (`[^1]`), **verwijzingen** als links, lijsten, tabellen en afbeeldingen (die komen als bijlage mee in de zip). Bestaat er alleen een PDF (nieuwe publicaties en bijlagen), dan wordt die omgezet, met een notitie. Woo-documenten worden omgezet vanuit hun bestand (meestal PDF) met een kopblok met soort, organisatie, datum en thema; een scan zonder tekstlaag levert een waarschuwing.
 
-Rechts van het resultaat staat het **bijlagenpaneel**: bijlagen bij een kamerstuk, of de gerelateerde documenten van een Woo-document. Elk item is met één klik naar Markdown om te zetten in een nieuw tabblad.
+Bijlagen en gerelateerde documenten staan als **linklijst onderaan** het document; plak zo'n link bij Ophalen om dat document apart om te zetten. Na het ophalen klapt de zoeklijst in (hij blijft te openen).
+
+Twee subtabs naast **Stukken**:
+- **Consultaties** (internetconsultatie.nl) — zoeken op titel of tekst en periode. Een consultatie komt als Markdown met metadata en tekst; documenten en de wetgevingskalender staan als links, en **alle openbare reacties** zijn als één document op te halen (de tekst van elke reactie, bijlagen als link).
+- **Wetgevingskalender** (wetgevingskalender.overheid.nl) — zoeken op wet of AMvB, met filters op status, fase en soort. Een regeling komt als Markdown met voortgang, mijlpalen en alle documenten (adviezen, memorie van toelichting, …); een document is los om te zetten via zijn link.
+
+### Weergave van het resultaat
+Bij elk tabblad staat het resultaat in een viewer met drie standen: **Ruwe tekst** (met regelnummers, te bewerken), **Weergave** (de gerenderde Markdown) of **Naast elkaar**, waarbij het scrollen meeloopt.
 
 ### 4. Documentupload
 - Sleep een of meer bestanden in het venster (of klik om te bladeren), **of plak een of meer links naar bestanden** (bv. directe PDF-links).

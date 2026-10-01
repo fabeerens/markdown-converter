@@ -101,7 +101,13 @@
 
     <!-- Open overheid -->
     <section class="pane" data-pane="oo" id="pane-oo" role="tabpanel" aria-label="Open overheid" hidden>
-      <div class="seg" role="group" aria-label="Werkwijze">
+      <div class="subtabs" role="tablist" aria-label="Soort informatie">
+        <button type="button" class="subtab" role="tab" id="sub-stukken" data-sub="stukken" aria-selected="true">Stukken</button>
+        <button type="button" class="subtab" role="tab" id="sub-consultaties" data-sub="consultaties" aria-selected="false">Consultaties</button>
+        <button type="button" class="subtab" role="tab" id="sub-wgk" data-sub="wgk" aria-selected="false">Wetgevingskalender</button>
+      </div>
+
+      <div class="seg" id="oo-modes" role="group" aria-label="Werkwijze">
         <button type="button" class="seg-btn" id="mode-oo-fetch" aria-pressed="true">Ophalen</button>
         <button type="button" class="seg-btn" id="mode-oo-search" aria-pressed="false">Zoeken</button>
       </div>
@@ -114,7 +120,7 @@
           </div>
           <div class="rows" id="rows-oo"></div>
           <div class="bulk" id="bulk-oo" hidden>
-            <label class="visually-hidden" for="bulk-oo-text">Lijst met kamerstukken, Woo-documenten, links of identifiers</label>
+            <label class="visually-hidden" for="bulk-oo-text">Lijst met kamerstukken, open overheid-documenten, links of identifiers</label>
             <textarea id="bulk-oo-text" spellcheck="false"
                       placeholder="Eén per regel — plak hier een hele lijst:&#10;&#10;kst-36600-VII-1&#10;36180, nr. 133&#10;https://zoek.officielebekendmakingen.nl/ah-tk-20242025-100.html&#10;https://open.overheid.nl/documenten/3174ead9-a4cb-4eb9-a26c-c2d8cc619c35&#10;&#10;Opsommingstekens, omringende tekst en dubbele regels worden er zelf uitgehaald."></textarea>
             <div class="bulk-bar">
@@ -129,15 +135,15 @@
         <p class="hint">
           <strong>Kamerstukken</strong>, <strong>Kamervragen met antwoord</strong>,
           <strong>Handelingen</strong> en <strong>bijlagen</strong> van de Tweede en Eerste Kamer
-          (officiële publicatie op officielebekendmakingen.nl) en <strong>Woo-documenten</strong>
-          van open.overheid.nl. Vul een <strong>identifier</strong>
+          (officiële publicatie op officielebekendmakingen.nl) en <strong>Open overheid-documenten</strong>
+          van open.overheid.nl (waaronder Woo-besluiten). Vul een <strong>identifier</strong>
           (<code>kst-36600-VII-1</code>, <code>ah-tk-20242025-100</code>, <code>blg-1184123</code>),
           een <strong>dossiernotatie</strong> (<code>36600-VII, nr. 1</code>), een
           <strong>link</strong> (officielebekendmakingen.nl, tweedekamer.nl of open.overheid.nl) of een
           <strong>D-nummer</strong> van de Tweede Kamer in (<code>2024D40329</code>). Koppen,
           voetnoten, verwijzingen, lijsten, tabellen en afbeeldingen blijven behouden; afbeeldingen
-          komen als bijlage mee in de zip. Bijlagen en gerelateerde documenten staan in het paneel
-          rechts van het resultaat. Weet je het nummer niet? Kies <strong>Zoeken</strong>.
+          komen als bijlage mee in de zip. Bijlagen en gerelateerde documenten staan als linklijst
+          onderaan het document; plak zo'n link hierboven om ze zelf om te zetten. Weet je het nummer niet? Kies <strong>Zoeken</strong>.
         </p>
       </div>
 
@@ -150,25 +156,30 @@
                        placeholder="Zoekterm, dossiernummer (36600-VII) of onderwerp">
               </div>
               <select class="select" id="oo-scope" aria-label="Waarin zoeken">
-                <option value="alles">Alles — parlementaire stukken + Woo</option>
+                <option value="alles">Alles — parlementaire stukken + Open overheid</option>
                 <option value="pub">Alleen parlementaire stukken</option>
-                <option value="woo">Alleen Woo-documenten</option>
+                <option value="woo">Alleen Open overheid-documenten</option>
               </select>
               <button type="submit" class="btn btn-solid" id="oo-go">Zoeken</button>
             </div>
             <div class="row filters">
               <select class="select" id="oo-soort" aria-label="Soort"></select>
+              <span class="extra-filters" id="oo-extra"></span>
               <select class="select" id="oo-sort" aria-label="Sorteren">
                 <option value="nieuwste">Nieuwste eerst</option>
                 <option value="relevantie">Meest relevant</option>
                 <option value="oudste">Oudste eerst</option>
               </select>
-              <label class="date-field"><span>Vanaf</span>
+              <label class="date-field" id="oo-dates-from"><span>Vanaf</span>
                 <input type="date" id="oo-van" class="select"></label>
-              <label class="date-field"><span>Tot</span>
+              <label class="date-field" id="oo-dates-to"><span>Tot</span>
                 <input type="date" id="oo-tot" class="select"></label>
             </div>
           </form>
+          <button type="button" class="collapse-bar" id="oo-toggle" aria-expanded="true" aria-controls="oo-resultbox" hidden>
+            <span class="caret" aria-hidden="true">▾</span><span id="oo-toggle-text"></span>
+          </button>
+          <div id="oo-resultbox">
           <div class="results-head" id="oo-results-head" hidden>
             <label class="checkbox"><input type="checkbox" id="oo-select-all"><span id="oo-count"></span></label>
             <button type="button" class="btn btn-solid" id="oo-fetch-selected" disabled>Geselecteerde ophalen</button>
@@ -179,14 +190,29 @@
             <span id="oo-page"></span>
             <button type="button" class="btn btn-outline" id="oo-next">Volgende →</button>
           </div>
+          </div>
         </div>
-        <p class="hint">
+        <p class="hint" id="oo-hint-stukken">
           <strong>Alles</strong> doorzoekt twee bronnen tegelijk en toont één lijst, op datum:
           <strong>parlementaire stukken</strong> (kamerstukken, Kamervragen, Handelingen; zoekdienst
           van overheid.nl; een dossiernummer als <code>36600-VII</code> geeft alle stukken van dat
-          dossier) en <strong>Woo-documenten</strong> van open.overheid.nl (Woo-besluiten, adviezen,
+          dossier) en <strong>Open overheid-documenten</strong> van open.overheid.nl (Woo-besluiten, adviezen,
           beslisnota's, Kamerbrieven en meer). Staat hetzelfde stuk in beide, dan komt het één keer
           voor. Kies één bron om op soort te filteren.
+        </p>
+        <p class="hint" id="oo-hint-consultaties" hidden>
+          <strong>Consultaties</strong> van internetconsultatie.nl: wetsvoorstellen en andere regelingen in
+          voorbereiding waarop je kunt reageren. Zoek op titel of op titel en tekst, en op
+          consultatieperiode. Een consultatie komt als Markdown met metadata en tekst; documenten,
+          de wetgevingskalender-fiche en <strong>alle openbare reacties</strong> (één document met de
+          tekst van elke reactie) staan als links onderaan en zijn zelf ook op te halen door de link
+          bij <em>Stukken → Ophalen</em> te plakken.
+        </p>
+        <p class="hint" id="oo-hint-wgk" hidden>
+          <strong>Wetgevingskalender</strong> (wetgevingskalender.overheid.nl): het traject van een wet of
+          AMvB van voorbereiding tot bekendmaking, met alle mijlpalen en documenten (adviezen,
+          memorie van toelichting, …). Filter op status, fase en soort. Plak een WGK-nummer
+          (<code>WGK027200</code>) of link bij <em>Stukken → Ophalen</em> om er direct één op te halen.
         </p>
       </div>
     </section>
@@ -275,7 +301,6 @@
 
     <!-- Uitvoer -->
     <section id="output" aria-label="Resultaat" hidden>
-      <div class="out-main">
       <div class="doc-tabs" id="doc-tabs" aria-label="Opgehaalde documenten" hidden></div>
 
       {% if ai %}
@@ -303,27 +328,26 @@
 
       <div class="out-bar">
         <span class="src" id="src"></span>
+        <div class="seg view-seg" role="group" aria-label="Weergave van het resultaat">
+          <button type="button" class="seg-btn" id="view-raw" aria-pressed="false">Ruwe tekst</button>
+          <button type="button" class="seg-btn" id="view-split" aria-pressed="true">Naast elkaar</button>
+          <button type="button" class="seg-btn" id="view-preview" aria-pressed="false">Weergave</button>
+        </div>
         <button type="button" class="btn btn-outline" id="copy">Kopiëren</button>
         <button type="button" class="btn btn-outline" id="download">Download .md</button>
         <button type="button" class="btn btn-outline" id="download-all" hidden>Alles downloaden</button>
       </div>
 
+      <div class="viewer" id="viewer" data-view="split">
       <div class="editor" id="editor">
         <div class="gutter" aria-hidden="true"><div class="gutter-inner" id="gutter-inner"></div></div>
         <label class="visually-hidden" for="md">Markdown</label>
         <textarea id="md" spellcheck="false"></textarea>
         <div class="line-mirror" id="line-mirror" aria-hidden="true"></div>
       </div>
+      <div class="md-preview" id="preview" tabindex="0" aria-label="Weergave van de Markdown"></div>
       </div>
 
-      <aside class="side" id="bijlagen" aria-labelledby="bijlagen-title">
-        <div class="side-head">
-          <h2 id="bijlagen-title">Bijlagen</h2>
-          <button type="button" class="btn btn-outline btn-sm" id="bijlagen-all" hidden>Alles ophalen</button>
-        </div>
-        <p class="side-empty" id="bijlagen-empty">Dit document heeft geen bijlagen of gerelateerde documenten.</p>
-        <ul class="side-list" id="bijlagen-list"></ul>
-      </aside>
     </section>
   </main>
 
@@ -422,6 +446,7 @@
     Markdown converter · v{{ version }} (build {{ build }}) · geïnstalleerd op {{ installed_at }}
   </footer>
 
+  <script src="{{ url_for('static', filename='mdview.js') }}"></script>
   <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>

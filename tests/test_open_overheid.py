@@ -475,7 +475,8 @@ def test_search_endpoint_passes_parameters_and_clamps_numbers(client, monkeypatc
     r = client.get("/api/search?scope=woo&q=klimaat&soort=brief&van=2026-01-01&sort=nieuwste&start=-5&n=999")
     assert r.status_code == 200
     assert seen == {"scope": "woo", "q": "klimaat", "soort": "brief", "van": "2026-01-01", "tot": "",
-                    "sort": "nieuwste", "start": 0, "n": 50}
+                    "sort": "nieuwste", "start": 0, "n": 50,
+                    "status": "", "fase": "", "type_": "", "zoekin": ""}
     client.get("/api/search?start=abc&n=x")
     assert seen["start"] == 0 and seen["n"] == 20
 
@@ -490,11 +491,94 @@ def test_search_soorten_endpoint_lists_the_fixed_parliamentary_kinds(client):
     assert keys == ["alles", "kamerstuk", "bijlage", "aanhangsel", "handelingen"]
 
 
-def test_open_overheid_tab_and_panel_exist_in_the_page(client):
+def test_open_overheid_tab_exists_without_a_side_panel_and_results_can_collapse(client):
     html = client.get("/").get_data(as_text=True)
     for element in ('data-tab="oo"', "Open overheid", 'id="oo-form"', 'id="oo-q"', 'id="oo-scope"',
-                    'id="oo-results"', 'id="bijlagen"', 'id="bijlagen-list"', 'id="fetch-oo"'):
+                    'id="oo-results"', 'id="oo-toggle"', 'id="oo-resultbox"', 'id="fetch-oo"'):
         assert element in html, element
+    assert 'id="bijlagen' not in html and 'class="side"' not in html          # paneel is vervallen
     assert 'data-tab="kst"' not in html and "Kamerstukken</button>" not in html
+    # Binnen de tab heet de bron "Open overheid", niet "Woo".
+    pane = html[html.index('id="pane-oo"'):html.index('id="pane-doc"')]
+    assert "Alleen Open overheid-documenten" in pane and "Alleen Woo-documenten" not in pane
+    assert "parlementaire stukken + Open overheid" in pane
     # Tabvolgorde: tussen Wetgeving en Documentupload.
     assert html.index('data-tab="wet"') < html.index('data-tab="oo"') < html.index('data-tab="doc"')
+
+
+def test_bijlagen_become_a_link_list_unless_the_source_already_placed_it():
+    from mdconv.sources import common
+
+    items = [{"query": "blg-1", "titel": "Beslisnota", "rol": "Bijlage", "open_url": "https://x/blg-1.html"},
+             {"query": "https://x/doc/1", "titel": "Document", "rol": "Document", "open_url": None}]
+    out = common.with_bijlagen("# T\n\nTekst.\n", items)
+    assert out.endswith("## Bijlagen en gerelateerde documenten\n\n"
+                        "- [Beslisnota](https://x/blg-1.html) — Bijlage\n"
+                        "- [Document](https://x/doc/1) — Document\n")
+    assert common.with_bijlagen(out, items) == out                   # niet dubbel
+    assert common.with_bijlagen("# T\n", []) == "# T\n"
+
+
+# ---------------------------------------------------------------------------
+# Weergave naast de ruwe tekst (static/mdview.js, af te lezen vanuit alle tabbladen)
+# ---------------------------------------------------------------------------
+
+def test_viewer_is_in_the_shared_output_so_every_tab_has_it(client):
+    html = client.get("/").get_data(as_text=True)
+    for element in ('id="viewer"', 'id="preview"', 'id="view-raw"', 'id="view-split"', 'id="view-preview"',
+                    'id="gutter-inner"', 'id="md"', "static/mdview.js"):
+        assert element in html, element
+    # Eén uitvoer-sectie, na de vijf invoer-panelen: dus voor jur/wet/oo/doc/tekst hetzelfde.
+    assert html.count('id="viewer"') == 1
+    assert html.index('id="pane-tekst"') < html.index('id="viewer"')
+    assert html.index("mdview.js") < html.index("app.js")        # de renderer moet eerder geladen zijn
+
+
+def test_attachment_images_are_served_for_the_preview_but_only_from_the_own_set(client):
+    from mdconv import attachments
+    from mdconv.sources import Attachment
+
+    token = attachments.store([Attachment(filename="p01.png", data=b"\x89PNG-data")])
+    r = client.get(f"/api/attachments/{token}/p01.png")
+    assert r.status_code == 200 and r.data == b"\x89PNG-data" and r.mimetype == "image/png"
+    assert client.get(f"/api/attachments/{token}/ontbreekt.png").status_code == 404
+    assert client.get("/api/attachments/onbekendtoken/p01.png").status_code == 404
+    assert client.get(f"/api/attachments/{token}/..%2f..%2fetc%2fpasswd").status_code == 404
+
+
+_NODE = __import__("shutil").which("node")
+
+
+@pytest.mark.skipif(not _NODE, reason="node niet beschikbaar")
+@pytest.mark.parametrize("markdown, expected, forbidden", [
+    ("# Titel\n\n## Sub *x*", ["<h1>Titel</h1>", "<h2>Sub <em>x</em></h2>"], []),
+    ("**vet**, *cursief*, `code` en snake_case_naam", ["<strong>vet</strong>", "<em>cursief</em>",
+                                                       "<code>code</code>", "snake_case_naam"], ["<em>case"]),
+    ("- een\n- twee\n  - genest\n- drie", ["<li>een</li>", "<li>twee\n<ul>", "<li>genest</li>"], ["<li><p>"]),
+    ("1. a\n2. b", ["<ol>", "<li>a</li>", "<li>b</li>"], []),
+    ("| A | B |\n| --- | --- |\n| 1 | a\\|b |", ["<th>A</th>", "<td>1</td>", "<td>a|b</td>"], []),
+    ("Tekst.[^1]\n\n[^1]: De *noot*.", ['<sup class="fnref"><a href="#fn-1" id="fnref-1">1</a></sup>',
+                                        '<li id="fn-1"><p>De <em>noot</em>.'], []),
+    ("[l](https://x.nl/a_b) en <https://y.nl>", ['<a href="https://x.nl/a_b" target="_blank"',
+                                                 ">https://y.nl</a>"], []),
+    ("H<sub>2</sub>O x<sup>2</sup><br>", ["H<sub>2</sub>O", "x<sup>2</sup>", "<br>"], []),
+    ("![[p01.png]] en [[Doel|alias]]", ['<img src="/emb/p01.png"', '<span class="wikilink">alias</span>'], []),
+    ("> citaat", ["<blockquote><p>citaat</p></blockquote>"], []),
+    ("```\n<b>x</b>\n```", ["<pre><code>&lt;b&gt;x&lt;/b&gt;</code></pre>"], ["<b>"]),
+    # Veiligheid: niets uitvoerbaars uit een document of uit wat je zelf typt.
+    ("<script>alert(1)</script> <img src=x onerror=alert(1)> [x](javascript:alert(1)) ![i](data:text/html,x)",
+     ["&lt;script&gt;", "&lt;img src=x onerror=alert(1)&gt;", '<a href="#">x</a>', 'src="#"'],
+     ["<script", "<img src=x", 'href="javascript', 'src="data']),
+])
+def test_markdown_renderer(markdown, expected, forbidden):
+    import json
+    import subprocess
+
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    script = (f"const {{mdToHtml}} = require({json.dumps(os.path.join(root, 'static', 'mdview.js'))});"
+              f"process.stdout.write(mdToHtml({json.dumps(markdown)}, {{embedUrl: n => '/emb/' + n}}));")
+    html = subprocess.run([_NODE, "-e", script], capture_output=True, text=True, check=True).stdout
+    for piece in expected:
+        assert piece in html, f"{piece!r} ontbreekt in {html!r}"
+    for piece in forbidden:
+        assert piece not in html, f"{piece!r} hoort er niet in: {html!r}"

@@ -15,9 +15,9 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 
 from .errors import ConversionError
-from .sources import sru, woo
+from .sources import consultatie, sru, wgk, woo
 
-SCOPES = ("alles", "pub", "woo")
+SCOPES = ("alles", "pub", "woo", "consultatie", "wgk")
 
 # Bij "alles" halen we per bron de eerste `start + n` resultaten op en voegen die
 # samen; dieper dan dit bladeren we niet (anders groeit elke pagina-aanvraag mee).
@@ -80,7 +80,25 @@ def _woo_result(item: dict) -> dict:
     }
 
 
-_NEED_TERM = "Vul een zoekterm in (of kies een filter) om in de Woo-documenten te zoeken."
+def _cons_result(x: dict) -> dict:
+    return {
+        "id": x["slug"], "query": consultatie.canonical(x["slug"]), "titel": x["titel"],
+        "soort": x["status"], "datum": x["sluiting"], "bron": x["organisatie"],
+        "meta": "sluitingsdatum" if x["sluiting"] else "",     # de datum zelf staat al in `datum`
+        "snippet": _flat(x["samenvatting"]), "open_url": consultatie.canonical(x["slug"]),
+        "bronsoort": "consultatie",
+    }
+
+
+def _wgk_result(x: dict) -> dict:
+    return {
+        "id": x["id"], "query": x["id"], "titel": x["titel"], "soort": x["fase"], "datum": "",
+        "bron": x["ministerie"], "meta": "", "snippet": "",
+        "open_url": f"{wgk.BASE}/Regeling/{x['id']}", "bronsoort": "wgk",
+    }
+
+
+_NEED_TERM = "Vul een zoekterm in (of kies een filter) om in de documenten van open overheid te zoeken."
 
 
 def _search_pub(q, soort, van, tot, sort, start, n):
@@ -176,7 +194,7 @@ def _search_all(q, van, tot, sort, start, n) -> dict:
     with ThreadPoolExecutor(max_workers=2) as pool:
         futures = {"pub": pool.submit(pub), "woo": pool.submit(woo_)}
     got, warnings = {}, []
-    for name, label in (("pub", "parlementaire stukken"), ("woo", "Woo-documenten")):
+    for name, label in (("pub", "parlementaire stukken"), ("woo", "documenten van open overheid")):
         try:
             got[name] = futures[name].result()
         except Exception as e:                      # één bron mag uitvallen
@@ -195,10 +213,23 @@ def _search_all(q, van, tot, sort, start, n) -> dict:
 
 
 def search(scope: str, q: str, *, soort: str = "", van: str = "", tot: str = "",
-           sort: str = "relevantie", start: int = 0, n: int = 20) -> dict:
+           sort: str = "relevantie", start: int = 0, n: int = 20,
+           status: str = "", fase: str = "", type_: str = "", zoekin: str = "") -> dict:
     """Uniform antwoord: totaal, resultaten, soorten (voor het filter) en sorteermogelijkheden."""
     if scope not in SCOPES:
         raise ConversionError("Onbekende zoekbron.")
+    if scope == "consultatie":
+        # De site geeft vaste pagina's van 10; een paginagrootte kiezen kan niet.
+        n = consultatie.PAGE_SIZE
+        total, raw = consultatie.search(q, titel_alleen=(zoekin == "titel"), van=van, tot=tot,
+                                        page=start // n + 1)
+        return {"scope": scope, "total": total, "start": start, "n": n, "limit": total,
+                "results": [_cons_result(x) for x in raw], "soorten": []}
+    if scope == "wgk":
+        n = wgk.PAGE_SIZE
+        total, raw = wgk.search(q, status=status, fase=fase, type_=type_, page=start // n + 1, size=n)
+        return {"scope": scope, "total": total, "start": start, "n": n, "limit": total,
+                "results": [_wgk_result(x) for x in raw], "soorten": []}
     pub_soorten = [{"key": k, "label": label} for k, label, _c, _x in sru.SOORTEN]
     dossier = sru.dossier_of(q)
     if dossier and scope in ("alles", "pub"):

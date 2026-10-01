@@ -475,7 +475,7 @@ def client():
     return create_app(ai_enabled=False).test_client()
 
 
-def test_endpoint_returns_markdown_attachment_token_bijlagen_and_name(client, monkeypatch):
+def test_endpoint_returns_markdown_attachment_token_and_name_with_bijlagen_in_the_text(client, monkeypatch):
     from mdconv.sources.common import Fetched
 
     monkeypatch.setattr(kamerstuk, "fetch", lambda q: Fetched(
@@ -485,9 +485,12 @@ def test_endpoint_returns_markdown_attachment_token_bijlagen_and_name(client, mo
     r = client.post("/api/convert/overheid", json={"query": "kst-1-1"})
     body = r.get_json()
     assert r.status_code == 200
-    assert body["markdown"] == "# Titel\n" and body["kind"] == "document"
+    assert body["markdown"].startswith("# Titel\n") and body["kind"] == "document"
+    # De bijlagen staan als linklijst in de Markdown zelf; er is geen apart paneel meer.
+    assert "## Bijlagen en gerelateerde documenten\n\n- [B](blg-1) — Bijlage" in body["markdown"]
+    assert "bijlagen" not in body
     assert body["attachment_count"] == 1 and body["attachments_token"]
-    assert body["bijlagen"][0]["query"] == "blg-1" and body["ident"] == "kst-1-1" and body["name"] == "kst-1-1"
+    assert body["ident"] == "kst-1-1" and body["name"] == "kst-1-1"
 
 
 def test_endpoint_validates_input_in_dutch(client):

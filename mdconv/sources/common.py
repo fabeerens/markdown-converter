@@ -48,6 +48,30 @@ def bijlage(query: str, titel: str, rol: str, open_url: str | None = None) -> di
     return {"query": query, "titel": titel or query, "rol": rol, "open_url": open_url}
 
 
+BIJLAGEN_HEADING = "## Bijlagen en gerelateerde documenten"
+
+
+def bijlagen_section(items: list[dict]) -> str:
+    """Linklijst met bijlagen en gerelateerde documenten, als onderdeel van de Markdown.
+
+    Elke link is een adres dat de tool zelf ook begrijpt: plak het bij "Ophalen" om dat
+    document apart om te zetten."""
+    if not items:
+        return ""
+    lines = []
+    for it in items:
+        url = it.get("open_url") or it["query"]
+        lines.append(f"- [{it['titel']}]({url}) — {it['rol']}")
+    return BIJLAGEN_HEADING + "\n\n" + "\n".join(lines)
+
+
+def with_bijlagen(markdown: str, items: list[dict]) -> str:
+    """Zet de bijlagenlijst onderaan, tenzij de bron hem al op de juiste plek heeft gezet."""
+    if not items or BIJLAGEN_HEADING in markdown:
+        return markdown
+    return markdown.rstrip() + "\n\n" + bijlagen_section(items) + "\n"
+
+
 def header(title: str, facts: list[tuple[str, str | None]]) -> str:
     """`# titel` + een opsomming `- **Label:** waarde` (lege waarden vallen weg)."""
     lines = [f"- **{label}:** {value}" for label, value in facts if value]

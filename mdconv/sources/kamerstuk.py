@@ -44,7 +44,7 @@ from .. import net
 from ..errors import ConversionError
 from ..render import tidy
 from . import sru
-from .common import Fetched, MAX_DOWNLOAD_BYTES, bijlage, header, nl_date
+from .common import Fetched, MAX_DOWNLOAD_BYTES, bijlage, bijlagen_section, header, nl_date
 
 BASE = "https://zoek.officielebekendmakingen.nl"
 ODATA = "https://gegevensmagazijn.tweedekamer.nl/OData/v4/2.0"
@@ -309,12 +309,12 @@ def fetch(query: str) -> Fetched:
             bijlagen = bijl_future.result()
 
     if xml is not None:
-        markdown, image_names = xml_to_markdown(xml, ident, meta)
-        markdown, images = _attach_images(markdown, image_names)
-        source = f"Officiële Bekendmakingen • {_display_id(ident)} ({ident})"
         if not bijlagen:   # SRU gaf niets (of faalde): de ids uit de XML-metadata zijn beter dan niets
             bijlagen = [bijlage(b, b, "Bijlage", f"{BASE}/{b}.html")
                         for b in meta.get("OVERHEIDop.bijlage", [])]
+        markdown, image_names = xml_to_markdown(xml, ident, meta, bijlagen)
+        markdown, images = _attach_images(markdown, image_names)
+        source = f"Officiële Bekendmakingen • {_display_id(ident)} ({ident})"
         return Fetched(markdown, source, images, bijlagen, ident=ident, name=ident)
 
     if ident:
@@ -940,7 +940,8 @@ def _kop_lines(root) -> dict[str, str]:
     return out
 
 
-def xml_to_markdown(xml: bytes, ident: str, meta: dict | None = None) -> tuple[str, list[str]]:
+def xml_to_markdown(xml: bytes, ident: str, meta: dict | None = None,
+                    bijlagen: list[dict] | None = None) -> tuple[str, list[str]]:
     """Officiële-publicatie-XML → (markdown, namen van de afbeeldingen)."""
     meta = meta or {}
     try:
@@ -1017,11 +1018,13 @@ def xml_to_markdown(xml: bytes, ident: str, meta: dict | None = None) -> tuple[s
     if subtitle:
         head += ["", _heading(subtitle, 2)]
 
-    bijlagen = meta.get("OVERHEIDop.bijlage", [])
+    # Bijlagen (met titel, uit de zoekdienst) of anders alleen de id's uit de metadata.
+    if bijlagen is None:
+        bijlagen = [bijlage(b, b, "Bijlage", f"{BASE}/{b}.html")
+                    for b in meta.get("OVERHEIDop.bijlage", [])]
     tail: list[str] = []
     if bijlagen:
-        tail += ["## Bijlagen bij dit stuk", "",
-                 "\n".join(f"- [{b}]({BASE}/{b}.html)" for b in bijlagen)]
+        tail += [bijlagen_section(bijlagen)]
     if ctx.notes:
         tail += ["", "\n\n".join(f"[^{label}]: {text}" for label, text in ctx.notes)]
 
