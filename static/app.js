@@ -49,7 +49,7 @@ const LANGS = ["NL", "EN", "FR", "DE", "ES", "IT", "PT", "PL"];
 const PLACEHOLDERS = {
   jur: "ECLI of link — bv. ECLI:EU:C:2025:645 · ECLI:NL:HR:2012:BQ9251 · ECLI:CE:ECHR:… · HUDOC-link",
   wet: "link, CELEX of BWB — bv. 32016R0679 · eur-lex.europa.eu/eli/… · BWBR0040940",
-  oo: "kamerstuk of Woo-document — bv. kst-36600-VII-1 · 36600-VII, nr. 1 · 2024D40329 · open.overheid.nl-link",
+  oo: "kamerstuk of open overheid-document — bv. kst-36600-VII-1 · 36600-VII, nr. 1 · 2024D40329 · open.overheid.nl-link",
   doc: "https://… (link naar een PDF, Word, Excel …)",
 };
 
@@ -98,7 +98,7 @@ function profileFor(doc) {
 function addDoc({
   title, filenameBase, source, kind, markdown, allowObsidian,
   attachments_token, attachment_count, batchIndex = 0, activate = true,
-  bijlagen = [], ident = "",
+  ident = "",
 }) {
   const doc = {
     id: state.nextId++,
@@ -125,9 +125,7 @@ function addDoc({
     // bouwt i.p.v. een los .md-bestand.
     attachmentsToken: attachments_token || null,
     attachmentCount: attachment_count || 0,
-    // Open overheid: gerelateerde documenten voor het paneel rechts, en het id
-    // waaronder de bron dit document kent (om "al geopend" te herkennen).
-    bijlagen,
+    // Open overheid: het id waaronder de bron dit document kent (om "al geopend" te herkennen).
     ident,
   };
   state.docs.push(doc);
@@ -286,7 +284,7 @@ function makeRow(kind, onSubmit) {
   input.setAttribute(
     "aria-label",
     kind === "doc" ? "Link naar een bestand"
-      : kind === "oo" ? "Kamerstuk, Woo-document, identifier of link"
+      : kind === "oo" ? "Kamerstuk, open overheid-document, identifier of link"
       : "ECLI, CELEX of link"
   );
   field.appendChild(input);
@@ -651,10 +649,10 @@ async function fetchLinks(kind) {
 }
 
 /* --------------------------------------------------------------------------
-   Open overheid — ophalen, zoeken en het bijlagenpaneel
+   Open overheid — ophalen en zoeken
 
    Eén endpoint (/api/convert/overheid) voor kamerstukken, Kamervragen,
-   Handelingen, bijlagen en Woo-documenten; de server beslist welke bron het is.
+   Handelingen, bijlagen en open overheid-documenten; de server beslist welke bron het is.
    Zoeken (/api/search) levert per resultaat de `query` die ophalen direct
    begrijpt, dus een zoekresultaat en een bijlage gaan door dezelfde functie.
    -------------------------------------------------------------------------- */
@@ -662,16 +660,19 @@ async function fetchLinks(kind) {
 /** Wat er op dit moment voor een bijlage/resultaat wordt opgehaald (op `query`). */
 const ooBusy = new Set();
 
-async function fetchOverheidItems(items, button) {
+async function fetchOverheidItems(items, button, { collapse = false } = {}) {
+  const docsBefore = state.docs.length;
   const fresh = items.filter((it) => {
     // Staat dit document al open? Dan alleen ernaartoe, geen tweede tabblad.
     const open = state.docs.find((d) => d.ident && d.ident === it.query);
     if (open) setActive(open.id);
     return !open;
   });
-  if (!fresh.length) return;
+  if (!fresh.length) {
+    if (collapse) { oo.collapsed = true; renderResults(); }
+    return;
+  }
   fresh.forEach((it) => ooBusy.add(it.query));
-  renderBijlagen();
   renderResults();
   const run = () =>
     runBatch(
@@ -692,7 +693,9 @@ async function fetchOverheidItems(items, button) {
     await (button ? withBusyButton(button, run) : run());
   } finally {
     fresh.forEach((it) => ooBusy.delete(it.query));
-    renderBijlagen();
+    // Opgehaald vanuit de zoeklijst? Dan klapt die in (hij blijft bestaan), zodat het
+    // resultaat meteen in beeld is.
+    if (collapse && state.docs.length > docsBefore) oo.collapsed = true;
     renderResults();
   }
 }
@@ -700,71 +703,25 @@ async function fetchOverheidItems(items, button) {
 async function fetchOverheid() {
   const items = readInput("oo");
   if (!items.length) {
-    setStatus("Voer minstens één kamerstuk, Woo-document, identifier of link in.", "err");
+    setStatus("Voer minstens één kamerstuk, open overheid-document, identifier of link in.", "err");
     return;
   }
   await fetchOverheidItems(items, $("#fetch-oo"));
 }
 
-/* -- Het bijlagenpaneel -------------------------------------------------- */
-
-function renderBijlagen() {
-  const doc = activeDoc();
-  const items = doc ? doc.bijlagen : [];
-  $("#bijlagen-empty").hidden = items.length > 0;
-  const loaded = (it) => state.docs.some((d) => d.ident === it.query);
-  const todo = items.filter((it) => !loaded(it) && !ooBusy.has(it.query));
-  const all = $("#bijlagen-all");
-  all.hidden = todo.length < 2;
-  all.textContent = `Alles ophalen (${todo.length})`;
-  all.onclick = () => fetchOverheidItems(todo, all);
-
-  $("#bijlagen-list").replaceChildren(
-    ...items.map((item) => {
-      const li = document.createElement("li");
-      li.className = "side-item";
-      const title = document.createElement("div");
-      title.className = "side-title";
-      title.textContent = item.titel;
-      const rol = document.createElement("span");
-      rol.className = "chip";
-      rol.textContent = item.rol;
-      const actions = document.createElement("div");
-      actions.className = "side-actions";
-
-      const convert = document.createElement("button");
-      convert.type = "button";
-      convert.className = "btn btn-outline btn-sm";
-      const isLoaded = loaded(item);
-      convert.textContent = ooBusy.has(item.query) ? "Bezig…" : isLoaded ? "Tonen" : "Naar Markdown";
-      convert.disabled = ooBusy.has(item.query);
-      convert.addEventListener("click", () => fetchOverheidItems([item], convert));
-      actions.appendChild(convert);
-
-      if (item.open_url) {
-        const open = document.createElement("a");
-        open.className = "side-link";
-        open.href = item.open_url;
-        open.target = "_blank";
-        open.rel = "noopener noreferrer";
-        open.textContent = "Origineel ↗";
-        actions.appendChild(open);
-      }
-      li.append(rol, title, actions);
-      return li;
-    })
-  );
-}
-
 /* -- Zoeken -------------------------------------------------------------- */
 
 const oo = {
-  mode: "fetch",            // "fetch" | "search"
-  scope: "alles",           // "alles" (beide samengevoegd) | "pub" (SRU) | "woo" (open.overheid.nl)
+  mode: "fetch",            // "fetch" | "search" (alleen bij de subtab "Stukken")
+  sub: "stukken",           // "stukken" | "consultaties" | "wgk"
+  stukken: "alles",         // keuze binnen "Stukken": "alles" (beide samengevoegd) | "pub" (SRU) | "woo"
+  filters: {},              // extra filters van de huidige bron (zie OO_FILTERS)
   q: "", soort: "", sort: "nieuwste", van: "", tot: "",
   start: 0, n: 20, total: 0,
   /** Hoe diep er te bladeren valt (bij "alles" begrensd), en de totalen per bron. */
   limit: 0, totals: null,
+  /** De resultaatlijst is ingeklapt (na ophalen) — alleen de balk om hem weer te openen blijft. */
+  collapsed: false,
   /** Gezet als de zoekterm een dossiernummer was: dan is het resultaat het hele dossier. */
   dossier: "",
   results: [], selected: new Set(),
@@ -774,6 +731,29 @@ const oo = {
   token: 0,
 };
 
+/** De bron waarin gezocht wordt: bij "Stukken" de keuze in de lijst, anders de subtab. */
+const ooScope = () =>
+  oo.sub === "consultaties" ? "consultatie" : oo.sub === "wgk" ? "wgk" : oo.stukken;
+
+/** Extra filters per bron (naast zoekterm, soort, sortering en datums). */
+const OO_FILTERS = {
+  consultatie: [
+    { key: "zoekin", aria: "Zoeken in", options: [["", "Titel en tekst"], ["titel", "Alleen titel"]] },
+  ],
+  wgk: [
+    { key: "status", aria: "Status", options: [["", "Alle statussen"], ["inwording", "In wording"],
+      ["naderend", "Naderend"], ["beeindigd", "Beëindigd"]] },
+    { key: "fase", aria: "Fase", options: [["", "Alle fasen"], ...["Voorbereiding", "Raad van State",
+      "Tweede Kamer", "Eerste Kamer", "Bekendmaking"].map((f) => [f, f])] },
+    { key: "type", aria: "Soort regeling", options: [["", "Wet of AMvB"], ["Wet", "Wet"], ["Amvb", "AMvB"]] },
+  ],
+};
+const OO_PLACEHOLDER = {
+  stukken: "Zoekterm, dossiernummer (36600-VII) of onderwerp",
+  consultaties: "Zoekterm, bv. politie of Wet gegevensvergaring",
+  wgk: "Zoekterm (naam van de wet of AMvB), leeg = alles",
+};
+
 const NL_DATE = new Intl.DateTimeFormat("nl-NL", { day: "numeric", month: "short", year: "numeric" });
 function formatDate(iso) {
   const d = /^\d{4}-\d{2}-\d{2}/.test(iso || "") ? new Date(`${iso.slice(0, 10)}T00:00:00`) : null;
@@ -781,18 +761,32 @@ function formatDate(iso) {
 }
 
 function renderOO() {
-  const search = oo.mode === "search";
-  $("#oo-fetch").hidden = search;
+  const scope = ooScope();
+  const stukken = oo.sub === "stukken";
+  const search = !stukken || oo.mode === "search";
+  $$(".subtab").forEach((t) => t.setAttribute("aria-selected", String(t.dataset.sub === oo.sub)));
+  $("#oo-modes").hidden = !stukken;
+  $("#oo-fetch").hidden = !(stukken && !search);
   $("#oo-search").hidden = !search;
   $("#mode-oo-fetch").setAttribute("aria-pressed", String(!search));
   $("#mode-oo-search").setAttribute("aria-pressed", String(search));
+  $("#oo-hint-stukken").hidden = !stukken;
+  $("#oo-hint-consultaties").hidden = oo.sub !== "consultaties";
+  $("#oo-hint-wgk").hidden = oo.sub !== "wgk";
+  $("#oo-q").placeholder = OO_PLACEHOLDER[oo.sub];
 
-  $("#oo-scope").value = oo.scope;
+  $("#oo-scope").hidden = !stukken;
+  $("#oo-scope").value = oo.stukken;
   $("#oo-sort").value = oo.sort;
+  // Sortering en soort bestaan alleen waar de bron dat kent; wetgevingskalender kent geen datums.
+  const hasSoort = scope === "pub" || scope === "woo";
+  $("#oo-sort").hidden = !(stukken);
+  $("#oo-dates-from").hidden = $("#oo-dates-to").hidden = scope === "wgk";
+
   const soort = $("#oo-soort");
-  const options = oo.scope === "woo"
+  const options = scope === "woo"
     ? [{ key: "", label: "Alle soorten" }, ...oo.soorten.woo]
-    : oo.scope === "pub" ? oo.soorten.pub : [];
+    : scope === "pub" ? oo.soorten.pub : [];
   soort.replaceChildren(
     ...options.map((o) => {
       const opt = document.createElement("option");
@@ -802,9 +796,27 @@ function renderOO() {
     })
   );
   soort.value = options.some((o) => o.key === oo.soort) ? oo.soort : options[0]?.key ?? "";
-  oo.soort = oo.scope === "alles" ? "" : soort.value;
-  // Soorten verschillen per bron; bij "alles" is er dus geen soortfilter.
-  soort.hidden = oo.scope === "alles";
+  oo.soort = hasSoort ? soort.value : "";
+  soort.hidden = !hasSoort;
+
+  // Extra, bron-specifieke filters.
+  $("#oo-extra").replaceChildren(
+    ...(OO_FILTERS[scope] || []).map((f) => {
+      const select = document.createElement("select");
+      select.className = "select";
+      select.id = `oo-f-${f.key}`;
+      select.setAttribute("aria-label", f.aria);
+      f.options.forEach(([value, label]) => {
+        const opt = document.createElement("option");
+        opt.value = value;
+        opt.textContent = label;
+        select.appendChild(opt);
+      });
+      select.value = oo.filters[f.key] || "";
+      select.addEventListener("change", () => { oo.filters[f.key] = select.value; });
+      return select;
+    })
+  );
   $("#oo-go").disabled = oo.loading;
   renderResults();
 }
@@ -815,6 +827,13 @@ function renderResults() {
   const pager = $("#oo-pager");
   head.hidden = !oo.results.length;
   pager.hidden = !oo.results.length;
+  const toggle = $("#oo-toggle");
+  toggle.hidden = !oo.results.length;
+  toggle.setAttribute("aria-expanded", String(!oo.collapsed));
+  $("#oo-toggle-text").textContent = oo.collapsed
+    ? `Zoekresultaten tonen (${oo.total.toLocaleString("nl-NL")} ${oo.total === 1 ? "resultaat" : "resultaten"})`
+    : "Zoekresultaten verbergen";
+  $("#oo-resultbox").hidden = oo.collapsed && oo.results.length > 0;
 
   if (!oo.results.length) {
     const empty = document.createElement("li");
@@ -828,11 +847,11 @@ function renderResults() {
   const from = oo.start + 1;
   const to = oo.start + oo.results.length;
   const split = oo.totals
-    ? ` (publicaties ${oo.totals.pub?.toLocaleString("nl-NL") ?? "–"} · Woo ${oo.totals.woo?.toLocaleString("nl-NL") ?? "–"})`
+    ? ` (publicaties ${oo.totals.pub?.toLocaleString("nl-NL") ?? "–"} · Open overheid ${oo.totals.woo?.toLocaleString("nl-NL") ?? "–"})`
     : "";
   $("#oo-count").textContent = oo.dossier
     ? `Dossier ${oo.dossier} — ${oo.total.toLocaleString("nl-NL")} stukken, oudste eerst — ${from}–${to} getoond`
-    : `${oo.total.toLocaleString("nl-NL")} resultaten${split} — ${from}–${to} getoond`;
+    : `${oo.total.toLocaleString("nl-NL")} ${oo.total === 1 ? "resultaat" : "resultaten"}${split} — ${from}–${to} getoond`;
   const allSelected = oo.results.every((r) => oo.selected.has(r.id));
   $("#oo-select-all").checked = allSelected;
   const nSel = oo.selected.size;
@@ -871,16 +890,16 @@ function renderResults() {
       const meta = document.createElement("div");
       meta.className = "result-meta";
       // Bij "alles" staat het meteen bij elk resultaat uit welke bron het komt.
-      if (oo.scope === "alles") {
+      if (ooScope() === "alles") {
         const bron = document.createElement("span");
         bron.className = `chip chip-${r.bronsoort}`;
-        bron.textContent = r.bronsoort === "woo" ? "Woo" : "Officiële publicatie";
+        bron.textContent = r.bronsoort === "woo" ? "Open overheid" : "Officiële publicatie";
         meta.appendChild(bron);
         if (r.ook_woo) {
           const ook = document.createElement("span");
           ook.className = "chip chip-woo";
-          ook.title = "Dit stuk staat ook bij open.overheid.nl (Woo)";
-          ook.textContent = "ook Woo";
+          ook.title = "Dit stuk staat ook bij open.overheid.nl";
+          ook.textContent = "ook Open overheid";
           meta.appendChild(ook);
         }
       }
@@ -905,7 +924,7 @@ function renderResults() {
       get.className = "btn btn-outline btn-sm";
       get.textContent = ooBusy.has(r.query) ? "Bezig…" : open ? "Tonen" : "Ophalen";
       get.disabled = ooBusy.has(r.query);
-      get.addEventListener("click", () => fetchOverheidItems([{ query: r.query }], get));
+      get.addEventListener("click", () => fetchOverheidItems([{ query: r.query }], get, { collapse: true }));
 
       li.append(check, body, get);
       return li;
@@ -926,12 +945,14 @@ async function runSearch(start = 0) {
   if (start === 0) oo.n = 20;
   oo.start = start;
   oo.loading = true;
+  oo.collapsed = false;            // een nieuwe zoekopdracht toont de lijst weer
   const token = ++oo.token;
   renderOO();
   const params = new URLSearchParams({
-    scope: oo.scope, q: oo.q, soort: oo.soort, sort: oo.sort,
+    scope: ooScope(), q: oo.q, soort: oo.soort, sort: oo.sort,
     van: oo.van, tot: oo.tot, start: String(start), n: String(oo.n),
   });
+  Object.entries(oo.filters).forEach(([k, v]) => { if (v) params.set(k, v); });
 
   setStatus("Zoeken…", "info", { busy: true });
   try {
@@ -944,7 +965,7 @@ async function runSearch(start = 0) {
     oo.dossier = data.dossier || "";
     oo.n = data.n || oo.n;            // een dossier komt in grotere pagina's
     oo.searched = true;
-    if (data.scope !== "alles") oo.soorten[data.scope] = data.soorten.filter((o) => o.key !== "");
+    if (data.scope === "pub" || data.scope === "woo") oo.soorten[data.scope] = data.soorten.filter((o) => o.key !== "");
     // Eén bron die uitvalt mag de andere niet verbergen: tonen, maar wel melden.
     if (data.waarschuwing) setStatus(data.waarschuwing, "info");
     else clearStatus();
@@ -967,11 +988,13 @@ async function runSearch(start = 0) {
 }
 
 async function initOpenOverheid() {
-  // Vaste soorten voor parlementaire publicaties; Woo-soorten komen uit de eerste zoekopdracht.
+  // Vaste soorten voor parlementaire publicaties; soorten van open.overheid.nl komen uit de eerste zoekopdracht.
   try {
     oo.soorten.pub = (await api("/api/search/soorten")).soorten;
   } catch (_) { /* zonder lijst blijft "Zoeken" werken, alleen zonder soortfilter */ }
   oo.mode = localStorage.getItem("ooMode") === "search" ? "search" : "fetch";
+  const savedSub = localStorage.getItem("ooSub");
+  oo.sub = ["stukken", "consultaties", "wgk"].includes(savedSub) ? savedSub : "stukken";
 
   const setMode = (mode) => {
     oo.mode = mode;
@@ -982,20 +1005,42 @@ async function initOpenOverheid() {
   $("#mode-oo-fetch").addEventListener("click", () => setMode("fetch"));
   $("#mode-oo-search").addEventListener("click", () => setMode("search"));
 
-  $("#oo-scope").addEventListener("change", (e) => {
-    oo.scope = e.target.value;
+  const resetResults = () => {
     oo.soort = "";
+    oo.filters = {};
     oo.results = [];
+    oo.total = 0;
+    oo.dossier = "";
+    oo.totals = null;
     oo.selected.clear();
     oo.searched = false;
+    oo.collapsed = false;
+  };
+  $("#oo-scope").addEventListener("change", (e) => {
+    oo.stukken = e.target.value;
+    resetResults();
     renderOO();
   });
+  $$(".subtab").forEach((tab) =>
+    tab.addEventListener("click", () => {
+      if (oo.sub === tab.dataset.sub) return;
+      oo.sub = tab.dataset.sub;
+      localStorage.setItem("ooSub", oo.sub);
+      resetResults();
+      renderOO();
+      if (oo.sub !== "stukken") $("#oo-q").focus();
+    })
+  );
   $("#oo-soort").addEventListener("change", (e) => { oo.soort = e.target.value; });
   $("#oo-sort").addEventListener("change", (e) => { oo.sort = e.target.value; });
   $("#oo-form").addEventListener("submit", (e) => {
     e.preventDefault();
     oo.selected.clear();
     runSearch(0);
+  });
+  $("#oo-toggle").addEventListener("click", () => {
+    oo.collapsed = !oo.collapsed;
+    renderResults();
   });
   $("#oo-prev").addEventListener("click", () => runSearch(Math.max(0, oo.start - oo.n)));
   $("#oo-next").addEventListener("click", () => runSearch(oo.start + oo.n));
@@ -1006,7 +1051,7 @@ async function initOpenOverheid() {
   $("#oo-fetch-selected").addEventListener("click", async () => {
     const items = oo.results.filter((r) => oo.selected.has(r.id)).map((r) => ({ query: r.query }));
     oo.selected.clear();
-    await fetchOverheidItems(items, $("#oo-fetch-selected"));
+    await fetchOverheidItems(items, $("#oo-fetch-selected"), { collapse: true });
   });
   renderOO();
 }
@@ -1229,7 +1274,6 @@ function renderEditor() {
   $("#output").hidden = !doc;
   if (!doc) return;
 
-  renderBijlagen();
   $("#md").value = doc.markdown;
   $("#src").textContent = doc.source;
   $("#src").title = doc.source;
@@ -1736,6 +1780,78 @@ function syncGutterScroll() {
 function updateLineNumbers() {
   cancelAnimationFrame(editor.frame);
   editor.frame = requestAnimationFrame(measureLineNumbers);
+  schedulePreview();
+}
+
+/* --------------------------------------------------------------------------
+   Weergave naast de ruwe tekst (static/mdview.js)
+
+   Eén Markdown-bron, twee gezichten: de textarea met regelnummers en de gerenderde
+   weergave. Alleen wat zichtbaar is wordt gerenderd; tijdens een stream (opschonen)
+   ververst de weergave hooguit om de 600 ms in plaats van bij elk stukje tekst.
+   -------------------------------------------------------------------------- */
+
+const VIEWS = ["raw", "split", "preview"];
+const preview = { mode: "split", timer: null, last: 0, lock: 0 };
+
+function renderView() {
+  $("#viewer").dataset.view = preview.mode;
+  VIEWS.forEach((v) => $(`#view-${v}`).setAttribute("aria-pressed", String(v === preview.mode)));
+  schedulePreview(0);
+  updateLineNumbers();           // de editor is misschien net zichtbaar/van breedte veranderd
+}
+
+function schedulePreview(delay = 150) {
+  if (preview.mode === "raw" || typeof mdToHtml !== "function") return;
+  clearTimeout(preview.timer);
+  // Wachten tot het typen/streamen even stilvalt, maar nooit langer dan 600 ms oud.
+  const wait = performance.now() - preview.last >= 600 ? 0 : delay;
+  preview.timer = setTimeout(updatePreview, wait);
+}
+
+function updatePreview() {
+  if (preview.mode === "raw") return;
+  preview.last = performance.now();
+  const doc = activeDoc();
+  const token = doc && doc.attachmentsToken;
+  const pane = $("#preview");
+  const top = pane.scrollTop;
+  pane.innerHTML = mdToHtml($("#md").value, {
+    // Geëxtraheerde afbeeldingen (![[p01.png]]) staan onder het bijlage-token van het document.
+    embedUrl: token ? (name) => `/api/attachments/${token}/${encodeURIComponent(name)}` : null,
+  });
+  pane.scrollTop = top;
+}
+
+function initPreview() {
+  const saved = localStorage.getItem("mdView");
+  preview.mode = VIEWS.includes(saved) ? saved : "split";
+  VIEWS.forEach((v) =>
+    $(`#view-${v}`).addEventListener("click", () => {
+      preview.mode = v;
+      localStorage.setItem("mdView", v);
+      renderView();
+    })
+  );
+  // Voetnoten en ankers scrollen binnen de weergave, niet de hele pagina.
+  $("#preview").addEventListener("click", (e) => {
+    const a = e.target.closest('a[href^="#"]');
+    if (!a) return;
+    e.preventDefault();
+    const target = $("#preview").querySelector(`[id="${a.getAttribute("href").slice(1)}"]`);
+    if (target) target.scrollIntoView({ block: "nearest" });
+  });
+  // Naast elkaar: scrollen loopt evenredig mee (met een korte vergrendeling tegen echo's).
+  const follow = (from, to) => () => {
+    if (preview.mode !== "split" || performance.now() < preview.lock) return;
+    const max = from.scrollHeight - from.clientHeight;
+    if (max <= 0) return;
+    preview.lock = performance.now() + 80;
+    to.scrollTop = (from.scrollTop / max) * (to.scrollHeight - to.clientHeight);
+  };
+  $("#md").addEventListener("scroll", follow($("#md"), $("#preview")), { passive: true });
+  $("#preview").addEventListener("scroll", follow($("#preview"), $("#md")), { passive: true });
+  renderView();
 }
 
 function measureLineNumbers() {
@@ -2225,6 +2341,7 @@ function init() {
   if (SETTINGS_ENABLED) initSettings();
   if (AI_ENABLED) initCleanControls();
   initUpload();
+  initPreview();
   initGlassSpecular();
   initHeaderElevation();
 

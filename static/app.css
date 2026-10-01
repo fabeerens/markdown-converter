@@ -659,10 +659,20 @@ body {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
+/* De hoogte (en het vergroten) zit op `.viewer`, die de ruwe tekst en de weergave naast
+   elkaar of los laat zien; editor en weergave vullen hem. */
+.viewer {
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-3);
+  height: 480px; min-height: 200px; resize: vertical; overflow: hidden;
+}
+.viewer[data-view="split"] { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.viewer[data-view="raw"] .md-preview, .viewer[data-view="preview"] .editor { display: none; }
+.view-seg { margin-bottom: 0; }
+
 .editor {
   position: relative; display: flex;
-  height: 480px; min-height: 200px;
-  resize: vertical; overflow: hidden;
+  height: 100%; min-height: 0;
+  overflow: hidden;
   background: var(--panel);
   border-radius: var(--diag-4);
   box-shadow: var(--card-ring);
@@ -848,11 +858,12 @@ body {
   .row { flex-wrap: wrap; }
   .row .field { flex-basis: 100%; }
   .clean-controls { width: 100%; }
-  .editor { height: 380px; }
+  .viewer { height: 380px; }
+  .viewer[data-view="split"] { grid-template-columns: minmax(0, 1fr); grid-template-rows: 1fr 1fr; height: 640px; }
 }
 
 /* --------------------------------------------------------------------------
-   Open overheid: zoeken, resultaten en het bijlagenpaneel
+   Open overheid: zoeken en resultaten
    -------------------------------------------------------------------------- */
 .btn-sm { height: var(--space-5); padding: 0 var(--space-3); font-size: var(--fs-1); }
 
@@ -904,37 +915,75 @@ body {
   color: var(--muted); font-size: var(--fs-1);
 }
 
-/* Resultaat + bijlagenpaneel. Het resultaat is breder dan de rest van de pagina
-   (max. 1360px) zodat het paneel rechts de editor niet platdrukt; onder 1100px
-   staat het paneel gewoon onder de editor. */
-.side {
-  margin-top: var(--space-4); padding: var(--space-4);
-  background: var(--panel); border-radius: var(--diag-4); box-shadow: var(--card-ring);
+/* Ingeklapte zoekresultaten: de lijst blijft bestaan (hidden), alleen deze balk blijft zichtbaar. */
+.collapse-bar {
+  display: flex; align-items: center; gap: var(--space-2); width: 100%;
+  margin: var(--space-3) 0 var(--space-1); padding: var(--space-2) var(--space-3);
+  background: var(--gray-a3); border: 0; border-radius: var(--radius-2); cursor: pointer;
+  color: var(--text); font: var(--fw-medium) var(--fs-2)/1.4 var(--font-sans); text-align: left;
 }
-.side-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
-.side h2 { margin: 0; font-size: var(--fs-3); font-weight: var(--fw-bold); }
-.side-empty { margin: var(--space-3) 0 0; color: var(--muted); font-size: var(--fs-1); line-height: var(--lh-2); }
-.side-list { list-style: none; margin: var(--space-3) 0 0; padding: 0; }
-.side-item { padding: var(--space-3) 0; border-top: 1px solid var(--border-subtle); }
-.side-title {
-  margin: var(--space-1) 0 var(--space-2); font-size: var(--fs-2); line-height: var(--lh-2);
-  overflow-wrap: anywhere;
-}
-.side-actions { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
-.side-link { color: var(--accent-text); font-size: var(--fs-1); text-decoration: none; }
-.side-link:hover { text-decoration: underline; }
+.collapse-bar:hover { background: var(--gray-a4); }
+.collapse-bar:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.collapse-bar .caret { display: inline-block; transition: transform var(--dur-fast) var(--ease-standard); }
+.collapse-bar[aria-expanded="false"] .caret { transform: rotate(-90deg); }
 
-@media (min-width: 1100px) {
-  #output:not([hidden]) {
-    position: relative; left: 50%; transform: translateX(-50%);
-    width: min(1360px, calc(100vw - 2 * var(--space-4)));
-    display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: var(--space-4);
-    align-items: start;
-  }
-  .out-main { min-width: 0; }
-  .side { margin-top: 0; position: sticky; top: calc(var(--space-8) + var(--space-6)); max-height: calc(100vh - 140px); overflow: auto; }
-}
 @media (max-width: 640px) {
   .result { flex-wrap: wrap; }
   .result > .btn { margin-left: calc(var(--space-3) + 16px); }
 }
+
+/* --------------------------------------------------------------------------
+   Weergave van de Markdown (static/mdview.js). Opaak, net als de editor.
+   -------------------------------------------------------------------------- */
+.md-preview {
+  min-width: 0; height: 100%; overflow: auto; padding: var(--space-4) var(--space-5);
+  background: var(--panel); border-radius: var(--diag-4); box-shadow: var(--card-ring);
+  color: var(--text); font: var(--fw-regular) var(--fs-3)/1.6 var(--font-sans);
+  overflow-wrap: anywhere;
+}
+.md-preview:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+.md-preview > :first-child { margin-top: 0; }
+.md-preview h1, .md-preview h2, .md-preview h3, .md-preview h4, .md-preview h5, .md-preview h6 {
+  margin: 1.4em 0 .5em; line-height: 1.25; font-weight: var(--fw-bold);
+}
+.md-preview h1 { font-size: 1.6em; } .md-preview h2 { font-size: 1.35em; }
+.md-preview h3 { font-size: 1.15em; } .md-preview h4 { font-size: 1.05em; }
+.md-preview h5, .md-preview h6 { font-size: 1em; color: var(--muted); }
+.md-preview p { margin: 0 0 .8em; }
+.md-preview ul, .md-preview ol { margin: 0 0 .8em; padding-left: 1.6em; }
+.md-preview li > p { margin-bottom: .4em; }
+.md-preview blockquote {
+  margin: 0 0 .8em; padding: .1em 1em; color: var(--gray-11);
+  border-left: 3px solid var(--accent-a6); background: var(--accent-a2);
+}
+.md-preview code { padding: 1px 4px; border-radius: 4px; background: var(--gray-a3); font: var(--editor-font); font-size: .9em; }
+.md-preview pre { margin: 0 0 .8em; padding: var(--space-3); overflow: auto; border-radius: var(--radius-2); background: var(--gray-a3); }
+.md-preview pre code { padding: 0; background: none; }
+.md-preview a { color: var(--accent-text); }
+.md-preview img { max-width: 100%; height: auto; }
+.md-preview hr { border: 0; border-top: 1px solid var(--border-subtle); margin: 1.2em 0; }
+.md-preview .table-wrap { overflow-x: auto; margin: 0 0 .8em; }
+.md-preview table { border-collapse: collapse; font-size: .92em; }
+.md-preview th, .md-preview td { padding: 4px 10px; border: 1px solid var(--border-subtle); vertical-align: top; text-align: left; }
+.md-preview th { background: var(--gray-a3); font-weight: var(--fw-bold); }
+.md-preview .wikilink, .md-preview .embed {
+  padding: 0 6px; border-radius: var(--radius-pill); background: var(--accent-a3); color: var(--accent-text); font-size: .9em;
+}
+.md-preview sup.fnref { font-size: .75em; line-height: 0; }
+.md-preview .footnotes { margin-top: 2em; font-size: .9em; color: var(--gray-11); }
+.md-preview .footnotes ol { padding-left: 1.4em; }
+.md-preview .footnotes li { scroll-margin-top: var(--space-3); }
+.md-preview .fnback { text-decoration: none; margin-left: 4px; }
+
+/* Subtabs binnen "Open overheid": lichter dan de hoofdtabs (onderstreept, geen pil). */
+.subtabs { display: flex; gap: var(--space-4); margin: 0 0 var(--space-3); border-bottom: 1px solid var(--border-subtle); }
+.subtab {
+  padding: var(--space-2) 2px; margin-bottom: -1px; background: none; border: 0; cursor: pointer;
+  border-bottom: 2px solid transparent; color: var(--muted);
+  font: var(--fw-medium) var(--fs-2)/1.2 var(--font-sans);
+  transition: color var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard);
+}
+.subtab:hover { color: var(--text); }
+.subtab:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: 2px; }
+.subtab[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent-9); font-weight: var(--fw-bold); }
+.extra-filters { display: contents; }

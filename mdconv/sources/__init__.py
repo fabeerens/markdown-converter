@@ -16,6 +16,8 @@ from dataclasses import dataclass
 
 from . import (
     be_juportal,
+    common,
+    consultatie,
     de_openlegaldata,
     eurlex,
     files,
@@ -27,6 +29,7 @@ from . import (
     pdf_images,
     rechtspraak,
     wetten,
+    wgk,
     woo,
 )
 
@@ -63,8 +66,8 @@ class Attachment:
 class Document:
     """Eén geconverteerd document, klaar voor de editor.
 
-    `bijlagen` zijn links naar gerelateerde documenten (bijlagen bij een
-    kamerstuk, relaties van een Woo-document) voor het paneel rechts.
+    `bijlagen` zijn gerelateerde documenten (bijlagen bij een kamerstuk, relaties van een
+    open overheid-document); ze staan als linklijst in de Markdown zelf (`common.with_bijlagen`).
 
     `attachments` (losse afbeeldingen uit een PDF, zie `pdf_images.py`) gaat
     NIET mee in `as_json()` — binaire data hoort niet in de conversie-JSON.
@@ -86,9 +89,6 @@ class Document:
             out["ident"] = self.ident
         if self.name:
             out["name"] = self.name
-        if self.bijlagen:
-            # Voor het bijlagenpaneel: [{query, titel, rol, open_url}] — zie sources/common.py.
-            out["bijlagen"] = list(self.bijlagen)
         return out
 
 
@@ -110,6 +110,10 @@ def detect_source(query: str) -> str | None:
     # Kamerstuk-id's (kst-…, ah-tk-…) en links naar officielebekendmakingen.nl /
     # tweedekamer.nl zijn ondubbelzinnig, dus eerst: de cijfergroepen in zo'n id
     # mogen niet als HUDOC-item-id of CELEX gelezen worden.
+    if consultatie.matches(q):
+        return "consultatie"
+    if wgk.matches(q):
+        return "wgk"
     if kamerstuk.matches(q):
         return "kamerstuk"
     if woo.matches(q):
@@ -138,7 +142,7 @@ def detect_source(query: str) -> str | None:
 def from_link(query: str, lang: str = "NL") -> Document:
     """Los een link/identifier op naar een document."""
     source = detect_source(query)
-    if source in ("kamerstuk", "woo"):
+    if source in ("kamerstuk", "woo", "consultatie", "wgk"):
         return from_overheid(query)
     if source == "rechtspraak":
         markdown, note = rechtspraak.fetch(query)
@@ -160,20 +164,25 @@ _UUID_ID = re.compile(
 
 def _document_from(fetched) -> Document:
     return Document(
-        markdown=fetched.markdown, source=fetched.source, kind=KIND_DOCUMENT,
+        markdown=common.with_bijlagen(fetched.markdown, fetched.bijlagen), source=fetched.source, kind=KIND_DOCUMENT,
         attachments=tuple(Attachment(filename=n, data=d) for n, d in fetched.images),
         bijlagen=tuple(fetched.bijlagen), ident=fetched.ident, name=fetched.name,
     )
 
 
 def from_overheid(query: str) -> Document:
-    """Open overheid: kamerstuk/aanhangsel/Handelingen/bijlage óf een Woo-document.
+    """Open overheid: kamerstuk/aanhangsel/Handelingen/bijlage, een open overheid-document,
+    een consultatie (met documenten en reacties) of een wetgevingskalender-regeling.
 
     Routering: een open.overheid.nl-link of id → Woo; een kale UUID is óók een
     Tweede Kamer-Document-Id, dus die probeert eerst open.overheid.nl (één licht
     verzoek) en valt anders terug op de Tweede Kamer-open data; de rest is een
     kamerstuk (id, link, dossiernotatie of D-nummer)."""
     q = query.strip()
+    if consultatie.matches(q):
+        return _document_from(consultatie.fetch(q))
+    if wgk.matches(q):
+        return _document_from(wgk.fetch(q))
     if woo.matches(q):
         return _document_from(woo.fetch(q))
     if _UUID_ID.match(q) and (q.count("_") or woo.is_known_id(q)):
