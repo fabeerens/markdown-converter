@@ -21,7 +21,7 @@ from flask import (
     send_from_directory,
 )
 
-from . import attachments, cleanup, features, net, ocr, search, sources, version
+from . import attachments, cleanup, features, kb_bundle, net, ocr, search, sources, version
 from .errors import ConversionError
 from .sources import pdf_images
 
@@ -228,7 +228,7 @@ def convert_text():
     text = data.get("text") or ""
     if not html.strip() and not text.strip():
         raise ConversionError("Plak eerst tekst in het vak.")
-    return jsonify(sources.from_pasted_text(html, text).as_json())
+    return jsonify(_doc_payload(sources.from_pasted_text(html, text)))
 
 
 def _doc_payload(doc) -> dict:
@@ -236,6 +236,14 @@ def _doc_payload(doc) -> dict:
     afbeeldingen uit een PDF zijn geëxtraheerd — de binaire data zelf gaat
     nooit in JSON mee, zie `mdconv/attachments.py`."""
     payload = doc.as_json()
+    if doc.provenance is not None:
+        token = kb_bundle.store(doc.provenance.as_json())
+        if token:
+            payload["bundle_token"] = token
+    # De herkomst (met de volledige bronbytes) blijft server-side. Voor
+    # wetgeving heeft de browser alleen het bundeltoken nodig; meesturen zou
+    # het antwoord verdubbelen en de bron onnodig in de browser bewaren.
+    payload.pop("provenance", None)
     if doc.attachments:
         payload["attachments_token"] = attachments.store(doc.attachments)
         payload["attachment_count"] = len(doc.attachments)
@@ -254,7 +262,11 @@ def convert_file():
     if not data.strip():
         raise ConversionError("Het bestand is leeg.")
     extract_images = request.form.get("extract_images") == "1"
-    doc = sources.from_file(data, upload.filename, extract_images=extract_images)
+    # Optioneel en alleen achterkant: zonder documentnummer blijft de download een los
+    # `.md`-bestand. De voorkant heeft er (nog) geen veld voor.
+    document_id = (request.form.get("document_id") or "").strip() or None
+    extra = {"document_id": document_id} if document_id else {}
+    doc = sources.from_file(data, upload.filename, extract_images=extract_images, **extra)
     return jsonify(_doc_payload(doc))
 
 
@@ -284,7 +296,9 @@ def convert_file_url():
 
     filename = _filename_from_url(url, r.headers.get("Content-Type", ""))
     extract_images = data_in.get("extract_images") is True
-    doc = sources.from_file_bytes(r.content, filename, url, extract_images=extract_images)
+    document_id = (data_in.get("document_id") or "").strip() or None
+    doc = sources.from_file_bytes(r.content, filename, url, extract_images=extract_images,
+                                  document_id=document_id, source_url=url)
     return jsonify(_doc_payload(doc))
 
 
@@ -529,6 +543,7 @@ def download():
 
     Drie vormen, in deze volgorde:
     - `documents: [...]` → alle opgehaalde documenten in één zip (batch-download);
+    - één wetgevingsdocument met `bundle_token` → een uitpakbare kb-zip;
     - één document mét `attachments_token` → een zip met de markdown en de
       `attachments/`-map (losse afbeeldingen uit een PDF, zie `mdconv/attachments.py`);
     - anders → een los `.md`-bestand.
@@ -539,6 +554,23 @@ def download():
         return _download_bundle(documents, data.get("filename"))
 
     name = _safe_name(data.get("filename"))
+    bundle_token = (data.get("bundle_token") or "").strip()
+    if bundle_token:
+        try:
+            gebouwd = kb_bundle.build(
+                bundle_token,
+                data.get("markdown", ""),
+                bewerkt_met_ai=data.get("bewerkt_met_ai") is True,
+            )
+        except (ValueError, TypeError) as exc:
+            raise ConversionError(f"Kennisbankbundel kon niet worden gebouwd: {exc}") from exc
+        if gebouwd is None:
+            raise ConversionError("De kennisbankbundel is verlopen; haal het document opnieuw op.")
+        stream, document_id = gebouwd
+        return send_file(
+            stream, mimetype="application/zip", as_attachment=True,
+            download_name=f"{document_id}.zip",
+        )
     directory = _attachment_dir(data.get("attachments_token"))
     if directory:
         buf = io.BytesIO()
@@ -570,6 +602,25 @@ def _download_bundle(documents: list, name):
     used: set = set()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         for entry in entries:
+            bundle_token = (entry.get("bundle_token") or "").strip()
+            if bundle_token:
+                try:
+                    gebouwd = kb_bundle.build(
+                        bundle_token,
+                        entry.get("markdown") or "",
+                        bewerkt_met_ai=entry.get("bewerkt_met_ai") is True,
+                    )
+                except (ValueError, TypeError) as exc:
+                    raise ConversionError(f"Kennisbankbundel kon niet worden gebouwd: {exc}") from exc
+                if gebouwd is None:
+                    raise ConversionError(
+                        "Een kennisbankbundel is verlopen; haal de documenten opnieuw op."
+                    )
+                binnenste, _ = gebouwd
+                with zipfile.ZipFile(binnenste) as kb_zip:
+                    for pad in kb_zip.namelist():
+                        zf.writestr(pad, kb_zip.read(pad))
+                continue
             base = _unique_name(_safe_name(entry.get("filename")), used)
             zf.writestr(f"{base}.md", entry.get("markdown") or "")
             directory = _attachment_dir(entry.get("attachments_token"))

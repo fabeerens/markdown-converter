@@ -97,8 +97,8 @@ function profileFor(doc) {
 
 function addDoc({
   title, filenameBase, source, kind, markdown, allowObsidian,
-  attachments_token, attachment_count, batchIndex = 0, activate = true,
-  ident = "",
+  attachments_token, attachment_count, bundle_token, warnings,
+  batchIndex = 0, activate = true, ident = "",
 }) {
   const doc = {
     id: state.nextId++,
@@ -117,6 +117,9 @@ function addDoc({
     obsidian: false,
     model: $("#model")?.value || null,
     markdown,
+    // Bronwaarschuwingen blijven bij hun eigen documenttab horen. Zo blijft
+    // een weggelaten inhoudsafbeelding ook na wisselen van tab zichtbaar.
+    warnings: Array.isArray(warnings) ? warnings : [],
     cleaned: false,
     translated: false,
     lastUsage: null,
@@ -125,6 +128,9 @@ function addDoc({
     // bouwt i.p.v. een los .md-bestand.
     attachmentsToken: attachments_token || null,
     attachmentCount: attachment_count || 0,
+    // Bronbytes en herkomst blijven op de server; alleen dit tijdelijke token
+    // gaat door de browser en bouwt bij downloaden de uitpakbare kb-boom.
+    bundleToken: bundle_token || null,
     // Open overheid: het id waaronder de bron dit document kent (om "al geopend" te herkennen).
     ident,
   };
@@ -407,7 +413,7 @@ function pickIdentifier(line) {
   const url = line.match(RE_URL);
   // Sluitleestekens van een markdown-link of een prozaregel horen niet bij de URL.
   if (url) return url[0].replace(/[.,;:!?)\]}>"'»]+$/, "");
-  for (const pattern of [RE_KSTID, RE_DNUM, RE_UUID, RE_ECLI, RE_BWB, RE_CELEX]) {
+  for (const pattern of [RE_KSTID, RE_DNUM, RE_UUID, RE_ECLI, RE_BWB, RE_CELEX, RE_HUDOC]) {
     const hit = line.match(pattern);
     if (hit) return hit[0];
   }
@@ -1277,11 +1283,18 @@ function renderEditor() {
   $("#md").value = doc.markdown;
   $("#src").textContent = doc.source;
   $("#src").title = doc.source;
+  const waarschuwing = $("#doc-warnings");
+  waarschuwing.hidden = doc.warnings.length === 0;
+  waarschuwing.textContent = doc.warnings.length
+    ? `Waarschuwing: ${doc.warnings.join(" · ")}`
+    : "";
   updateLineNumbers();
 
-  $("#download").textContent = doc.attachmentsToken
-    ? `Download .zip (${doc.attachmentCount} afb.)`
-    : "Download .md";
+  $("#download").textContent = doc.bundleToken
+    ? "Download kennisbank .zip"
+    : doc.attachmentCount
+      ? `Download .zip (${doc.attachmentCount} afb.)`
+      : "Download .md";
 
   if (!AI_ENABLED) return;
 
@@ -1938,9 +1951,12 @@ async function saveDownload(body, filename) {
     setStatus(data.error || "Downloaden is mislukt.", "err");
     return;
   }
+  const blob = await response.blob();
+  const extension = blob.type === "application/zip" ? "zip" : "md";
+  const basename = filename.replace(/\.(?:md|zip)$/i, "");
   const link = document.createElement("a");
-  link.href = URL.createObjectURL(await response.blob());
-  link.download = filename;
+  link.href = URL.createObjectURL(blob);
+  link.download = `${basename}.${extension}`;
   link.click();
   URL.revokeObjectURL(link.href);
 }
@@ -1956,6 +1972,8 @@ async function downloadActive() {
     {
       markdown: doc.markdown, filename: doc.filenameBase,
       attachments_token: doc.attachmentsToken || undefined,
+      bundle_token: doc.bundleToken || undefined,
+      bewerkt_met_ai: doc.cleaned || doc.translated,
     },
     `${doc.filenameBase}.${doc.attachmentsToken ? "zip" : "md"}`
   );
@@ -1974,6 +1992,8 @@ async function downloadAll() {
         markdown: doc.markdown,
         filename: doc.filenameBase,
         attachments_token: doc.attachmentsToken || undefined,
+        bundle_token: doc.bundleToken || undefined,
+        bewerkt_met_ai: doc.cleaned || doc.translated,
       })),
     },
     `${name}.zip`

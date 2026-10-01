@@ -6,3 +6,5 @@ __pycache__/
 .claude/
 .deploy-state/
 .pytest_cache/
+meetlat/cache/
+meetlat/uitvoer/

@@ -13,6 +13,8 @@ import warnings
 from bs4 import BeautifulSoup, NavigableString, XMLParsedAsHTMLWarning
 from markdownify import markdownify as _markdownify
 
+from .table_structure import normalize_data_tables
+
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 
 
@@ -55,6 +57,8 @@ def html_to_markdown(html: str) -> str:
         or soup
     )
 
+    normalize_data_tables(container)
+
     markdown = _markdownify(
         str(container),
         heading_style="ATX",
@@ -66,6 +70,7 @@ def html_to_markdown(html: str) -> str:
 
 def container_to_markdown(container) -> str:
     """Zet een al geselecteerde BeautifulSoup-container om (wetten.overheid.nl)."""
+    normalize_data_tables(container)
     return tidy(_markdownify(str(container), heading_style="ATX", strip=["a"], bullets="-"))
 
 
@@ -92,7 +97,7 @@ def _own_rows(table):
     return [tr for tr in table.find_all("tr") if tr.find_parent("table") is table]
 
 
-def _marker_prefix(marker: str) -> str:
+def marker_prefix(marker: str) -> str:
     marker = marker.strip()
     if re.fullmatch(r"\d{1,4}", marker):
         return f"{marker}. "        # puur cijfer → genummerd item, nummer behouden
@@ -103,6 +108,30 @@ def _marker_prefix(marker: str) -> str:
     return ""
 
 
+def prefix_into(soup, container, prefix: str) -> None:
+    """Zet de marker ín het eerste blok-element van de container (bv. <p>).
+
+    Zo blijft hij op dezelfde regel als de tekst staan. Puur mechanisch en
+    bronloos: dezelfde vorm voor een marker uit een tabelcel als voor een marker
+    die een bron zelf al uit zijn eigen markup heeft gevist.
+    """
+    if not prefix:
+        return
+    target = next(
+        (c for c in container.find_all(recursive=False)
+         if c.name in _BLOCK_TAGS and c.get_text(strip=True)),
+        None,
+    )
+    if target is not None:
+        target.insert(0, NavigableString(prefix))
+        return
+    wrapper = soup.new_tag("p")
+    wrapper.append(NavigableString(prefix))
+    for child in list(container.contents):
+        wrapper.append(child.extract())
+    container.append(wrapper)
+
+
 def _unwrap_marker_tables(soup) -> None:
     # Binnenste tabellen eerst, zodat geneste layout-tabellen goed omgezet worden.
     for table in reversed(soup.find_all("table")):
@@ -110,6 +139,9 @@ def _unwrap_marker_tables(soup) -> None:
         if not rows:
             continue
         cell_sets = [tr.find_all(["td", "th"], recursive=False) for tr in rows]
+        if any(cell.name == "th" or cell.has_attr("rowspan") or cell.has_attr("colspan")
+               for cells in cell_sets for cell in cells):
+            continue
         if any(len(cells) != 2 for cells in cell_sets):
             continue
         markers = [cells[0].get_text(" ", strip=True) for cells in cell_sets]
@@ -120,23 +152,7 @@ def _unwrap_marker_tables(soup) -> None:
         replacements = []
         for cells, marker in zip(cell_sets, markers):
             content = cells[1]
-            prefix = _marker_prefix(marker)
-            if prefix:
-                # Zet de marker ín het eerste blok-element van de cel (bv. <p>),
-                # zodat hij op dezelfde regel als de tekst blijft staan.
-                target = next(
-                    (c for c in content.find_all(recursive=False)
-                     if c.name in _BLOCK_TAGS and c.get_text(strip=True)),
-                    None,
-                )
-                if target is not None:
-                    target.insert(0, NavigableString(prefix))
-                else:
-                    wrapper = soup.new_tag("p")
-                    wrapper.append(NavigableString(prefix))
-                    for child in list(content.contents):
-                        wrapper.append(child.extract())
-                    content.append(wrapper)
+            prefix_into(soup, content, marker_prefix(marker))
             for child in list(content.contents):
                 replacements.append(child.extract())
 

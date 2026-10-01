@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "eurlex-md",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["serve.sh"],
+      "autoPort": true,
+      "port": 5001
+    }
+  ]
+}

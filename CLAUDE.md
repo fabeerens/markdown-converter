@@ -7,18 +7,18 @@ De projectmap heet nog "EUR-lex naar md" (historisch); de tool zelf heet "Markdo
 De UI heeft vijf tabbladen: **Jurisprudentie** (HvJ EU / EHRM / NL via ECLI of link),
 **Wetgeving** (EU via CELEX/ELI/link, NL via wetten.overheid.nl/BWB), **Open overheid**
 (subtabs Stukken, Consultaties en Wetgevingskalender: ophalen via id/dossiernotatie/link/D-nummer
-óf zoeken — zie "Open overheid" onder "Belangrijke details"),
+óf zoeken — zie `docs/bronnen/open-overheid.md`),
 **Documentupload**
 (bestand(en) slepen óf link(s) naar een bestand plakken) en **Tekst plakken** (kale of
 verrijkte tekst rechtstreeks in een `contenteditable`-vak plakken/typen). Tabs 1 en 2
 posten beide naar `/api/convert/link` (auto-detectie); tab Open overheid naar
 `/api/convert/overheid` (geen taalkeuze) en zoekt via `/api/search`; Documentupload naar `/api/convert/file` of
 `/api/convert/file-url` (of, met de **wiskunde-modus** aan, naar de streaming-varianten
-`/api/convert/file/ocr` resp. `/api/convert/file-url/ocr` — zie "Wiskunde-modus" hieronder);
+`/api/convert/file/ocr` resp. `/api/convert/file-url/ocr` — zie `docs/bronnen/bestanden-pdf-en-tekst.md`);
 Tekst plakken naar `/api/convert/text`. De eerste vier bronnen-tabs (Jurisprudentie, Wetgeving, Open overheid, Documentupload) ondersteunen **meerdere
-documenten tegelijk** (zie "Meerdere documenten" hieronder); Tekst plakken is één plakvak per keer
+documenten tegelijk** (zie "Meerdere documenten" in `docs/frontend-en-designsysteem.md`); Tekst plakken is één plakvak per keer
 — een batch van tekstvakken past niet bij hoe je knipt-en-plakt. Bij die vier kun je
-bovendien een hele **lijst** in één keer aanleveren (zie "Batch-import" onder Front-end).
+bovendien een hele **lijst** in één keer aanleveren (zie "Batch-import" in `docs/frontend-en-designsysteem.md`).
 
 ## Starten
 
@@ -46,13 +46,21 @@ mdconv/
   version.py               lui berekend versienummer/buildteller voor de footer
   sources/
     __init__.py            Document-dataclass, detect_source-precedentie, from_link/from_file
-    eurlex.py              CELEX/ELI/EU-ECLI → Cellar, portal als terugval
-    rechtspraak.py         ECLI:NL → data.rechtspraak.nl XML → markdown
-    hudoc.py               EHRM-ECLI/item-id → HUDOC zoek-API + HTML-body
-    wetten.py              BWB/wetten.overheid.nl portal-HTML → markdown
-    formex.py              Formex-XML → markdown (context expliciet, dus thread-safe)
-    files.py               PDF via pdf-inspector, rest via MarkItDown (beide lui geladen)
-    kamerstuk.py           kamerstukken/Kamervragen/Handelingen/bijlagen: officiële XML (of PDF) → markdown
+    eurlex.py              CELEX/ELI → Formex, Cellar-HTML/portal als terugval; EU-ECLI en sector-6-CELEX → formex_hof, zonder terugval
+    formex_hof.py          Cellar-Formex van een arrest/beschikking (JUDGMENT/ORDER) → raw-vorm voor de kennisbank
+    rechtspraak.py         ECLI:NL → data.rechtspraak.nl XML → raw-vorm + herkomst + bronbewijs
+    hudoc.py               EHRM-ECLI/item-id → HUDOC zoek-API (metadata) + DOCX, zonder terugval
+    hudoc_docx.py          HUDOC-Word-bestand → raw-vorm voor de kennisbank
+    wetten.py              BWB-XML van KOOP → markdown; portal-HTML als terugval
+    bwb_xml.py             BWB-toestand → raw-vorm voor de kennisbank
+    formex.py              losse Formex-XML-upload → algemene Markdown
+    formex_xml.py          Cellar-Formex-zip → raw-vorm voor de kennisbank
+    xml_gedeeld.py         fail-closed XML-tabellen en nummerankers
+    files.py               PDF via pdf-inspector (een PDF zonder tekstlaag is een weigering, geen terugval), rest via MarkItDown (beide lui geladen); `pdf_kwaliteit()` meet de omzetting
+    docx.py                Word-bestand → raw-vorm; generieke lezer met een `Kaart` per uitgever (HUDOC = `hudoc_docx.py`), koppen uit `outlineLvl`/`Heading N`, noten native, weigert wat het niet kent
+    html_document.py       HTML-pagina → raw-vorm; container `<main>` → `<article>` → `[role=main]` en weigert als dat niet eenduidig is; bewaart alleen de gekozen inhoud als bron
+    officiele_bekendmakingen.py  Kamerstuk (`kst-…`) → officiële XML van KOOP + `metadata.xml`; geen XML = weigeren, nooit terugval op de PDF
+    kamerstuk.py           Open overheid: invoerherkenning (id, link, dossiernotatie, D-nummer via OData) en de PDF-terugval; de XML gaat door officiele_bekendmakingen.py
     woo.py                 documenten van open.overheid.nl (o.a. Woo): zoek-API, bestand → markdown, relaties
     consultatie.py         internetconsultatie.nl: consultaties, documenten, reacties, zoeken (scraping)
     wgk.py                 wetgevingskalender.overheid.nl: regeling-XML → markdown, zoeken
@@ -61,6 +69,7 @@ mdconv/
     pasted_text.py         handmatig geplakte tekst (kaal of verrijkte HTML) → markdown
     pdf_images.py           losse afbeeldingen uit een PDF (pdfimages/pdfinfo, poppler)
   attachments.py            tijdelijke, token-based opslag van geëxtraheerde afbeeldingen
+  kb_bundle.py              tijdelijke bronopslag + uitpakbare kb-download (wetgeving, rechtspraak, en documenten met een documentnummer)
   cleanup/
     __init__.py            publieke ingangen: estimate(), clean(), clean_stream()
     config.py              standaarden + instellingen (modellen/deelgrootte/prompts)
@@ -72,6 +81,7 @@ templates/index.html       één pagina, alleen markup
 static/app.css             designsysteem (Radix-tokens) + componenten
 static/app.js              front-end: één state + render-functies per gebied
 tests/                     karakteriseringstests (pinnen het gedrag vast)
+meetlat/                   vaste verzameling EU-documenten + meetscript voor de Formex-dekking
 ```
 
 **De HTTP-laag is dun.** Alleen `mdconv/api.py` importeert Flask. Domeincode gooit
@@ -86,6 +96,7 @@ soort), zodat de route niets over engines of classificatie hoeft te weten.
 | CELEX (`32016R0679`), EUR-Lex link, **ELI-link** (`/eli/reg/2016/679/oj`), **`ECLI:EU:…`** | EUR-Lex |
 | **Geconsolideerde versie**: CELEX met datum (`02014R0910-20241018`) of gedateerde ELI (`/eli/reg/2014/910/2024-10-18`) | EUR-Lex (+ overwegingen uit de basishandeling) |
 | **`ECLI:NL:…`** of rechtspraak.nl-link | Rechtspraak.nl |
+| **Publicatie-id** (`kst-34851-4`) of officielebekendmakingen.nl-link | Officiële Bekendmakingen (alleen Kamerstukken; XML of weigering) |
 | HUDOC-link, item-id (`001-…`), **`ECLI:CE:ECHR:…`** | HUDOC (EHRM) |
 | wetten.overheid.nl-link of **BWB-nummer** (`BWBR0040940`) | wetten.overheid.nl |
 | **`kst-…`/`ah-tk-…`/`h-tk-…`/`blg-…`-id**, officielebekendmakingen.nl- of tweedekamer.nl-link | Open overheid → `kamerstuk.py` (staat bóvenaan `detect_source`) |
@@ -95,1032 +106,32 @@ soort), zodat de route niets over engines of classificatie hoeft te weten.
 | **`ECLI:BE:…`** (Belgische rechtspraak) | Juportal |
 | **`ECLI:FR:CC:…`** (Conseil constitutionnel) of **`ECLI:FR:CCASS:…`** (Cour de cassation); overige FR-gerechten: nette foutmelding | conseil-constitutionnel.fr resp. Judilibre |
 
-**Buitenlandse rechtspraak** (`_NATIONAL_SOURCES` in `mdconv/sources/__init__.py`): per
-ECLI-landcode een eigen module. Nu `DE` → `sources/de_openlegaldata.py` (valt intern terug
-op `sources/de_rechtsprechung.py`), `BE` → `sources/be_juportal.py`, `FR` →
-`sources/fr_conseil_constitutionnel.py` (dispatcht intern naar `sources/fr_judilibre.py`
-voor de Cour de cassation); uitbreidbaar door een module met dezelfde vorm
-(`ECLI_RE` + `fetch(query) -> (markdown, bron)`) toe te voegen en te registreren in
-`_NATIONAL_SOURCES`.
-
-**Onderzocht maar niet haalbaar met plain HTTP** (geen browserautomatisering, geen verplichte
-accountregistratie namens de gebruiker):
-- **ES** (CENDOJ) — een verplichte, interactieve afbeelding-CAPTCHA vóór elke
-  volledige-tekst-download (geen sessie/cookie-truc zoals bij Duitsland, een échte CAPTCHA).
-  Ook een browserautomatiserings-tool (`computingvictor/mcp-cendoj`, onderzocht) bootst alleen
-  de interactieve zoek-UI met Playwright na en garandeert niet dat het downloadpad zonder
-  CAPTCHA blijft — niet ingezet, want dat is precies het soort anti-bot-omzeiling die dit
-  project bewust vermijdt. Gebruikers kunnen zo'n PDF wel gewoon handmatig uploaden via het
-  bestaande PDF-pad.
-- **AT** (RIS) heeft wél een gratis, sleutelloze JSON-API (`data.bka.gv.at/ris/api/v2.6`),
-  maar géén gedocumenteerde ECLI-zoekparameter (bevestigd: nul treffers voor "ECLI" in de
-  60 pagina's officiële API-documentatie; een `Ecli=`-parameter wordt genegeerd, niet als
-  filter toegepast). Vrije-tekstzoeken op de ECLI-string (`Suchworte`) werkte één keer bij
-  toeval en gaf bij hertesten (ook later, met dezelfde ECLI) telkens 0 treffers — niet
-  betrouwbaar genoeg om te bouwen. De wél betrouwbare route (zoeken op `Geschaeftszahl`)
-  vereist het terugrekenen van die Geschäftszahl uit de ECLI, en dat encoderingsschema is
-  nergens gedocumenteerd; één reverse-engineerpoging op een OGH-voorbeeld klopte niet
-  (verwachte senaatsnummer "3", afgeleid "30"). Niet gebouwd op basis van onzekere gok-logica.
+**Buitenlandse rechtspraak** (DE, BE, FR via `_NATIONAL_SOURCES`) en waarom ES en AT niet haalbaar zijn:
+`docs/bronnen/buitenlandse-rechtspraak.md`.
 
 ## Belangrijke, niet-voor-de-hand-liggende details
 
-- **Open overheid — kamerstukken** (`mdconv/sources/kamerstuk.py`, endpoint
-  `/api/convert/overheid`, tab "Open overheid" tussen Wetgeving en Documentupload; interne
-  sleutel `oo`): wat Tkconv's `tkgetxml` doet is alleen de
-  SyncFeed van opendata.tweedekamer.nl binnenhalen (metadata); de **tekst** zit niet in die feed.
-  De gestructureerde tekst staat in de **officiële XML** op
-  `https://zoek.officielebekendmakingen.nl/{id}.xml` (schema `op-xsd-2012-2`, keyless, geen WAF-
-  blokkade — anders dan EUR-Lex). Eén parser voor `kst-` (kamerstukken), `ah-tk-`/`ah-ek-`
-  (Kamervragen + antwoord) en `h-tk-`/`h-ek-` (Handelingen); onbekende elementen worden als
-  alinea/container gelezen, nooit weggelaten (`_is_container`/`_INLINE`). `<metadata.xml>` naast
-  het stuk (soort, indiener, datum, bijlage-id's) is best-effort verrijking, geparallelliseerd met
-  de XML-fetch.
-  - **Invoer** (`parse_reference`): publicatie-id (hoofdletters genormaliseerd), URL, dossiernotatie
-    ("36600-VII, nr. 1", "21501-02 nr. 3174", "36836 D"), D-nummer (`2024D40329`), Document-GUID of
-    tweedekamer.nl-link met `did=`. Een kaal dossiernummer zonder stuknummer krijgt een eigen
-    foutmelding i.p.v. een gok. `detect_source` claimt alleen de **ondubbelzinnige** vormen (id's en
-    links), vóór de HUDOC-test (de cijfers in zo'n id mogen niet als item-id gelezen worden); losse
-    dossiernotaties horen bij het eigen tabblad.
-  - **D-nummer/GUID → publicatie** via de OData-API (`gegevensmagazijn.tweedekamer.nl/OData/v4/2.0/
-    Document`, `$expand=Kamerstukdossier`): dossier+toevoeging+`Volgnummer` → `kst-…`;
-    `Aanhangselnummer` `242501244` → `ah-tk-20242025-1244`. Heeft het document geen van beide (een
-    brief buiten een dossier, `Volgnummer` -1), of staat de XML er (nog) niet, dan **terugval op het
-    originele bestand** (`Document({id})/resource`, DOCX/PDF) via `files.convert` — mét een
-    cursieve notitie bovenaan, nooit stil.
-  - **Koppen**: `divisie`/`kop`. Genummerde koppen ("1.", "2.1") krijgen hun niveau uit de
-    nummering (de bron nest "2.1" niet altijd in "2."); ongenummerde `tussenkop`pen uit hun opmaak
-    (vet > halfvet > vetcur > cur > rom > ondlijn), **relatief per container**: gebruikt een
-    sectie maar één stijl, dan is dat één niveau. H1 = dossiertitel, H2 = stuktitel, inhoud vanaf H3.
-  - **Voetnoten**: `noot` staat inline in de bron → `[^nr]` + definities onderaan; een nummer dat
-    opnieuw begint (bijlagen) krijgt een `-2`-suffix zodat labels uniek blijven. **Links**: `extref`
-    → `[tekst](url)` (`kst-…` → `…/{id}.html`, `dossier/…` → `…/dossier/…`, `soort=URL` letterlijk).
-  - **Tabellen** (CALS): col-/rowspans uitgevouwen, meerdere kopregels per kolom samengevoegd
-    (met herhaalde span-tekst), lege afstandsrijen weggelaten.
-  - **Afbeeldingen** (`illustratie naam=…`) worden gedownload van `…/officielebekendmakingen.nl/{naam}`
-    en als `![[naam]]` + bijlage meegegeven (zelfde `attachments`-mechanisme als PDF-afbeeldingen;
-    max. 30 stuks / 10 MB per stuk / 50 MB totaal). Wat niet lukt blijft als gewone
-    `![naam](bron-url)` staan — zichtbaar, geen dode embed.
-  - **Veiligheid**: de XML-parser resolve't geen entiteiten en doet geen netwerk (`_parser()`);
-    pinned door een test met een externe entiteit.
-  - **Geen XML? Dan de PDF.** Nieuwe publicaties (`blg-…`, `ah-<nummer>`, ook recente stukken)
-    bestaan alleen als PDF: `zoek.officielebekendmakingen.nl/{id}.xml` geeft 404. `fetch()` slaat de
-    XML-poging voor `blg-`/`ah-<cijfers>` over en valt voor andere ids terug op het SRU-record
-    (`sru.by_identifier`) → de `pdf`-manifestatie → `files.convert`, met kopblok uit het record en een
-    cursieve notitie ("geen gestructureerde XML"). Download is begrensd op 100 MB.
-  - **Bijlagen**: `sru.attachments_of(id)` (CQL `w.hoofddocument==<id>`) geeft de
-    `blg-…`-bijlagen mét titel; een bijlage wijst zelf terug naar zijn hoofddocument. Best-effort
-    (een storing geeft een lege lijst, nooit een mislukte conversie); zonder SRU-resultaat vallen
-    we terug op `OVERHEIDop.bijlage` uit metadata.xml. Elk item is `{query, titel, rol, open_url}`;
-    `query` gaat weer naar `/api/convert/overheid`, dus een bijlage is zelf een volwaardig document.
-  - Niet gebouwd: bijlagen van bijlagen volgen, Handelingen-structuur (sprekers) verder dan platte
-    tekst, Staatscourant/Staatsblad (`stcrt-`/`stb-`, ander schema).
-- **Open overheid — Woo** (`mdconv/sources/woo.py`): open.overheid.nl heeft een keyless JSON-API
-  (dezelfde als de eigen SPA, afgelezen uit de JS-bundel; de SRU-zoekdienst bevat Woo **niet**):
-  `/overheid/openbaarmakingen/api/v0/zoek?zoektekst=…` (zoeken + facetten), `/zoek/{id}` (metadata),
-  `/documenten/{id}` (het bestand). Waar je op moet letten:
-  - Parameternamen: `zoektekst` (niet `zoekterm` — dat wordt stilzwijgend genegeerd en geeft alle
-    700k documenten), `aantalResultaten` ∈ {10, 20, 50} (anders 400), `start` = offset,
-    `sort=publicatiedatum` + `order=asc`, datums als **dd-mm-jjjj** (de UI levert ISO; `woo.search`
-    zet om), filters (`documentsoort` e.d.) **dubbel URL-gecodeerd** en de URL zelf bouwen (niet via
-    `requests`' `params=`, dat codeert nog eens).
-  - Een id met `_2`-suffix is het **versienummer**; het bestand zit onder het id zónder suffix. Een
-    bestand kan ook een eigen `url` hebben (bv. opendata.rijksoverheid.nl) — alleen
-    overheidshosts worden gevolgd (`_TRUSTED_HOSTS`), anders de eigen `/documenten/`-route.
-    `_pick_file` kiest PDF/Office/tekst en slaat zips over; geen bruikbaar bestand → duidelijke fout.
-  - Gescande pdf's zonder tekstlaag geven vrijwel geen tekst: dan een cursieve waarschuwing met het
-    advies de OCR-/wiskunde-modus bij Documentupload te gebruiken.
-  - **Relaties** (`documentrelaties`) worden de bijlagenlijst: rollen uit de TOOI-thesaurus
-    (`c_05f4a5f3` = "heeft bijlage", `c_4d1ea9ba` = "is bijlage bij", plus bundel/onderdeel; de
-    identiteitsgroep valt weg). Titels worden parallel opgehaald (max. 30).
-  - Een **kale UUID** is ook een Tweede Kamer-Document-Id: `sources.from_overheid` vraagt het aan
-    open.overheid.nl (`woo.is_known_id`, één verzoek) en valt anders terug op de TK-open data; een
-    `_n`-suffix of link is altijd Woo.
-- **Zoeken** (`mdconv/search.py`, `GET /api/search`, `GET /api/search/soorten`): standaard
-  **`alles`** = beide bronnen samengevoegd tot één lijst (`_search_all`); daarnaast `pub` en `woo`
-  apart. Eén resultaatvorm `{id, query, titel, soort, datum, bron, meta, snippet, open_url}` — `query`
-  gaat direct naar `/api/convert/overheid`.
-  - `pub` = SRU (`https://repository.overheid.nl/sru`, keyless; `sru.py`). CQL die werkt:
-    `cql.textAndIndexes="…"` (volledige tekst), `w.dossiernummer=="36600-VII"` (een invoer die op een
-    dossiernummer lijkt wordt automatisch een dossierzoekopdracht), `w.publicatienaam==`,
-    `dt.type==Bijlage`, `dt.date>=…`, `A NOT B` (**niet** `AND NOT`), sorteren met
-    `sortBy dt.date/sort.descending` (de `sortKeys`-parameter wordt genegeerd). Zoektekst gaat
-    alleen tussen quotes mee nadat `"` en `\` eruit zijn. Zonder zoektekst is "nieuwste eerst" de
-    standaard. De "soorten" (`sru.SOORTEN`) zijn vast; sluit Staatscourant e.d. uit omdat de
-    converter daar niets mee kan.
-  - **`alles`**: per bron de eerste `start + n` resultaten (parallel; `MERGE_LIMIT` = 200 per bron,
-    daarom bladert de UI niet dieper), samengevoegd en gesneden. Bij "nieuwste/oudste" sorteert het op
-    datum; bij "relevantie" worden de bronnen afwisselend gelegd (scores zijn niet vergelijkbaar).
-    **Dubbelen** (`_merge`): dezelfde titel binnen 21 dagen — Woo zet "dossier, nr. X - " voor de titel
-    (`_WOO_PREFIX`, wordt eraf gehaald) en een kamerstuk heeft "dossiertitel; soort; stuktitel", dus
-    er wordt ook op het laatste deel vergeleken — blijft één keer staan, als officiële publicatie met
-    `ook_woo: true`. Valt één bron uit, dan komt de rest mét een `waarschuwing`; beide uit = fout.
-    Geen soortfilter (de soorten verschillen per bron).
-  - **Dossiernummer als zoekterm** (`sru.dossier_of`: `36600`, `36 600-VII`, `dossier 36600`; vijf
-    cijfers, want vier is een jaar): geen tekstzoekopdracht maar de **hele dossierlijst** uit de
-    officiële publicaties (`w.dossiernummer`), oudste eerst, pagina's van 50, in `alles` én `pub`
-    (Woo-kopieën zijn dubbelen, dus Woo blijft erbuiten). Het antwoord heeft `dossier`; de UI toont
-    "Dossier X — n stukken". `_stuk_label` zet "36600-VII, nr. 1 - " voor de titel zodat een lange
-    lijst leesbaar is.
-  - `woo` = `woo.search`; het soortfilter komt uit de facetten van het laatste antwoord (meeste
-    eerst, max. 40). Zonder zoekterm én zonder filter weigert de zoekfunctie (anders 700k treffers).
-  - Front-end (`oo`-state + `renderOO`/`renderResults`/`runSearch` in `app.js`): drie **subtabs**
-    (Stukken | Consultaties | Wetgevingskalender; `oo.sub`, onthouden) — `ooScope()` leidt de
-    zoekbron af (bij Stukken de keuze alles/pub/woo). Bron-specifieke filters staan data-gedreven in
-    `OO_FILTERS` (consultaties: titel/tekst; wgk: status, fase, soort). Bij Stukken modus "Ophalen" ↔
-    "Zoeken"; selectievakjes + "Geselecteerde ophalen"; een verzoek-token zodat alleen het laatste
-    antwoord de lijst bijwerkt; paginering. Een document dat al open staat (`doc.ident`) wordt
-    getoond i.p.v. dubbel opgehaald. **Na ophalen klapt de resultaatlijst in** (`oo.collapsed`, de
-    lijst blijft in de DOM; balk "Zoekresultaten tonen (n)"); een nieuwe zoekopdracht klapt hem uit.
-- **Bijlagen = linklijst in de Markdown** (`common.bijlagen_section`/`with_bijlagen`): er is geen
-  paneel meer (eerst gebouwd, bleek weinig toe te voegen). Elke bron levert `Fetched.bijlagen`
-  (`{query, titel, rol, open_url}`); `sources._document_from` zet die onderaan als
-  `## Bijlagen en gerelateerde documenten` (tenzij de bron de lijst al op de juiste plek heeft
-  gezet, zoals kamerstukken vóór de voetnoten). Elke link is een adres dat de tool zelf begrijpt:
-  plakken bij Stukken → Ophalen zet dat document apart om. Zit niet in de JSON-respons.
-- **Consultaties** (`mdconv/sources/consultatie.py`, subtab "Consultaties"): internetconsultatie.nl is
-  server-gerenderde HTML zonder API, dus scrapen met BeautifulSoup. Adresvormen en de zoek-URL staan
-  in de module-docstring. Wat je moet weten:
-  - De consultatie wordt Markdown vanaf "In het kort" (titel/labels erboven en de feitentabel zitten
-    in het kopblok; **voorouders van die kop blijven staan** bij het wegknippen, anders verdwijnt de
-    hele inhoud). Bijlagenlijst: documenten (`/document/{id}`), "Alle reacties (n)" en de
-    wetgevingskalender-fiche (uit de link op de pagina).
-  - **Reacties** (`fetch_reacties`): één Markdown-document met de tekst van elke openbare reactie.
-    De lijst is te pagineren met `/reacties/datum/{pagina}/100` (de site laat 10/25/100 toe; met
-    10 per pagina duurde het veel langer). Elke reactie is een eigen pagina (12 parallel, 144 stuks
-    ≈ 1 minuut — de site is traag); max. `MAX_REACTIES` (400), meer wordt gemeld. De standaardvraag
-    "Wilt u reageren…" valt weg, specifieke vragen blijven (vet) staan; een bijlage wordt een link.
-  - **Zoeken**: `GET /zoeken/resultaat?Trefwoorden=…&TrefwoordenSearchScope=Titel|TitelEnTekst`
-    `&ConsultatiedatumVan=d-m-jjjj 00:00:00&…TotEnMet=…&Pagina=n`, vast 10 per pagina (de UI neemt
-    `n` uit het antwoord over). De filters kwamen uit de redirect van het POST-formulier
-    (ASP.NET-viewstate niet nodig). Zoekterm leeg mag.
-- **Wetgevingskalender** (`mdconv/sources/wgk.py`, subtab "Wetgevingskalender"): per regeling is er een
-  **XML-versie** (`/Regeling/WGKnnn/xml`, `regelgevingFiche`) met metadata, fasen, mijlpalen en
-  documenten (download-url) — die is de bron, niet de HTML. Zoeken: `/Regeling/ZoekResultaten?
-  Zinsdeel=…&Type=Regeling&Status=inwording|naderend|beeindigd&Fase=…&RegelgevingType=Wet|Amvb
-  &Pagina&Paginagrootte=10|25|100` (de site gebruikt GET-parameters die uit de formuliervelden
-  komen; filterwaarden worden gevalideerd tegen vaste lijsten). **Eén treffer** stuurt de site door
-  naar de regeling zelf; de titel komt dan uit `<title>`. Een document-download-URL (`…/Download/guid.pdf`)
-  wordt omgezet via `consultatie.fetch_file`, met de titel uit de fiche in plaats van de GUID.
-- **Weergave** (`static/mdview.js`, schakelaar "Ruwe tekst | Naast elkaar | Weergave" in de uitvoerbalk,
-  dus voor alle vijf de tabbladen): een eigen kleine Markdown→HTML-renderer zonder dependency (geen
-  build, geen externe verzoeken). Alles wordt geëscaped; alleen `<br>`, `<sup>`, `<sub>` blijven;
-  links alleen http(s)/mailto/relatief (nooit `javascript:`/`data:`). Dekt koppen, lijsten (genest),
-  tabellen, citaten, code, voetnoten (met terugkeerlink), links, Obsidian-embeds
-  (`![[p01.png]]` → `/api/attachments/<token>/<naam>`) en -wikilinks. Alleen gerenderd als hij
-  zichtbaar is; tijdens typen/streamen debounced (max. 600 ms oud), scrollen loopt evenredig mee,
-  de keuze staat in `localStorage` (`mdView`). Een Node-gestuurde test (`skipif` zonder `node`)
-  draait de renderer op vaste gevallen, incl. XSS-pogingen.
-- **EUR-Lex fetch**: de portal-HTML (`/legal-content/…/HTML/`) blokkeert bots (HTTP 202, lege body;
-  inmiddels een AWS WAF-JS-challenge, dus ook met retries permanent 202 — de portal is in de praktijk
-  dood voor een simpele `requests`-scraper). Gebruik het **Cellar-archief** via content negotiation,
-  `Accept: application/xhtml+xml, text/html;q=0.9`:
-  - CELEX: `http://publications.europa.eu/resource/celex/{CELEX}`
-  - EU-ECLI: `http://publications.europa.eu/resource/ecli/{ECLI}` — ECLI **url-encoded** (`ECLI%3AEU%3AC%3A…`), anders 404.
-  `Accept-Language` bepaalt de taal. `notice=object` geeft alléén metadata, niet de tekst.
-- **Cellar 300 (multiple choice) is niet alleen een taalprobleem.** Sommige documenten — met name
-  wetgevingsvoorstellen (CELEX-type `PC`/`DC`) met een losse bijlage — bestaan uit **meerdere
-  HTML-onderdelen**, elk een eigen manifestatie. Cellar meldt dat met **HTTP 300** en een lijst
-  `…/DOC_1`, `…/DOC_2`, … in documentvolgorde. `eurlex._fetch_multipart()` haalt die op en plakt ze
-  aan elkaar (`\n\n---\n\n`). **Belangrijk**: elk `DOC_n`-onderdeel moet met `Accept: text/html`
-  worden opgehaald, niet `application/xhtml+xml` — de manifestatie-URL zelf heeft `text/html` als
-  resource-mimetype en geeft anders 406. Voorbeeld: `CELEX:52025PC0837` (voorstel + bijlage).
-  Alleen als er géén `DOC_n`-links in de 300-respons staan, is het wél een taalprobleem.
-- **ELI-links** (`/eli/reg/2016/679/oj`): Cellar resolvet ELI **niet** direct (404) en de portal blokkeert.
-  Een vierde padsegment in datumvorm (`/eli/reg/2014/910/2024-10-18`) is de consolidatiedatum en
-  levert de geconsolideerde CELEX (sector 0 + datum); `/oj` en andere segmenten niet. Die datum
-  eerder negeren gaf stilzwijgend de oorspronkelijke handeling terug — geen fout, wel het
-  verkeerde document.
-  Daarom `eli_to_celex()`: leidt deterministisch een CELEX af (type→letter reg=R/dir=L/dec=D/reco=H,
-  `3{jaar}{letter}{nummer:04d}`) en gebruikt vervolgens de normale CELEX-Cellar-route.
-- **Geconsolideerde versies** (`02014R0910-20241018`, sector 0 + de datum waarop die versie geldt):
-  Cellar serveert die gewoon op dezelfde `…/resource/celex/{CELEX}`-route, mét `Accept-Language`.
-  Wat er níét in zit is de **preambule**: EUR-Lex laat in een geconsolideerde versie de aanhef, de
-  "Gezien …"-citaten en **álle overwegingen** weg. Die staan alleen in de oorspronkelijke handeling.
-  - **Terugzetten kan structureel, zonder tekstheuristiek.** Beide documenten delen hetzelfde
-    xhtml-skelet: `div.eli-main-title#tit_1` → `div.eli-subdivision#pbl_1` (de preambule) →
-    `div.eli-subdivision#enc_1` (de artikelen). In een geconsolideerde versie ontbreekt precies
-    `#pbl_1`. `_with_base_preamble()` haalt dat blok uit het origineel en zet het terug vóór
-    `#enc_1` — op zijn eigen plek, dus vóór Artikel 1, met één cursieve herkomstregel erboven.
-  - De CELEX van de basishandeling staat **machineleesbaar in het document zelf**: de eerste
-    `►B`-pijl (`p.arrow > a`) linkt ernaartoe en draagt het nummer in zijn `title`-attribuut.
-    `_base_celex()` leest dat; ontbreekt de pijl, dan wordt het nummer afgeleid (sector 0 → 3).
-  - **Terugvalladder bij het invoegen**: `#enc_1` → anders het eerste element met class
-    `title-division-1`/`title-article-norm` (oudere consolidaties zoals `02008R0593-20080724`
-    hebben geen eli-markup, wél die CONVEX-klassen) → anders overslaan. Levert het origineel geen
-    `#pbl_1` (handelingen van vóór ± 2004, bv. `32002L0058`), dan converteert het document gewoon
-    zónder overwegingen — mét een notitie in de tekst, nooit zwijgend.
-  - **Alleen de overwegingen van de basishandeling**, bewuste keuze. Die van de wijzigings-
-    handelingen (►M1/►M2) zitten er niet bij; hun CELEX-nummers staan wel in dezelfde
-    `p.arrow`-links, dus dat is later een kleine uitbreiding.
-  - De ▼B/▼M2-wijzigingsmarkeringen (155 stuks in eIDAS) blijven **bewust staan** — ze zeggen welke
-    passage door welke wijziging is vervangen of ingevoegd. Niet "opschonen".
-  - **Eén CELEX-patroon** (`_CELEX_BODY`), want de vorm stond vier keer los uitgeschreven en liep
-    uit elkaar zodra de datum erbij kwam: kaal werd `02014R0910-20241018` afgewezen, uit een URL
-    werd de datum stil afgekapt tot een CELEX die niet bestaat. Let ook op de tekenklasse in
-    `CELEX[:/]([0-9A-Z()-]+)` — zonder het koppelteken breekt die tak alsnog af.
-  - **Sector 0 faalt niet via de portal.** Cellar 404't op een sector-0-CELEX die het niet kan
-    serveren; doorvallen naar de geblokkeerde portal maakt daar een netwerkfout van. `_fetch_cellar`
-    geeft dan `None` en `fetch_and_convert` gaat over naar `_consolidated_fallback()`.
-  - **Een 404 op sector 0 heeft twee heel verschillende oorzaken, met dezelfde statuscode.**
-    Ofwel de consolidatiedatum bestaat niet (consolidatiedata liggen vast, één per wijziging),
-    ofwel de versie bestaat wél maar is er (nog) niet in de gevraagde taal — **EUR-Lex
-    consolideert taal per taal en loopt daarin achter**. Die tweede is niet exotisch
-    (geverifieerd: `02024R2979-20241204` alleen in IE+SV, `02026R0798-20260408` alleen in DE+ET,
-    `02014R0910-20140917` in 9 van de 24 talen). De tool meldde eerder in álle gevallen dat de
-    datum niet bestond — feitelijk onjuist — en gaf niets terug, terwijl de handeling zelf in het
-    Nederlands wél op te halen is.
-    - **Het onderscheid staat alleen in de metadata**, keyless op te vragen bij het
-      **SPARQL-endpoint** van het Publicatiebureau (`publications.europa.eu/webapi/rdf/sparql`,
-      dezelfde bron als "Alle versies van dit document" op de portal). `_consolidated_index()`
-      vraagt per handeling álle geconsolideerde CELEX-nummers mét hun talen op met één query
-      (`cdm:resource_legal_id_celex` + `FILTER(STRSTARTS(…))` op de sector-0-stam, plus
-      `cdm:expression_uses_language`). Duurt ~6 s, dus **alleen op het faalpad**. `None` betekent
-      "niet te achterhalen", niet "geen" — de ladder behandelt dat anders. Cellars notice-varianten
-      (`?notice=object|branch|tree`) zijn hiervoor géén route: 400/404.
-    - **Terugvalladder** (`_consolidated_fallback()`): de nieuwste geconsolideerde versie **op of
-      vóór** de gevraagde datum die in deze taal bestaat → de oorspronkelijke handeling in deze
-      taal → een foutmelding. Die eerste stap is geen concessie maar het juiste antwoord: vraagt
-      iemand een willekeurige datum (bv. "vandaag"), dan is de nieuwste versie op of vóór die
-      datum precies de versie die op dat moment gold. **Latere versies komen nooit in de plaats** —
-      die verwerken wijzigingen die op de gevraagde datum nog niet golden.
-    - **Nooit stil.** Elke terugval zet een cursieve notitie bovenaan de tekst én noemt de
-      afwijking in de bronvermelding, want stilzwijgend de oorspronkelijke handeling teruggeven
-      is precies de val die deze code eerder maakte (zie de ELI-datum hierboven) — dan lijkt het
-      origineel de geconsolideerde versie. `_fallback_reason()` levert die ene zin voor zowel de
-      notitie als de foutmelding, zodat die twee nooit iets anders kunnen beweren; de talen/datums
-      die ze opsomt zijn er alléén de talen/datums die in de **gevraagde taal** bestaan, want dat
-      is wat de gebruiker ermee kan. `_base_act_tail()` houdt de drie gevallen apart die eerder
-      door elkaar liepen: geen eerdere versie / eerdere versie niet in deze taal / versielijst
-      onbekend. De eerste versie beweerde in dezelfde alinea "geen eerdere versie" én somde de
-      bestaande versies op.
-  - `detect_source` heeft een **CELEX-uitsluiting** nodig bij de HUDOC-item-id-test:
-    `01999L0001-20040501` bevat "001-20040501", precies de vorm van een HUDOC-id. Dezelfde
-    volgorde-val zit in `deriveName()` in `app.js` (daar staat de CELEX-test daarom vóór de
-    HUDOC-test).
-- **EUR-Lex koppen**: koppen komen als `<p>` binnen; `promote_headings` promoot volledig-geankerde
-  regels ("Artikel N", "HOOFDSTUK I") naar `##`/`###`. Genummerde alinea's (overwegingen, arrest-
-  punten) staan in de xhtml als **tweekoloms-tabellen**; `_unwrap_marker_tables` zet die om naar
-  alinea's/lijst-items (nummer ín het bestaande blok, niet nesten).
-- **HUDOC**: body via `hudoc.echr.coe.int/app/conversion/docx/html/body?library=ECHR&id={itemid}`.
-  Een EHRM-**ECLI** → itemid via de zoek-API: `…/app/query/results?query=ecli:"<ECLI>"&select=itemid,ecli,languageisocode&rankingmodelid=11111_Ranking&sort=&facetquery=&start=0&length=30`
-  (die extra params zijn **verplicht**, anders 404; `select` is komma-gescheiden, kleine letters).
-  Eén ECLI → meerdere docs (EN=HEJUD, FR=HFJUD, vertalingen=HJUD<TAAL>). Kies op taal, val terug op
-  ENG→FRE. Veel vertalingen hebben **geen HTML-body (204)** → probeer kandidaten op volgorde.
-- **Rechtspraak.nl**: `https://data.rechtspraak.nl/uitspraken/content?id={ECLI}` geeft schone XML
-  (`<uitspraak>` met `section`/`title`/`parablock`/`para`).
-- **wetten.overheid.nl**: geen bruikbare XML-export gevonden; de **portal-HTML** is server-rendered
-  en bevat de volledige tekst in `#regeling` (h1 titel, h3 hoofdstuk, h4 artikel). `wetten.py` pakt
-  die container, strip't werkbalk-ruis (`[class*=action--]`, `.visually-hidden`) en markdownify't.
-  URL wordt herbouwd uit BWB-id + optionele versiedatum (`/{jjjj-mm-dd}`).
-- **Duitse rechtspraak** — twee lagen, met een gedeelde parser:
-  - **Primair: OpenLegalData** (`de_openlegaldata.py`, `de.openlegaldata.io`) — een gratis,
-    **sleutelloze** JSON-API, rechtstreeks doorzoekbaar op ECLI (`?ecli=<ECLI>`, dan een
-    detail-GET voor het volledige `content`-veld), géén sessie/tokendans nodig, en met een veel
-    bredere dekking (~424.000 zaken, ook deelstaatgerechten) dan alleen de zeven federale
-    gerechten. OpenLegalData aggregeert echter meerdere bronformaten in dat `content`-veld, dus
-    `_content_to_markdown()` proeft drie lagen: (1) de federale "RspDL"-conventie (zie hieronder)
-    als HTML-fragment (`<h2>`-sectiekoppen + een `<div>` met `<dl class="RspDL">`), (2) een
-    afwijkende deelstaatconventie (geverifieerd: OVG Nordrhein-Westfalen) met
-    `<span class="absatzRechts">N</span>` gevolgd door een **sibling** `<p class="absatzLinks">`
-    — het randnummer staat dus náást de alinea, niet erin — samengevoegd door
-    `_merge_absatz_pairs()`, en (3) een generieke `container_to_markdown()`-fallback voor een
-    nog onbekende conventie. Een bekend data-kwaliteitsgat: `court.name` is voor sommige
-    (vooral oudere) zaken letterlijk `"Unknown court"`; dan wordt het gerecht in plaats daarvan
-    afgeleid uit het 3e ECLI-onderdeel. Levert OpenLegalData geen (bruikbaar) resultaat, dan
-    valt `fetch()` intern terug op `de_rechtsprechung.fetch()`.
-  - **Terugval: rechtsprechung-im-internet.de** (`de_rechtsprechung.py`, BMJ) — publiceert
-    geselecteerde uitspraken van BGH/BVerfG/BVerwG/BFH/BAG/BSG/BPatG sinds 2010, als schone XML
-    met een eigen DTD, maar zonder directe "haal-op-met-ECLI"-URL. Het is een Java-portlet-app
-    die eerst doorzocht moet worden: (1) GET het zoekfragment
-    (`/js_pane/Suchportlet1/media-type/html`) en lees de verborgen formuliervelden
-    (`sugportal`/`sughashcode`/…) uit — die zijn **sessiegebonden** en server-gegenereerd; zonder
-    exact die velden geeft de site alleen het lege formulier terug. (2) GET hetzelfde fragment,
-    nu met die velden + `query=<ECLI>`, **in dezelfde sessie** (cookies) → de HTML bevat
-    `doc.id=<ID>` (of "0 Treffer"). Dit gebeurt met een **eigen `requests.Session`**, niet de
-    gedeelde `net.documents()` — die wordt gelijktijdig door andere documenten gebruikt (de tool
-    haalt meerdere documenten parallel op) en twee gelijktijdige zoekopdrachten op dezelfde
-    JSESSIONID zouden elkaars tussenstaat overschrijven. Elke gevonden `doc.id` heeft daarna een
-    vaste, **stateloze** `.../docs/bsjrs/{doc.id}.zip` met één XML erin (dus wél via de gedeelde
-    sessie). `_resolve_doc_id()` onderscheidt een bevestigde "0 Treffer"-melding (échte lege
-    uitkomst, geen nieuwe poging) van een technische hapering zonder die melding (bv. een
-    gewijzigd formulierveld) — dat laatste wordt één keer opnieuw geprobeerd
-    (`_SEARCH_ATTEMPTS`) voordat de tool concludeert dat de uitspraak niet gevonden is.
-  - **Gedeelde "RspDL"-parser** (`juris_markup.py`): beide bronnen leveren voor federale/
-    juris-gebaseerde uitspraken dezelfde onderliggende structuur —
-    `<dl class="RspDL"><dt>…</dt><dd>…</dd></dl>`-paren, `<dt>` het randnummer
-    (`<a name="rd_N">N</a>`), `<dd>` de alinea of een `<table>` (bv. het handtekeningenblok) —
-    alleen als XML (rechtsprechung-im-internet.de) versus HTML-fragment (OpenLegalData). De
-    walker (`walk_dl_section`/`render_dd`/`inline`/`table_to_markdown`) staat daarom éénmalig in
-    deze module, want `lxml.etree`- en `lxml.html`-elementen delen dezelfde
-    `.tag`/`.text`/`.tail`/iteratie-interface.
-- **Belgische rechtspraak** (`be_juportal.py`): in tegenstelling tot Duitsland een **stateloze,
-  directe** route — `GET https://juportal.be/content/{ECLI}`, geen sessie/tokens nodig. Een
-  geldige ECLI geeft 200 met statische HTML (geen JS-rendering); een onbekende geeft **HTTP
-  400**. Is een uitspraak later gerectificeerd, dan toont Juportal gewoon 200 met de
-  **vervangende** tekst — geen HTTP-redirect — en staat de oorspronkelijke ECLI in het veld
-  "Vervangt nummer:" van de metadatatabel; de canonieke ECLI in de bronvermelding komt daaruit,
-  niet uit de aangevraagde URL. De volledige tekst staat in het `<fieldset>` met
-  `<legend>Tekst van de beslissing</legend>`, als één doorlopend `<p>` met `<br>`-regeleinden
-  (geen aparte structuurelementen) — **let op**: de omringende `<div>` bevat bij sommige
-  documenten óók een losse, gelekte serverregel (`ERROR JUPORTARobotRecordLienECLI …`) als
-  tekstnode vóór de `<p>`; daarom wordt specifiek de `<p>` geselecteerd, niet de hele `<div>`.
-  Romeinse-cijfer sectiekoppen ("I. RECHTSPLEGING VOOR HET HOF") worden gepromoveerd; genummerde
-  overwegingen ("1.", "2.") blijven bewust gewone alinea's, net als bij de andere bronnen.
-- **Franse rechtspraak** — `fr_conseil_constitutionnel.py` is het registratiepunt voor `FR` en
-  routeert op het gerecht-onderdeel van de ECLI:
-  - **Conseil constitutionnel**: publiceert op zijn **eigen site** (niet Légifrance, dus geen
-    Cloudflare-blokkade), met een **deterministische URL** rechtstreeks uit de ECLI — analoog
-    aan `eli_to_celex()`: `ECLI:FR:CC:{jaar}:{jaar}.{nummer}.{type}` →
-    `.../decision/{jaar}/{jaar}{nummer}{type}.htm` (het 5e ECLI-onderdeel met de punten eraf).
-    Geverifieerd op twee besluittypes (QPC en DC): de pagina bevestigt de aangevraagde ECLI
-    letterlijk in de tekst. De pagina is verder gewone semantische HTML (p/ul/li/blockquote/
-    strong) — geen bespoke walker nodig, gewoon `container_to_markdown()` (dezelfde
-    markdownify-route als `wetten.py`) op de container met class
-    `field--name-field-contenu-original`.
-  - **Cour de cassation** (`fr_judilibre.py`): via de officiële **Judilibre**-API op het
-    PISTE-portaal (`piste.gouv.fr`) — vereist een geregistreerde applicatie mét een
-    goedgekeurde **souscriptie** op de Judilibre-API (los van het aanmaken van de OAuth-
-    credentials zelf; zonder die souscriptie authenticeert de app wel, maar geeft de API
-    consequent **403** terug op elk endpoint). OAuth2 `client_credentials`-token via
-    `oauth.piste.gouv.fr` (production; **sandbox-Judilibre bevat alleen demodata**, dus
-    productie-toegang is voor echte opzoekingen sowieso vereist). Elke API-aanroep gaat met
-    zowel `Authorization: Bearer <token>` als `KeyId: <client_id>`; `_get_token()` cachet het
-    token (1 uur geldig) client-side. **ECLI-zoeken werkt wél**, in weerspraak met eerdere
-    aanname: geeft `/search` een `query`-parameter die exact een ECLI-string is, dan herkent
-    Judilibre dat intern en herschrijft het naar een exacte `terms`-filter op het `ecli`-veld
-    (zichtbaar in de `searchQuery`-debugkey van de respons) — geen apart ECLI-parameter nodig.
-    `/decision?id=<id>` geeft platte tekst (`text`-veld, geen HTML) terug, dus geen
-    structuurwalker nodig — alleen op lege regels in alinea's splitsen.
-  - Overige Franse gerechten (Conseil d'État, cours d'appel) geven een expliciete, uitleggende
-    foutmelding in plaats van een gok — die staan (ook) op Légifrance, achter de
-    Cloudflare-blokkade, zonder een vergelijkbare eigen-site- of API-route.
-- **PDF-conversie** (`mdconv/sources/files.py`): een geüploade/gelinkte `.pdf` gaat eerst door
-  **pdf-inspector** (Rust-library van Firecrawl, `process_pdf_bytes()`) — layout-aware Markdown
-  (koppen/lijsten/tabellen) zonder de losse-regeleinde-reflow-hack die MarkItDown nodig heeft.
-  `result.pdf_type` classificeert de PDF (`text_based`/`scanned`/`image_based`/`mixed`); bij
-  `scanned`/`image_based` (geen tekstlaag) of een lege/foutieve extractie valt de code terug op
-  MarkItDown (die óók geen OCR doet, maar wel de bestaande gedrag is voor dat geval). Alle andere
-  formaten (Word/Excel/PowerPoint/HTML/CSV/JSON/…) blijven altijd via MarkItDown lopen — behalve
-  EPUB, zie hieronder. `files.convert()` geeft `(markdown, engine)` terug zodat de UI kan tonen
-  welke engine het document daadwerkelijk verwerkte (`"pdf-inspector"`/`"epub"`/`"MarkItDown"`
-  in het bronveld).
-  - **Onvertaalde glyphs worden niet stilzwijgend doorgelaten.** Sommige lettertypen slaan
-    een typografische ligatuur (bv. "fi", "ft", "th") op als één samengesteld glyph, zónder
-    tekstcodering (`ToUnicode`) naar de onderliggende letters — de PDF "weet" dan zelf niet
-    meer welke tekens het zijn, dus geen extractie-engine kan dat achteraf herstellen. Zowel
-    pdf-inspector als MarkItDown zetten daar dan een `�` (replacement character) neer,
-    bv. "these" → "�ese", "often" → "o�en". `files.warn_if_unmapped_glyphs()` (aangeroepen
-    vanuit `sources.from_file()`, op alle PDF-routes: gewoon, per-pagina-inline en de
-    MarkItDown-terugval) zet daarom een waarschuwing boven de tekst zodra `�` erin
-    voorkomt — anders zou een gebruiker een verkeerd citaat kunnen overnemen zonder dat te
-    weten. Geen poging tot giswerk-herstel: welke letters het precies waren staat nergens in
-    het bestand, dus alleen handmatig tegen het origineel controleren is betrouwbaar.
-- **EPUB-conversie** (`mdconv/sources/epub.py`, zonder AI): een EPUB is een zip met
-  XHTML-hoofdstukken plus een package-document (OPF) dat de leesvolgorde (`spine`) en de
-  bestanden (`manifest`) beschrijft. MarkItDown kan een EPUB al lezen (`_epub_converter.py`
-  in die dependency, zelf ook al container.xml/OPF/spine-bewust), maar behandelt elk
-  hoofdstuk als losse HTML: interne links (tussen hoofdstukken, voetnoten, de
-  inhoudsopgave) blijven dan gewone relatieve `href`'s — kapotte links zodra alle
-  hoofdstukken tot één Markdown-bestand worden samengevoegd. `files._convert_epub()`
-  probeert daarom eerst de eigen parser; lukt dat niet (geen geldige/ondersteunde
-  EPUB-structuur — bv. corrupte zip of ontbrekende OPF), dan valt de conversie terug op
-  MarkItDown, net als bij een PDF zonder tekstlaag.
-  - **Koppen: échte `<h1>`-`<h6>` tags, én koppromotie op typografie.** Echte kop-tags
-    komen via `markdownify` gewoon als `#`-`######` uit. Maar veel professioneel gezette
-    EPUB's (InDesign-export, bv. uitgeversboeken) hebben **géén** echte kop-tags —
-    hoofdstuktitels en paragraafkoppen zijn gewoon `<p class="...">` met een eigen
-    alinea-stijl. Bevestigd met een echt boek (CIPP-M, IAPP): zonder koppromotie leverde
-    dat **nul** koppen op in een boek van 750k tekens platte tekst. Tekstueel giswerk
-    ("lijkt deze zin op een titel?") zou hier onvoorspelbaar zijn op willekeurige
-    boektekst — precies waarom de structuurwoorden-aanpak van `render.promote_headings()`
-    (EUR-Lex: "HOOFDSTUK", "Artikel N", een vaste woordenlijst in de grote EU-talen) hier
-    niet herbruikt kan worden. Wat wél betrouwbaar is: de CSS zelf zegt hoe groot/vet/
-    welk lettertype elke alinea-stijl heeft — een meetbaar feit, geen gok.
-    - **`_load_css_classes()`** leest alle `.css`-bestanden in de zip met een simpele,
-      niet-geneste regex (`selector { declaraties }`) — de auto-gegenereerde CSS van
-      digitale-uitgeverssoftware heeft geen `@media`/geneste selectors, dus dat is
-      voldoende; `@font-face`/`@page`-blokken worden gewoon als (nooit matchende) "klasse"
-      meegelezen, geen probleem. Voor elke `.KlasseNaam` wordt `font-size` (naar een
-      em-equivalent: `px/16`, `pt/12`, `%/100`), `font-weight` (`bold`→700, `normal`→400,
-      cijfers direct) en het eerste `font-family`-token opgeslagen.
-    - **`_dominant_style()`** bepaalt de lettergrootte/lettertype die de méeste tekens in
-      het hele boek beslaat (over alle hoofdstukken se `<p>`'s heen, gewogen naar
-      tekstlengte) — in de praktijk de hoofdtekst, ongeacht hoe de uitgever die stijl
-      noemt. Dat is de baseline waar elke andere stijl tegen wordt afgezet; een aanpak die
-      werkt ongeacht de klassennamen-conventie van de specifieke uitgever/InDesign-sjabloon.
-    - **`_qualifying_heading_classes()`** promoveert een stijl alleen als hij **groter**
-      is dan de baseline (harde eis — sluit bv. een kleine "Chap-Num"-bijschriftstijl
-      altijd uit) én een samengestelde score van ≥2 haalt over drie signalen:
-      grootte-ratio (≥1,5× → 2 punten, ≥1,15× → 1 punt), `font-weight` ≥ 600 (1 punt), en
-      een ander lettertype dan de hoofdtekst (1 punt). Dit onderscheidt bv. een vette
-      auteursnaam-stijl (zelfde grootte als de hoofdtekst, dus 0 punten op grootte) van een
-      echte titelstijl (groter én vet én een ander lettertype) — puur op grootte of puur
-      op vet zou de auteursnaam ten onrechte ook promoveren.
-    - **Kopniveau via rangorde, niet via vaste ratio's**: de kwalificerende stijlen worden
-      gesorteerd op grootte (groot → `h1`, volgende → `h2`, …, maximaal `h6`) — vaste
-      ratio-afkappunten (bv. "≥2× = h1") zouden niet overdragen naar een ander boek met
-      een andere typografische schaal.
-    - **`_promote_headings_by_style()`** promoveert een `<p>` alleen als de tekst ≤ 150
-      tekens is — een hele alinea die toevallig een "kop"-stijlklasse hergebruikt (kan
-      voorkomen) blijft zo een alinea, geen kop.
-  - **Interne links → Obsidian-wikilinks, externe links blijven gewoon.** Vóór de
-    HTML→Markdown-conversie rewrite `_rewrite_links()` elke `<a>` met een relatieve `href`
-    (geen `scheme:` zoals `http:`/`mailto:`) naar de kop waar hij naar verwijst:
-    `[[#Kop]]`, of `[[#Kop|linktekst]]` als de linktekst afwijkt van de koptekst. Een link
-    zonder anker (naar het hele hoofdstuk) valt terug op de titel-kop van dat hoofdstuk; een
-    anker dat zelf geen kop is (bv. een voetnootmarkering) valt terug op de dichtstbijzijnde
-    voorafgaande kop — een betekenisvolle wikilink in plaats van een dode interne id. Is er
-    na die twee terugvallen nog niets te vinden, dan blijft de platte linktekst staan, geen
-    kapotte link. `_index_headings()` bouwt deze `(hoofdstuk, anker) → koptekst`-opzoektabel
-    in één keer over alle hoofdstukken vóór het herschrijven begint.
-  - **De nav/inhoudsopgave komt niet als apart "hoofdstuk" mee.** EPUB3 markeert die in de
-    spine met `linear="no"` (geen gewone leesvolgorde-pagina); `_spine_hrefs()` slaat zulke
-    `itemref`'s over.
-  - **Afbeeldingen worden weggelaten, niet als kapotte link.** Een `<img src="images/…">`
-    verwijst naar een pad binnen de zip; zonder een bijlage-mechanisme zoals bij PDF's zou
-    dat een dode `![alt](pad/in/de/zip.jpg)` opleveren. Buiten scope van deze functie (die
-    vroeg specifiek om koppen + wikilinks) — `<img>`-tags worden vóór de conversie
-    gedecomposet.
-  - **`BeautifulSoup(..., "xml")`** (lxml's XML-parser) voor container.xml/OPF, niet de
-    gewone `"lxml"` HTML-parser — die laatste zou de namespace-declaraties (`xmlns=`) in de
-    OPF niet betrouwbaar even goed verwerken. De hoofdstukken zelf gaan wél door `"lxml"`
-    (HTML-modus, vergevingsgezind bij ontbrekende `<body>` e.d.), zoals de rest van het
-    project al doet.
-- **Losse afbeeldingen extraheren** (`extract_images=1` op `/api/convert/file` en
-  `/api/convert/file-url`, alleen voor `.pdf`, bij Documentupload): een **aanvulling** op de
-  normale PDF-tekst (pdf-inspector/MarkItDown hierboven), geen alternatief — de UI-toggle
-  (`#extract-images`, alleen zichtbaar als `/api/config` `extract_images_available: true`
-  teruggeeft) staat naast de normale invoer en verandert niets aan hóe de tekst zelf wordt
-  omgezet.
-  - **`mdconv/sources/pdf_images.py`** (`pdfimages`/`pdfinfo`, poppler-utils — systeembinaries,
-    niet via pip: Homebrew lokaal, `apt-get` in de Dockerfile) extraheert de ingesloten
-    rasterafbeeldingen (grafieken, screenshots). **Hele pagina's als scan worden bewust
-    overgeslagen**: `_is_full_page()` vergelijkt de fysieke afmeting van elke afbeelding
-    (pixels ÷ eigen ppi uit `pdfimages -list`) met de paginaomvang uit `pdfinfo -f N -l N`
-    (let op: dat commando meldt de paginagrootte als `"Page    N size: …"`, niet
-    `"Page size: …"` zoals zonder `-f`/`-l` — een eerdere regex miste dat verschil). Beslaat
-    een afbeelding op beide assen ≥ 85% van de pagina, dan is het vrijwel zeker de hele
-    pagina, geen losse figuur — anders zou elke gescande pagina de eigen tekst als "bijlage"
-    dupliceren. `pdfimages -j` levert alleen écht al-JPEG-gecodeerde afbeeldingen als `.jpg`;
-    een rauwe pixmap (typisch voor grafieken/screenshots) komt er als ongecomprimeerde
-    `.ppm`/`.pbm` uit en wordt hier met Pillow herschreven naar PNG (klein, lossless).
-  - **Bestandsnamen**: elke afbeelding heet `p{paginanummer}[-n].ext` (bv. `p12.png`, of
-    `p12-2.png` bij meerdere op één pagina).
-  - **Plaatsing: op de pagina waar de afbeelding vandaan komt, niet allemaal onderaan.**
-    `files.convert_pdf_pages()` is de tweede, per-pagina variant van pdf-inspectors
-    extractie (`extract_pages_markdown_bytes`, naast het bestaande `process_pdf_bytes` dat
-    ín één samengevoegde string levert) — dat geeft de paginagrenzen die nodig zijn om een
-    afbeelding ná de tekst van precies díe pagina te zetten. `sources._attach_pdf_images_inline()`
-    plakt de pagina's weer aan elkaar en voegt na elke pagina de wikilink-embeds
-    (`![[p{n}.ext]]`) van de afbeeldingen van díe pagina toe — vóór de eerste
-    tekst van de volgende pagina, dus zo dicht bij "de plek in de PDF" als haalbaar zonder
-    coördinaten (paginagranulariteit, niet positie-binnen-de-pagina).
-    **Terugval**: kan pdf-inspector geen per-pagina tekst geven (bv. een PDF zonder
-    tekstlaag die alsnog via MarkItDown gaat, dat één doorlopende tekst zonder
-    paginascheiding teruggeeft), dan is de pagina van geen enkele alinea bekend — dan
-    valt het terug op de oude, grove plaatsing: alle afbeeldingen samen onder één losse
-    `## Bijlagen`-sectie aan het eind (`sources._attach_pdf_images()`), beter een
-    duidelijk-grove plek dan een gok.
-  - **Bijlagen en de zip-download** (`mdconv/attachments.py`): binaire afbeeldingsdata gaat
-    nooit in de conversie-JSON mee. `_doc_payload()` in `api.py` slaat `doc.attachments` op
-    onder een token (`attachments.store()`, een tempdir per set) en stuurt alleen
-    `attachments_token` + `attachment_count` terug; de front-end onthoudt dat op het
-    document (`doc.attachmentsToken`) en stuurt het bij het downloaden terug mee.
-    `/api/download` bouwt dan een `.zip` (de markdown + een `attachments/`-submap) i.p.v.
-    een los `.md`-bestand — of, bij een `documents`-array (de knop "Alles downloaden"),
-    één zip met alle documenten en per document een eigen `attachments/<naam>/`-map. `attachments.get()` **verwijdert niets** — nogmaals downloaden mag
-    gewoon; opruimen gebeurt lui, bij elke nieuwe `store()`-aanroep worden sets ouder dan
-    2 uur weggegooid (geen cron/achtergrondtaak nodig voor deze single-user lokale tool).
-- **Wiskunde-modus** (`mdconv/ocr.py`, endpoints `/api/convert/file/ocr` +
-  `/api/convert/file-url/ocr`): een **opt-in** route bij Documentupload (checkbox `#ocr-mode`),
-  alleen voor PDF en alleen met een OpenRouter-sleutel. De gewone tekstextractie
-  (pdf-inspector/MarkItDown) leest de tekstlaag lineair; LaTeX-wiskunde uit een Beamer-PDF
-  komt daar onbruikbaar uit (sub-/superscripts weg, `\underbrace`/grote accolades als
-  glyph-brij, de index *i* als Private-Use-glyph `U+EBE9` zonder `ToUnicode`). De semantische
-  wiskunde staat niet in de tekstlaag — alleen visueel herlezen helpt.
-  - **`pdf_images.render_pages()`** rastert elke pagina met `pdftoppm -png -r <dpi>` (poppler,
-    dezelfde binaries als `extract_images`; `render_available()` checkt `pdftoppm`/`pdfinfo`).
-    `page_count()` (via `pdfinfo`) weigert eerst een PDF > `_MAX_PAGES` (100) — een bewust
-    trage modus hoort een harde grens te hebben.
-    `_DPI` = 200, bij te stellen met de env-var `OCR_DPI`. Paginasortering is **numeriek**
-    (`page-2` vóór `page-10`), niet lexicaal.
-  - **`openrouter.ocr_pages_stream(images, …)`** is `stream_chunk` met één of meer
-    `image_url` data-URI's als user-content i.p.v. tekst — het model moet dus multimodaal
-    zijn. Géén "lege stream = fout"-check (een blanco pagina levert legitiem niets op);
-    `finish_reason == "length"` betekent dat de pagina's in dít verzoek niet in het
-    uitvoerplafond pasten → melding met het advies "pagina's per verzoek" te verlagen.
-  - **`ocr.ocr_pdf_stream()`** verdeelt de pagina's in groepen van
-    `config.get_ocr_pages_per_request()` (standaard 5, instelbaar in het paneel) en laat
-    tot `_MAX_PARALLEL_BATCHES` (3, env `OCR_PARALLEL`) van die verzoeken **parallel** lopen
-    (`ThreadPoolExecutor`, zoals `cleanup.clean()`), maar levert de tekst **in
-    documentvolgorde** uit — een groep die eerder klaar is wacht op zijn beurt, en zijn
-    tekst verschijnt dan in één keer. `\n\n` tussen groepen, één `Progress` per groep
-    (`produced_tokens` = pagina's tot nu toe), één opgeteld `Usage` aan het eind. Een fout
-    of `GeneratorExit` (client weg) zet de annuleringsvlag zodat de nog lopende groepen bij
-    hun eerstvolgende SSE-regel stoppen; `_cancel.clear(request_id)` in een `finally`.
-    Een korte PDF (≤ groepgrootte) is dus gewoon één verzoek.
-  - **Streaming + annuleren hergebruiken de opschoon-infrastructuur volledig**: dezelfde
-    `_frame`/`STREAM_ERROR_SENTINEL` met de `CLEAN_`-tagnamen (bewust niet hernoemd — dan
-    hoeft `makeStreamParser` niet te wijzigen), dezelfde proces-brede `mdconv.cleanup.cancel`-
-    set en hetzelfde `/api/clean/cancel`-endpoint, en aan de front-end de `activeCleans`-Map
-    + `#cancel-clean`-knop.
-  - **Modellen, prompt én pagina's-per-verzoek staan in het instellingenpaneel**
-    (`DEFAULT_OCR_MODELS`, `prompts.OCR`, `DEFAULT_OCR_PAGES_PER_REQUEST` = 5; keys
-    `ocr_models`/`ocr_prompt`/`ocr_pages_per_request` in `settings.json`) met dezelfde "leeg
-    = standaard"-semantiek als de opschoonmodellen. `DEFAULT_OCR_MODELS`:
-    `qwen/qwen3.7-flash` en `openai/gpt-5.6-luna-pro`. Env-terugval `OCR_MODEL`. Deze prompt
-    zit **niet** in `prompts.DEFAULTS`/`PROFILES` (dat stuurt de opschoon-dropdown).
-- **Tekst plakken** (`pasted_text.py`, endpoint `/api/convert/text`): de front-end stuurt
-  zowel `html` (`element.innerHTML` van het `contenteditable`-vak, dus de klembord-opmaak
-  zoals de browser die bij plakken invoegt) als `text` (`element.innerText`, kaal) mee.
-  `_has_structure()` beslist welke wordt gebruikt: alleen als de HTML échte structuurtags
-  bevat (koppen, lijsten, tabellen, nadruk, `<br>`) is ze de moeite waard — anders is de kale
-  tekst betrouwbaarder. **Waarom niet altijd de HTML gebruiken**: sommige plak-bronnen leveren
-  voor kale tekst een klembord-HTML die niet meer is dan één `<span>`/`<div>` om de hele tekst
-  heen, met regeleindes als kale `\n`-tekens i.p.v. `<br>`/`<p>` — `markdownify` normaliseert
-  witruimte binnen zo'n inline-element en zou dan de eigen regelindeling van de gebruiker
-  laten verdwijnen. Bevat de geplakte tekst een ECLI, dan komt die in de bronvermelding
-  terecht (`"Geplakte tekst • ECLI:…"`) zodat `kind_for_source()` — dat al op ECLI-patronen in
-  de bronvermelding matcht — dit automatisch als rechtspraak herkent (met de Obsidian-optie).
-  Dit tabblad heeft geen herhaalbare rijen zoals de andere drie: één `contenteditable`-vak,
-  één document per klik op "Opmaken".
-  **"Plakken"-knop** (`pasteFromClipboard()`): leest rechtstreeks van het systeemklembord via
-  de Clipboard API, zodat de gebruiker niet zelf Cmd/Ctrl+V hoeft te doen. Probeert eerst
-  `clipboard.read()` voor zowel `text/html` (verrijkt) als `text/plain`; zonder HTML-variant
-  valt de methode terug op `clipboard.readText()`. Vereist een secure context (https/
-  localhost) en kan de browser om toestemming laten vragen; weigert de browser (of geen
-  toestemming), dan een duidelijke foutmelding met het advies handmatig te plakken — nooit
-  een stille misser.
+De uitleg per bron staat sinds WP-60 in `docs/` (tekst ongewijzigd verplaatst; lees het document van de
+bron waar je aan werkt vóór je iets wijzigt, want de details zijn er met hun meetgeval opgeschreven):
 
-## Versie zonder AI (`mdconv/features.py`)
+| Onderwerp | Document |
+|---|---|
+| EUR-Lex: Formex, Cellar 300, ELI, geconsolideerde versies, koppen | `docs/bronnen/eurlex-formex.md` |
+| HUDOC (EHRM) via de DOCX | `docs/bronnen/hudoc.md` |
+| Hof van Justitie en Gerecht via Formex | `docs/bronnen/hof-van-justitie.md` |
+| Rechtspraak.nl (ECLI:NL, open data) | `docs/bronnen/rechtspraak-nl.md` |
+| wetten.overheid.nl (BWB-XML) | `docs/bronnen/wetten-nl.md` |
+| Duitse, Belgische en Franse rechtspraak; ES en AT | `docs/bronnen/buitenlandse-rechtspraak.md` |
+| PDF, EPUB, losse afbeeldingen (poppler), wiskunde-modus, geplakte tekst | `docs/bronnen/bestanden-pdf-en-tekst.md` |
+| Documenten voor de kennisbank (`documenten`) | `docs/documenten-profiel.md` |
+| AI-opschoning (OpenRouter), de versie zonder AI (`MDCONV_AI`) en de instellingen | `docs/ai-opschoning-en-instellingen.md` |
+| Front-end (`app.js`, `app.css`) en designsysteem | `docs/frontend-en-designsysteem.md` |
+| Meetlat voor de Formex-dekking | `docs/meetlat-formex.md` |
+| Open overheid: Kamerstukken, Woo, zoeken, consultaties, wetgevingskalender, weergave | `docs/bronnen/open-overheid.md` |
 
-- "Zonder AI" = geen opschonen, vertalen, Obsidian, wiskunde-modus of AI-instellingen. De
-  gewone conversie (incl. lijsten plakken, batch-download) blijft. **Bewust een schakelaar in
-  main, geen aparte branch** waar de code uit is gesloopt: de AI-code verandert vaak en zo'n
-  branch zou bij elke wijziging conflicteren.
-- **Eén bron van waarheid: `MDCONV_AI` in `.env`.** Geen aparte `ai_enabled` meer in
-  `settings.json` — dat zou een tweede plek zijn die uit elkaar kan lopen met `.env`. Twee
-  manieren om diezelfde variabele te zetten, met een bewuste rangorde:
-  1. **Vóór het opstarten**, handmatig in `.env` (env; ook `0`/`false`/`no`/`uit`/`nee`).
-     `create_app` legt dat één keer vast als `app.config["AI_LOCKED_OFF"]`
-     (`features.ai_locked_off()`). Stond AI toen al uit, dan registreert `create_app` blueprint
-     `ai_bp` niet eens — het ⚙-paneel is dan helemaal weg, en er is geen route om AI via de UI
-     weer aan te zetten. Dat is de garantie voor een installatie binnen een organisatie: alleen
-     door `.env` zelf aan te passen en de server te herstarten komt AI terug. **Niet afzwakken.**
-  2. **Tijdens het draaien**, met de schakelaar **"AI-functies"** in het instellingenpaneel
-     (`#settings-ai`, alleen zichtbaar als AI niet al zo vergrendeld was). Die schrijft
-     rechtstreeks in `.env` (`features.set_ai_enabled()`) én meteen in `os.environ` van dit
-     proces — nodig omdat `serve.sh` `.env` alleen bij het opstarten in de omgeving laadt, dus
-     een bestandswijziging alleen zou pas bij een herstart doorwerken. Uitzetten schrijft een
-     expliciete `MDCONV_AI=off`-regel; aanzetten **verwijdert** die regel weer (leeg =
-     standaard = aan, dezelfde conventie als de rest van `settings.json`). Andere regels in
-     `.env` (bv. `OPENROUTER_API_KEY`) blijven ongemoeid. `ai_bp.before_request` geeft dan 404
-     op alle AI-routes, behálve `/api/settings` — anders kun je hem niet weer aanzetten.
-  `features.ai_enabled()` leest dit **live** (geen cache) — dat is wat de schakelaar zonder
-  herstart laat doorwerken. `api._ai_on()` combineert dat met de vastgelegde
-  `AI_LOCKED_OFF`-vlag (die wint als hij `True` is) en is de enige plek die dat per verzoek
-  vraagt.
-- Alle routes die een model aanroepen, plus `/api/settings`, staan op **`ai_bp`**. **Een nieuwe
-  AI-route hoort op `ai_bp`, niet op `bp`.** De `ConversionError`-handler is daarom app-breed
-  (`app_errorhandler`), anders krijgt `ai_bp` geen nette JSON-fouten.
-- `/api/config` meldt `ai_enabled` en `ai_locked`. `GET /api/settings` voegt `ai_enabled` toe
-  aan `cleanup.settings_payload()` (dat zelf niets van `.env` afweet); `POST /api/settings`
-  haalt `ai_enabled` uit de payload en stuurt die apart naar `features.set_ai_enabled()`
-  vóórdat de rest naar `cleanup.update_settings()` gaat.
-- `index.html` krijgt twee vlaggen: `ai` (laat met `{% if ai %}` de AI-markup weg:
-  opschoonpaneel, `#ocr-opts`, de AI-secties van het instellingenpaneel, de Obsidian-zin in de
-  hint) en `settings` (⚙-knop + dialoog, weg bij vergrendeling). `<body data-ai>` geeft de
-  eerste door aan `app.js` (`AI_ENABLED`); `SETTINGS_ENABLED` = bestaat `#open-settings`.
-  Zonder AI slaat de JS `initCleanControls()`, `fillAiSettings()`/`readAiSettings()` en het
-  AI-deel van `initSettings()`/`renderEditor()`/`loadConfig()` over. **Nieuwe JS die
-  AI-elementen aanraakt moet achter `AI_ENABLED` staan**, anders crasht de pagina zonder AI
-  op een `null`.
-- **Omschakelen herlaadt de pagina** (de markup is server-side), en opgehaalde documenten
-  leven alleen in de browser — `saveSettings()` vraagt daarom eerst om bevestiging als er
-  documenten open staan.
-- Tests isoleren `.env` naar een tmp-map (`isolated_ai_env`, monkeypatcht
-  `features._ENV_DIR` + `MDCONV_AI` in de omgeving) — nooit het echte projectbestand
-  aanraken. Ze pinnen per modus (vergrendeld / aan / via de schakelaar uit) vast welke
-  elementen er wel en niet zijn, welke routes 404 geven, dat een expliciete vergrendeling bij
-  het opstarten wint over elke `.env`-waarde, en dat de schakelaar alleen zijn eigen
-  `MDCONV_AI`-regel wegschrijft/verwijdert.
+Wat er per versie veranderde, staat in `CHANGELOG.md`; de datums van de meetgevallen staan in de documenten hierboven.
+Verwijzingen als "zie Front-end hieronder" in die documenten wijzen naar het document uit de tabel.
 
-## AI-opschoning (`mdconv/cleanup/`)
-
-- Via **OpenRouter** (OpenAI-compatibele API), niet de Anthropic API. Plain `requests`.
-- Sleutel: `OPENROUTER_API_KEY` in `.env`. Optioneel `LLM_MODEL`, `OPENROUTER_BASE_URL`,
-  `OCR_MODEL` (standaardmodel wiskunde-modus) en `OCR_DPI` (rasterresolutie, standaard 200).
-- Standaardmodel: **`~anthropic/claude-haiku-latest`** — de **tilde `~` hoort erbij** (OpenRouter's
-  auto-updating "latest"-alias). Niet "corrigeren" naar de versie zonder tilde.
-- `config.base_url()` normaliseert (strip een eventuele `/chat/completions`), want de code plakt dat pad zelf.
-- **Vier profielen** (`cleanup/prompts.py` → `DEFAULTS`): `generic` (documenten/PDF), `caselaw` (uitspraken/arresten:
-  koppen vanaf `##`, rechtsoverwegingen behouden, citaten→`>`, lijsten→markdownlijsten,
-  voetnoten→`[^n]`), `obsidian` (complete Obsidian-notitie) en `translate_nl` (zuivere
-  vertaling naar het Nederlands, structuur ongewijzigd). De UI kiest `generic`/`caselaw`
-  automatisch via het `kind`-veld (`sources.kind_for_source`: Rechtspraak/HUDOC/
-  `ECLI:EU:`/`CELEX:6…` = caselaw). `obsidian` is een **handmatige extra keuze**
-  (checkbox `#obsidian`, zichtbaar bij `doc.allowObsidian` — automatisch bij herkende
-  rechtspraak, en ook op Documentupload/Tekst plakken: daar kan de tool niet zien of het
-  om een uitspraak gaat, dus mag de gebruiker dat zelf aangeven) die het automatische
-  profiel overschrijft. `translate_nl` is geen keuze in die dropdown maar een **eigen
-  knop** (`#translate-nl`, "Vertalen naar het Nederlands") naast "Opschonen", op elk
-  tabblad — een losse, onafhankelijke actie die je vóór of ná het opschonen kunt draaien
-  (eigen `doc.translated`-vlag, blokkeert `doc.cleaned` niet en andersom).
-- **`obsidian`-profiel**: system-prompt is verbatim gekopieerd uit de skill
-  `~/Downloads/SKILL jurisprudentie.md` (zonder de skill-YAML-frontmatter — dat is
-  Claude Code-metadata, geen model-instructie). Levert YAML-frontmatter + inhoudsopgave-
-  callout + juridische analyse (feiten/rechtsvragen/argumenten/conclusie/impact) + de
-  volledige uitspraak verbatim, in één `` ```markdown ``` ``-codeblok (dat blok wordt eraf
-  gestript door `openrouter.strip_markdown_fence` vóórdat het in de textarea komt).
-  **Draait altijd ongesplitst** (`config.NO_CHUNK_PROFILES`): frontmatter/analyse
-  mag maar één keer voorkomen, dus chunking zou meerdere stukken met elk hun eigen
-  frontmatter opleveren. Bij zeer lange arresten kan de output daardoor tegen
-  `config.MAX_OUTPUT_TOKENS` aanlopen. `config.OUTPUT_RATIO["obsidian"] = 1.35` compenseert de
-  kostenraming voor de extra analyse-tekst bovenop de verbatim-tekst (output > input,
-  anders dan bij `generic`/`caselaw` waar output ≈ input).
-- **`translate_nl`-profiel**: draait wél gechunkt (niet in `NO_CHUNK_PROFILES`) — elk deel
-  wordt onafhankelijk vertaald, net als `generic`/`caselaw`. Eigen user-prompt-template
-  (`prompts.USER_PROMPTS["translate_nl"]`, "Translate this Markdown fragment into
-  Dutch:") in plaats van de generieke `DEFAULT_USER_PROMPT` ("Clean up…"), en een eigen
-  `OUTPUT_RATIO` van 1,15 voor de kostenraming (een Nederlandse vertaling is doorgaans
-  iets langer dan de brontekst). De front-end (`runClean()` in `app.js`) deelt dezelfde
-  streaming-implementatie als "Opschonen" — alleen het profiel, de knop en het
-  guard-veld (`doc.translated` i.p.v. `doc.cleaned`) verschillen.
-- **Anderstalige uitspraak → tweetalige tabel.** Bij een niet-Nederlandse uitspraak (Duits,
-  Frans, Spaans, …) instrueert het obsidian-profiel het model om onder `## Volledige
-  uitspraak` elke rechtsoverweging/randnummer als tabelrij te zetten: links het origineel
-  (letterlijk), rechts een Nederlandse vertaling. Bij een al-Nederlandse uitspraak (bv.
-  rechtspraak.nl) blijft de oude opmaak (lopende genummerde alinea's) gewoon gelden — de
-  prompt maakt dit expliciet conditioneel, anders zou "vertaal niet" (voor de verbatim-eis)
-  in de weg staan van de vertaaltabel die de gebruiker net daar wél wil. De `Instantie`-
-  YAML-lijst is uitgebreid met de Duitse federale gerechten (BGH, BVerfG, BVerwG, BFH, BAG,
-  BSG, BPatG); bij toekomstige landen (AT/ES, of overige FR-gerechten) moeten hun gerechten er
-  ook bij, anders kan het model geen geldige waarde uit de gesloten lijst kiezen.
-- **Afkapping wordt niet stilletjes geaccepteerd.** Zowel `clean_chunk()` als
-  `stream_chunk()` controleren `choice["finish_reason"]`; is die `"length"`, dan gooien ze
-  een `ConversionError` in plaats van de afgekapte tekst terug te geven. Dit was een echte,
-  bevestigde bug: een groot document (bv. een EU-voorstel met bijlage, ~108k tokens) liep bij
-  het obsidian-profiel tegen `MAX_OUTPUT_TOKENS` (64.000) aan — de bijlage (het tweede "deel")
-  verdween daardoor **zonder enige foutmelding**. `_truncation_message(profile)` geeft een
-  profielspecifieke boodschap: bij `obsidian` (dat nooit chunkt) wordt aangeraden een ander
-  profiel te gebruiken; bij `generic`/`caselaw` wordt aangeraden de deelgrootte te verlagen.
-- **Een mid-stream providerfout wordt niet stilzwijgend als "geen inhoud" gemeld.**
-  `stream_chunk()`/`ocr_pages_stream()` krijgen de HTTP 200 en headers al vóórdat de
-  onderliggende provider daadwerkelijk begint te genereren; loopt die provider daarna vast
-  (tijdelijk niet beschikbaar, een providerspecifieke contextlimiet, moderatie), dan stuurt
-  OpenRouter dat als een SSE-regel mét een `error`-veld in plaats van `choices`. Zonder
-  expliciete check op `event.get("error")` werd die regel overgeslagen en kwam de stream leeg
-  uit — dat leverde de nietszeggende `"AI-opschoning gaf geen inhoud terug."` op (de fallback
-  voor "geen enkele delta binnengekomen"), terwijl de eigenlijke reden (bv. "Provider returned
-  error") verborgen bleef. Dit trad in de praktijk vooral op bij grotere documenten met meer
-  delen — elk deel is een aparte aanroep, dus meer delen = meer kans dat één ervan zo'n
-  providerhobbel raakt. `_error_message()` pakt `error.message` (of het hele veld) eruit en
-  komt terecht in dezelfde `ConversionError`-afhandeling als elke andere opschoonfout.
-- **Streaming** (`clean_stream()` in `cleanup/__init__.py`, endpoint `/api/clean/stream`):
-  levert de opgeschoonde tekst als een reeks stukjes op i.p.v. één keer het hele resultaat.
-  Bij meerdere delen worden die **na elkaar** gestreamd (niet parallel zoals `clean()`) —
-  de tekst moet in de editor van boven naar onder groeien, in documentvolgorde.
-  `openrouter.stream_chunk()` leest OpenRouters SSE-respons (`stream: true`,
-  `data: {...}`-regels, afgesloten met `data: [DONE]`) en levert `delta.content`-stukjes op.
-  Voor het obsidian-profiel haalt `openrouter.strip_fence_stream()` het
-  ```markdown-codeblok er *tijdens* het streamen af (een sluitende ``` mag niet even
-  zichtbaar zijn in de live-weergave) — met een kleine "holdback"-buffer die de laatste
-  paar tekens vasthoudt totdat zeker is of ze bij de sluitende fence horen.
-  **Foutafhandeling na de eerste bytes**: de HTTP-status (200) is dan al verzonden, dus een
-  fout die halverwege ontstaat (bv. een afkapping bij het tweede deel) kan niet meer als
-  statuscode gemeld worden. Die komt in de body terecht achter `STREAM_ERROR_SENTINEL`
-  (`\x00CLEAN_ERROR\x00`, identiek gedefinieerd in `mdconv/api.py` en `static/app.js`) — de
-  front-end herkent dat teken, toont de rest als foutmelding, en zet het tekstvak terug naar
-  de laatst bewaarde tekst i.p.v. de afgebroken streaming-tekst te laten staan.
-  `runClean()` in `app.js` bewaakt met `isLive()` of de gebruiker tijdens het streamen
-  naar een ander documenttabblad is gewisseld: dan wordt `doc.markdown` wel bijgewerkt, maar
-  niet het zichtbare tekstvak — pas bij terugschakelen toont de editor het complete resultaat.
-- **Voortgang, tokengebruik/kosten en annuleren.** Naast platte tekst kan de stream twee
-  afgesloten control-frames bevatten — anders dan `CLEAN_ERROR` (dat altijd het allerlaatste
-  in de stream is, dus zonder sluiting): `\x00CLEAN_PROGRESS\x00{...json...}\x00` en
-  `\x00CLEAN_USAGE\x00{...json...}\x00` (gebouwd door `_frame()` in `mdconv/api.py`).
-  `openrouter.stream_chunk()` yieldt tussen de tekst-stukjes een `Usage`-marker zodra
-  OpenRouter die in de laatste SSE-regel van een deel meestuurt (`prompt_tokens`/
-  `completion_tokens`/`total_tokens`/`cost` — automatisch aanwezig, geen extra requestveld
-  nodig); `cleanup.clean_stream()` telt dat op over alle delen en yieldt zelf `Progress`-
-  markers (geproduceerde tekens ÷ 4 vs. de verwachte totale uitvoer — invoergrootte ×
-  `OUTPUT_RATIO`, dezelfde schatting als `estimate()`) telkens na `_PROGRESS_STEP_CHARS`
-  (400) nieuwe tekens. De front-end-tegenhanger (`makeStreamParser()` in `app.js`) ontleedt
-  dit met een kleine buffer die over de grenzen van losse `reader.read()`-happen heen werkt,
-  want een frame kan best halverwege een netwerkhap doorlopen.
-  **Annuleren** loopt via een `request_id` (door de front-end gegenereerd,
-  `Date.now()-Math.random()`) die meegaat in het `/api/clean/stream`-verzoek.
-  `mdconv/cleanup/cancel.py` is een proces-brede, thread-safe set van geannuleerde
-  `request_id`'s; `/api/clean/cancel` (POST, alleen `request_id`) zet 'm erin,
-  `stream_chunk()` checkt 'm per binnenkomende SSE-regel (en sluit dan meteen de
-  OpenRouter-verbinding) en `clean_stream()` checkt 'm ook tussen delen — beide stoppen dan
-  stil (geen `ConversionError`, dat zou als foutmelding in de UI belanden). De front-end
-  (`cancelActiveClean()`) breekt tegelijk zijn eigen `fetch()` af via een `AbortController`
-  — dat is wat de gebruiker meteen ziet; de servercheck is vooral bedoeld om te voorkomen dat
-  een groot document op de achtergrond dooronline blijft genereren (en dus geld kost) nadat
-  de gebruiker al is gestopt met wachten. Opschonen/vertalen mag **per document** maar één
-  keer tegelijk lopen (`activeCleans` in `app.js`, een `Map` van docId → `{requestId,
-  controller}`) — nog een keer starten terwijl hetzelfde document al bezig is geeft een
-  duidelijke foutmelding, maar **verschillende documenten lopen gewoon gelijktijdig**
-  (elk zijn eigen `/api/clean/stream`-verzoek; de Flask-dev-server draait `threaded=True`,
-  gunicorn in Docker draait `gthread`). De voortgangsbalk en Annuleren-knop in het
-  opschoonpaneel zijn gedeelde DOM-elementen die altijd het document weerspiegelen dat op
-  dat moment in de editor staat — `renderEditor()` leest `activeCleans.has(doc.id)` bij elke
-  wisseling opnieuw uit, en `cancelActiveClean()` annuleert specifiek het weergegeven
-  document, niet "de eerste de beste" lopende actie.
-  **Duur en uitvoertokens/seconde** staan naast het tokengebruik zodra een actie klaar is
-  (`renderCleanResult()` in `app.js`): `runClean()` meet `performance.now()` vóór de
-  `fetch()` en ná het laatste stukje tekst, en zet dat als `elapsedMs` in `doc.lastUsage`
-  naast de `Usage`-marker (dus alleen bij een geslaagde afronding, niet bij annuleren of een
-  fout — die tonen geen halve/misleidende duur). Het aantal is `usage.completion_tokens`
-  gedeeld door die duur, dus alleen de uitvoer — dat is de modelgeneratiesnelheid; de
-  invoertokens tellen niet mee, die worden in één keer verstuurd en zeggen niets over hoe
-  snel het model tekst produceert.
-- **Beide reformat-prompts** (`generic`/`caselaw`) maken alléén echte sectietitels koppen;
-  genummerde overwegingen/randnummers blijven alinea's (uitdrukkelijke wens gebruiker —
-  niet terugdraaien).
-- Lange documenten worden per ~55.000 tokens (`config.get_chunk_tokens(model)`, ≈220k tekens)
-  in delen verwerkt; `max_tokens` = 64.000 (Haiku's output-plafond, dus geen afkapping). Meeste
-  teksten = één call. **Deelgrootte is per AI-endpoint instelbaar**, geen centrale instelling
-  (zie "Instellingen" hieronder) — een model met een kleiner effectief contextvenster kan zo
-  een kleinere deelgrootte krijgen zonder dat dat de andere endpoints raakt.
-  **Let op**: de UI toont `est.input_tokens` (documentgrootte), NIET `input+output` opgeteld —
-  dat laatste oogt ~2x zo groot als het echte document (output ≈ input bij opschonen) en
-  deed gebruikers denken dat het chunk-aantal niet klopte terwijl het wél correct was.
-- **Modelkeuze** (`config.DEFAULT_MODEL_CHOICES`): 7 opties, allemaal via dezelfde
-  OpenRouter-sleutel. `config.resolve_model(override)` accepteert een expliciete keuze uit de UI (moet in
-  `config.valid_model_ids()` zitten), anders terugval op `LLM_MODEL`/default. De `:nitro`-suffix
-  (snelste provider) bestaat NIET als los item in OpenRouter's `/models`-catalogus — `get_pricing()`
-  matcht daarom ook op het model-id vóór de `:`, anders krijgt elk `:nitro`-model `cost=None`.
-  UI: dropdown in `#model-choice`, gevuld vanuit `/api/config`, keuze onthouden in `localStorage`.
-  Een `change`-listener op `#model-choice` roept `loadEstimate()` opnieuw aan zodat de
-  kostenraming meteen het nieuw gekozen model reflecteert (was eerder een gemiste update).
-- **Regelnummers**: altijd aan (`#gutter`), geen toggle. Eén nummer per brontekst-regel
-  (niet per visueel omgebogen regel) — `#line-mirror` is een onzichtbare kloon van de
-  textarea (zelfde font/breedte/padding) waarin elke regel als eigen `<div>` wordt gemeten
-  (`getBoundingClientRect().height`); de gutter geeft elk nummer precies die hoogte, zodat
-  een lange gewrapte zin één nummer krijgt met witruimte eronder. Herberekend bij
-  input/resize en na elke nieuwe/opgeschoonde tekst.
-  **Scroll-sync**: `#gutter` heeft géén eigen `scrollTop` — de nummers staan in
-  `#gutter-inner`, dat met een CSS-`transform: translateY(-textarea.scrollTop)` exact
-  evenveel verschuift als de textarea scrolt (`syncGutterScroll()`), pixel-precies en
-  zonder aparte scroll-container-eigenaardigheden.
-  **Gelijke hoogte**: `#editor` (flex-row) heeft een expliciete `height: 460px` +
-  `resize: vertical` — gutter en textarea vullen dat samen met `height:100%`, zodat ze
-  nooit uit elkaar kunnen lopen. De textarea's eigen `resize` staat uit (`resize:none`);
-  de gebruiker resized het hele blok via de rand van `#editor`. Een `ResizeObserver` op
-  `#editor` roept `syncGutterScroll()` opnieuw aan na zo'n resize.
-- **NL-wetgeving met een fragment** in de link (`…#Hoofdstuk16`) → `wetten.py` haalt alléén dat
-  element op (`soup.find(id=anchor)`), niet de hele regeling.
-
-## Instellingen (⚙-knop rechtsboven)
-
-- `GET /api/settings` → huidige waarden + `defaults` (voor de reset-knoppen per veld,
-  géén apart reset-endpoint nodig). `POST /api/settings` → merget het payload over de
-  opgeslagen settings en persisteert; een leeg/ongeldig veld (lege modellenlijst, lege
-  prompt, deelgrootte buiten `MIN_CHUNK_TOKENS`–`MAX_CHUNK_TOKENS`) wist juist dat veld
-  terug naar "gebruik de standaardwaarde" in plaats van de ongeldige waarde op te slaan.
-- **Deelgrootte is per AI-endpoint, geen centrale instelling.** Elk item in `models` is
-  `{id, label, chunk_tokens}`; `chunk_tokens: null` (leeg gelaten in de UI) betekent
-  "gebruik `DEFAULT_CHUNK_TOKENS` voor dit endpoint". `config.get_chunk_tokens(model)`
-  zoekt het model op in `get_model_choices()` en geeft diens eigen waarde terug, anders de
-  standaard — zonder `model` (of een onbekend model) altijd de standaard, er is geen
-  centraal veld meer om op terug te vallen. `chunking.chunks_for()`/`split()` krijgen het
-  al-opgeloste model (`config.resolve_model(...)`) doorgegeven vanuit `cleanup.estimate()`/
-  `clean()`/`clean_stream()`, vóórdat er iets gesplitst wordt.
-- Opslag: `mdconv/cleanup/` → `state.StateFile` leest/schrijft `.deploy-state/settings.json` (dezelfde gitignored, in Docker als volume
-  gemounte map als `version.json`; ook hier een `fcntl.flock` tegen gelijktijdige writes
-  door meerdere gunicorn-workers). Alleen daadwerkelijk gewijzigde sleutels staan erin —
-  ontbrekend/leeg = val terug op de `_DEFAULT_*`-constante.
-- De ingebouwde standaardwaarden heten `DEFAULT_MODEL_CHOICES`,
-  `DEFAULT_CHUNK_TOKENS` en `prompts.DEFAULTS`. `get_model_choices()`,
-  `get_chunk_tokens(model)` en `get_prompt(profile)` zijn de dynamische lookups; een
-  wijziging via de UI werkt daardoor met terugwerkende kracht, zonder herstart.
-- UI (`templates/index.html`): `#open-settings` (header) opent `#settings`, een modal met
-  herhaalbare model-rijen (`modelRow()`/`renderModelRows()` — id, label, én een
-  `<input type=number class=mchunk>` voor de deelgrootte van dát endpoint) en vier
-  prompt-`<textarea>`'s. Elke sectie heeft een eigen "Standaard"-knop die het bijbehorende
-  veld terugzet naar `data.defaults.*` (uit de laatste `GET /api/settings`-respons) — puur
-  client-side, geen extra round-trip; "Standaardlijst" bij AI-endpoints zet zo ook alle
-  per-endpoint deelgroottes terug (de standaardlijst heeft er zelf geen ingesteld).
-  Opslaan roept `loadConfig()` opnieuw aan zodat de modellenlijst op het hoofdscherm meteen
-  de bijgewerkte lijst toont zonder page-reload.
-
-## Front-end (`static/app.js` + `static/app.css` + `templates/index.html`)
-
-Geen framework, geen build-stap. Eén expliciete `state` en per gebied een render-functie
-die die state naar de DOM schrijft; wat de gebruiker verandert gaat **eerst** in `state`
-en dan door een render. Nooit rechtstreeks de DOM patchen — daar liep de vorige versie
-op stuk, doordat dezelfde gegevens in een variabele, in een DOM-waarde én in het
-document zelf stonden en uit elkaar liepen bij het wisselen van tabblad.
-
-- **Meerdere documenten**: elk tabblad heeft herhaalbare invoerrijen (`makeRow()`/
-  `initRows()`), met "+ toevoegen" en per rij een ×-knop (minstens 1 rij blijft staan).
-  `runBatch()` haalt de ingevulde rijen op met een **kleine pool**
-  (`BATCH_CONCURRENCY = 4`, géén `Promise.allSettled` over alles tegelijk meer),
-  toont voortgang (`3/5 opgehaald…`) en meldt per mislukte rij precies wat faalde —
-  één fout blokkeert de rest niet. `#file` heeft `multiple`; slepen en de bestandskiezer
-  lopen over alle bestanden.
-  - **Waarom een pool en geen "alles tegelijk"**: bij een aangeleverde lijst van dertig
-    links waren dat dertig gelijktijdige verzoeken naar dezelfde bron (EUR-Lex,
-    wetten.overheid.nl) — precies hoe je throttling of een blokkade uitlokt, nog voordat
-    de eerste conversie klaar is.
-  - **Volgorde en niet-meespringen.** De bronnen antwoorden in willekeurige volgorde, dus
-    elk document krijgt zijn plaats in de lijst mee (`doc.batchIndex`, meegegeven door
-    `run(item, index)`) en `finishBatch()` zet de batch aan het eind terug in
-    invoervolgorde. `addDoc({activate: false})` zorgt dat de editor **tijdens** het
-    ophalen niet meespringt met elk document dat binnenkomt (dat volgde de
-    afrondingsvolgorde); pas `finishBatch()` opent het eerste document van de lijst. De
-    tab verschijnt wél meteen (`renderDocTabs()`), zodat je de lijst ziet vollopen.
-- **Batch-import: een lijst aanleveren** (Jurisprudentie, Wetgeving en Documentupload;
-  `LIST_PASTE_KINDS` + de `.seg`/`.bulk`-markup in `index.html` + een `initListMode()`-
-  aanroep zijn samen de plek om dat uit te breiden). Documentupload ("doc") heeft **geen
-  taalkeuze** voor de lijst — `#bulk-doc-lang` bestaat niet en de list-mode-helpers
-  (`switchListMode`/`initListMode`/`readInput`) gaan daar met een `?`-guard omheen. Twee
-  wegen naar dezelfde lijst:
-  - **Plakken splitst zich uit over de rijen.** Plak je meerdere regels in één
-    invoerveld, dan vult regel 1 dat veld en verschijnt er voor elke volgende regel een
-    nieuwe rij (`spreadList()`), met de taalkeuze van de rij waarin je plakte. Alleen bij
-    een **échte** lijst (meerdere regels én ≥ 2 herkende items) wordt het plakken
-    overgenomen; een gewone plak van één regel, of midden in een bestaande waarde, blijft
-    een gewone plak. Zo hoeft de gebruiker niets te leren: één Cmd/Ctrl+V.
-  - **"Lijst plakken"** (`.seg`-schakelaar) ruilt de rijen om voor één tekstvak met één
-    taalkeuze voor de hele lijst. Rijen en tekstvak zijn **twee weergaven van dezelfde
-    lijst**: `switchListMode()` neemt de inhoud mee in beide richtingen, zodat je nooit
-    werk kwijt bent en "Ophalen" altijd leest wat je op dat moment ziet. De gekozen
-    weergave blijft bewaard in `localStorage` (`listMode:<kind>`). Enter maakt in een
-    tekstvak een regel, dus **Cmd/Ctrl+Enter** haalt op.
-  - **De parser is vergevingsgezind maar voorspelbaar** (`parseList()`/
-    `pickIdentifier()`), per regel in deze volgorde: een URL in de regel (dus een
-    geplakte bullet mét omringende tekst werkt gewoon, sluitleestekens van een
-    markdown-link of prozapunt gaan eraf), anders een ECLI/BWB/CELEX in de regel, anders
-    de regel zelf zonder opsommingsteken of nummering. Onbekende invoer wordt dus **nooit
-    stil weggegooid** — die gaat door naar de server, die in het Nederlands uitlegt wat
-    er mis is. Lege regels en markdown-koppen (`## EU-wetgeving`) worden overgeslagen,
-    want zo ziet een lijst uit een notitie eruit. Een live teller onder het tekstvak
-    (`updateListCount()`) meldt "18 regelingen herkend · 2 dubbele weggelaten" **vóórdat**
-    je achttien verzoeken afvuurt.
-  - **Dubbele invoer gaat eruit op invoer *én* taal** (`readInput()`): dezelfde regeling
-    in NL en EN zijn juist wél twee documenten.
-  - **Één patroon per identificatievorm** (`RE_URL`/`RE_ECLI`/`RE_BWB`/`RE_CELEX`/
-    `RE_HUDOC`), gedeeld door de lijst-parser en `deriveName()`. Dezelfde les als
-    `_CELEX_BODY` aan de serverkant: los uitgeschreven liep de CELEX-vorm uit elkaar
-    zodra de consolidatiedatum erbij kwam. Let ook hier op de volgorde — een
-    geconsolideerde CELEX (`02014R0910-20241018`) matcht óók `RE_HUDOC`, andersom niet.
-  - **`[hidden]` doet het schakelen**, dus de `[hidden] { display: none !important }`-regel
-    in `app.css` is ook hier voorwaarde: `.rows` heeft `display: flex`.
-- **"Alles downloaden (n)"** (`#download-all`, zichtbaar vanaf 2 documenten): bij een lijst
-  van twintig is per document downloaden het nieuwe handwerk. `downloadAll()` stuurt alle
-  documenten in één `documents`-array naar `/api/download`, dat er één zip van maakt —
-  `<naam>.md` per document, en de bijlagen van een document onder `attachments/<naam>/`,
-  want twee PDF's leveren allebei een `p01.png`. Gelijke documentnamen krijgen een
-  `-2`-suffix (`_unique_name()`), anders zou het tweede het eerste overschrijven en was
-  dat document stil verdwenen. `saveDownload()` is de gedeelde helper van
-  `downloadActive()` en `downloadAll()`.
-- **Wiskunde-modus** (`#ocr-mode`-checkbox + `#ocr-model`-keuze bij Documentupload, alleen
-  zichtbaar bij `llm_available && ocr_available`): `uploadFiles()`/`fetchFileUrls()`
-  vertakken bij `ocrModeRequested()` naar `runOcr()`. Die verwerkt PDF's **ná elkaar** (niet
-  de 4-brede `runBatch`-pool — elke PDF is al N vision-verzoeken) via `streamOnePdf()`, dat
-  `runClean()` spiegelt: het document wordt **eerst leeg aangemaakt** (`addDoc({markdown:
-  "", activate: true})`) en loopt al streamend vol, met dezelfde `activeCleans`-Map,
-  `#cancel-clean`-knop, `makeStreamParser` en `setProgress` als het opschonen. De
-  bronvermelding (`wiskunde-OCR (<model>) • <naam>`) bouwt de front-end zelf op. Bij
-  annuleren blijft de tekst-tot-dan staan; komt er niets bruikbaars binnen, dan wordt het
-  lege tabblad weer opgeruimd (`closeDoc`).
-- **State per document**: `{id, title, filenameBase, source, kind, allowObsidian,
-  obsidian, model, markdown, cleaned}` in `state.docs`. `obsidian`/`model` zijn **per
-  document**, dus je kunt het ene document als Obsidian-notitie opschonen en het andere
-  met het standaardprofiel. `setActive()` bewaart eerst de live-bewerkte tekst
-  (`saveEdits()`) voordat het volgende document wordt geladen.
-- **"Opmaken voor Obsidian" is een checkbox** (`#obsidian`), geen dropdown. Zichtbaar bij
-  `doc.allowObsidian`, dat `addDoc()` zet op `kind === "caselaw"` (automatisch herkende
-  rechtspraak) **of** een expliciete `allowObsidian: true` vanuit de aanroep — die geven
-  `fetchFileUrls()`, `uploadFiles()` en `fetchPastedText()` altijd mee, want een geüpload
-  document of geplakte tekst kán een uitspraak zijn zonder dat de tool dat automatisch
-  herkent (bv. een land zonder eigen bron, handmatig gevonden). Aanvinken zet
-  `doc.obsidian` en zet `cleaned` terug op false (ander profiel = opnieuw opschonen mag),
-  en vernieuwt de kostenraming.
-- **`[hidden]` moet in CSS geforceerd worden.** De UI regelt zichtbaarheid via het
-  hidden-attribuut, maar de UA-stijl (`[hidden] { display: none }`) heeft de laagste
-  specificiteit: `.checkbox { display: inline-flex }` verslaat hem. Zonder de regel
-  `[hidden] { display: none !important }` in `app.css` staat het Obsidian-vinkje
-  zichtbaar bij gewone documenten. Er is een test die die regel afdwingt.
-- **Regelnummers**: één nummer per échte regel (per enter), niet per visueel omgebogen
-  regel. `#line-mirror` is een onzichtbare kloon van de textarea die per regel meet hoe
-  hoog die na word-wrap wordt; elk nummer krijgt exact die hoogte. Font en padding komen
-  uit `--editor-font`/`--editor-padding`, die beide elementen gebruiken — wijken die
-  uiteen, dan lopen de nummers scheef (ook daarvoor is een test).
-  Scroll-sync via een CSS-`transform` op `.gutter-inner`, niet via een eigen `scrollTop`.
-  De meting is **samengevoegd in één animatieframe** en wordt overgeslagen als tekst en
-  breedte niet zijn veranderd: 50 toetsaanslagen leveren 1 herbouw op in plaats van 50.
-- **Dialoog**: focus gaat naar binnen en blijft binnen (`trapFocus`), Escape en een klik
-  op de achtergrond sluiten, en `body` wordt scroll-vergrendeld zolang hij open staat.
-- **Kostenraming** heeft een verzoek-token (`estimateToken`): alleen het laatste antwoord
-  mag de UI bijwerken, zodat snel wisselen geen oude raming laat staan.
-
-## Designsysteem (`static/app.css`)
-
-De opmaak is **"liquid glass"**: het navigatie-chrome (kop, tabbalk, dialoog,
-statusregel, opschoonpaneel, documentchips, sleepzone) is vertaald glas —
-`backdrop-filter` + een lichtrand boven + een zachte specular highlight —
-dat over de gewone paginakleur drijft (géén achtergrondgloed — die
-kleurige `body::before`-vlekken zijn op verzoek verwijderd; de pagina is nu
-gewoon `--bg`, en het glas vertaalt daardoor vooral de inhoud die er onder
-zit). Het onderliggende kleurenpalet blijft de 12-stapsschaal van Radix
-Themes, met de hand in platte CSS (geen React/npm),
-met de vaste betekenis per stap: 1 paginablad · 2 subtiel blad · 3 vulling ·
-4 hover · 5 actief · 6 zachte rand · 7 rand/ring · 8 hover-rand **en de
-focusring** · 9 volvlak · 10 volvlak-hover · 11 secundaire tekst ·
-12 primaire tekst.
-
-**Glas versus vlak — nooit stapelen.** De `.glass`-klasse (blur + lichtrand +
-specular-`::before`) staat alleen op drijvend chrome (kop, tabbalk, dialoog,
-statusregel, opschoonpaneel, documentchips, sleepzone). Inhoudspanelen
-(`.card`, invoervelden, de editor) blijven bewust
-**ondoorzichtig**: twee doorzichtige lagen op elkaar (bv. een glazen knop
-binnen een al glazen dialoog) laat de leesbaarheid instorten — exact de
-reden dat knoppen zelf geen `backdrop-filter` hebben, alleen een niet-
-doorzichtige gradient-"sheen" (`.btn-solid::before`/`.btn-soft::before`) voor
-het glanzende effect zonder een tweede blur-laag.
-
-**De tabbalk is het enige echt "liquid" moment.** `.tabs-indicator` is een
-tweede, accent-getinte glazen pil die achter het actieve tabblad naar de
-juiste breedte/positie toe **vloeit** — met een klein beetje overshoot
-(`cubic-bezier(0.34, 1.56, 0.64, 1)`), bewust de enige plek met bounce.
-Overal elders is de beweging overshoot-vrij (`--ease-standard`), want
-overshoot op bv. een dialoog-intro leest als een fout, niet als vloeibaar.
-JS (`moveTabsIndicator()` in `app.js`) meet de `getBoundingClientRect()` van
-het geselecteerde tabblad en zet dat om in een `transform: translateX()` +
-`width` op de indicator — compositor-vriendelijk, werkt vanzelf mee bij elke
-schermbreedte.
-
-**Kleuren: huisstijl van Lex Digitalis** (lexdigitalis.nl, afgelezen uit hun eigen
-CSS-variabelen `--bs-primary`/`--bs-secondary`/`--wp--preset--color--*`). **Alleen licht** —
-de donkere modus is op verzoek verwijderd; ook bij een donker systeemthema blijft de pagina
-licht. De accentschaal (stap 1–12) is opgebouwd rond hun indigo **`#191585`** (stap 9, en
-`#14116a` = hun eigen hover = stap 10), met hun helderblauw **`#4271ff`** als stap 8 en dus
-als focusring. Oranje **`#f9a935`** (`--orange-9`) is het tweede accent: de hover van de
-hoofdknoppen en de voortgangsbalk. **Hoofdknoppen** (`.btn-solid`) zijn indigo met witte
-tekst en worden bij hover oranje met witte tekst — uitdrukkelijke wens van de gebruiker, net
-als op hun site (wit op oranje haalt maar ~2:1 contrast; bewust zo gekozen, niet
-"corrigeren"). **Het kopvlak** (`.app-header.glass`) is het indigo→blauw-verloop van hun hero
-met witte titel/ondertitel/⚙; twee classes zodat het de glas-achtergrond van `.glass`
-verslaat. De pagina is `#f5f8fb` (lichter dan hun `#edf3f7`).
-**Diagonale hoeken**: vlakken zijn alleen **linksboven en rechtsonder** afgerond, de andere
-twee hoeken recht (`--diag-3`/`--diag-4`/`--diag-5` = `R 0 R 0`). Geldt voor kop, tabbalk,
-kaarten, statusregel, opschoonpaneel, sleepzone, plakvak, lijst-tekstvak, editor en dialoog;
-de gutter heeft alleen linksboven. **Nooit op knoppen** — uitdrukkelijke wens van de
-gebruiker: `.btn` blijft pil, en dus ook de vier tab-knoppen (Jurisprudentie/Wetgeving/
-Documentupload/Tekst plakken, `.tab`) én de schuivende `.tabs-indicator` erachter, die de
-vorm van die knoppen volgt. Alleen de omringende `.tabs`-balk zelf is een vlak en dus
-diagonaal. Invoervelden, selects en documentchips blijven ook bewust pil/klein-rond — het is
-een vlakkenstijl, geen knoppenstijl. Lettertype: `Ubuntu` voorop in
-`--font-sans`, bewust **niet** van Google Fonts geladen (lokale tool, geen externe verzoeken)
-— alleen wie het geïnstalleerd heeft krijgt het.
-
-**Toegankelijkheid is geen ander thema, maar dezelfde schakelaar.**
-`prefers-reduced-transparency: reduce` maakt elk `.glass`-element ondoorzichtig
-(geen blur, geen specular). Ook de blur op `.overlay` (zie hieronder) gaat er
-dan uit. `prefers-reduced-motion: reduce`
-zet alle transitie-/animatieduur op nagenoeg 0 (één globale regel), inclusief
-de vloeiende tabbalk-indicator en de specular-highlight hieronder.
-
-**Specular highlight die de cursor volgt** (de Apple-Liquid-Glass-verversing,
-macOS/iOS 26): op een scherm is er geen kijkhoek zoals bij een fysieke lens,
-maar de cursor is de dichtstbijzijnde analogie. `--mx`/`--my` zijn met
-`@property` als `<percentage>` geregistreerd (dus animeerbaar — een gewone
-custom property springt instant, deze glijdt mee dankzij `transition: --mx …`
-op `.glass` zelf); `initGlassSpecular()` in `app.js` zet ze als inline style
-op elk `.glass`-element bij `pointermove`, en `.glass::before` tekent daar een
-radiale highlight op (`radial-gradient(640px circle at var(--mx, 30%)
-var(--my, 10%), …)`). Zonder muis — aanraakscherm (`hover: hover` faalt),
-toetsenbord, of `prefers-reduced-motion` — blijft de `initial-value`
-(30%, 10%, ongeveer de oude vaste linksboven-highlight) gewoon staan: dit is
-verrijking, geen vereiste, en breekt nergens iets af.
-Bewust **niet** de WebGL/canvas-refractie-met-chromatic-aberration-aanpak van
-bv. `liquid-glass-react` gekopieerd: die tekent zelf pas iets in Chromium en
-laat Safari/Firefox leeg (bevestigd in die library's eigen documentatie) —
-voor een eenpersoons-lokale-tool zonder build-stap een te zware, te breekbare
-afhankelijkheid voor een puur cosmetisch effect.
-
-**De kop zweeft** (`position: sticky`, i.p.v. gewoon meescrollen): een
-Liquid-Glass-navigatiebalk blijft zichtbaar boven de inhoud die erdoorheen
-scrolt. `initHeaderElevation()` zet `.is-scrolled` zodra `window.scrollY > 4`
-— die class heeft een hogere specificiteit dan `.glass` alleen (twee classes
-i.p.v. één), dus de iets diepere schaduw daarin wint zonder `!important`.
-
-**`.overlay` (de instellingendialoog) vervaagt de inhoud erachter** i.p.v.
-'m alleen te verduisteren (`backdrop-filter: blur(6px) saturate(140%)`) —
-zoals een iOS-sheet, om duidelijker te maken dat de dialoog er letterlijk
-"boven" ligt. Gaat uit onder `prefers-reduced-transparency`, net als `.glass`.
-
-**Iets scherper en meer verzadigd dan de vorige "frosted glass"-versie**:
-`--glass-blur` ging van 24px naar 20px en `saturate()` van 180% naar 200%
-(plus een vaste `contrast(105%)`) — Liquid Glass blurt minder en laat de
-kleur van wat erachter zit sterker doorschijnen. Elk `.glass`-element kreeg
-ook een tweede, donkerdere randlijn onderaan (`--glass-rim-bottom`, naast de
-bestaande lichte `--glass-rim-top`) voor het gevoel van een materiaal met
-enige dikte, niet een plat vlak met alleen een hoogtelicht.
 
 ## Prestaties — waar de winst zit (en waarom)
 - **Lui laden.** `import markitdown` kost honderden ms; die gebeurt nu pas bij de eerste
@@ -1180,24 +191,27 @@ enige dikte, niet een plat vlak met alleen een hoogtelicht.
   daar een `ZoneInfoNotFoundError` geven in plaats van gewoon te werken.
 
 ## Tests
-`.venv/bin/python -m pytest tests/ -q` — 357 tests (`tests/test_kamerstuk.py`, `test_open_overheid.py` en `test_consultatie_wgk.py` zijn de Open-overheid-bronnen, het zoeken en de weergave; de rest karakteriseringstests) die het gedrag
+`.venv/bin/python -m pytest tests/ -q` — 803 tests (`tests/test_kamerstuk.py`, `test_open_overheid.py` en
+`test_consultatie_wgk.py` zijn de Open-overheid-bronnen, het zoeken en de weergave; `test_kb_route_streng.py` de drie
+besluiten van WP-77; de rest karakteriseringstests) die het gedrag
 vastleggen in plaats van het te beschrijven: `detect_source`-precedentie, ELI→CELEX,
-de geconsolideerde-CELEX-afhandeling (datum behouden, preambule invoegen, en de vier
+de CLG-markupnormalisatie (lidnummers, lettermarkers, voetnootankers), de
+voetnootdefinities die met de preambule meereizen, de notitievorm die een intakepoort
+passeert, de geconsolideerde-CELEX-afhandeling (datum behouden, preambule invoegen, en de vier
 terugvalpaden als dat niet lukt), de versie-terugvalladder (nieuwste versie op of vóór de
 gevraagde datum, nooit een latere, en een notitie die niet beweert dat een bestaande versie
 niet bestaat), de chunking-ladder (ook zonder witregels en met één te
-lang woord), de PDF-reflow, de Formex-parser, de EPUB-parser (koppen (échte tags én
+lang woord), de PDF-reflow, de losse Formex-parser en de Cellar-Formex-route (inclusief
+bronbytes, manifestidentiteit en fail-closed tabellen), de EPUB-parser (koppen (échte tags én
 koppromotie op CSS-typografie voor EPUB's zonder kop-tags), interne links → wikilinks met
 de juiste terugvallen, de nav/inhoudsopgave overslaan, afbeeldingen weglaten, en de
-terugval naar MarkItDown bij een ongeldige structuur), de settings-semantiek (leeg
-wist terug naar standaard), de batch-zip (eigen naam en eigen `attachments/`-map per
-document), de wiskunde-modus (paginasortering + paginagrens bij het rasteren, de
-stream-orchestratie: `\n\n`-join, voortgang per pagina, opgeteld tokengebruik, stil
-annuleren, en de streaming-endpoint) en de Nederlandse foutmeldingen. Enkele tests pinnen
-de front-end vast
-waar Python niet bij de JS kan: de id's die `app.js` per conventie opbouwt
-(`#bulk-<kind>-text`, `#ocr-mode` enz.) moeten in `index.html` bestaan, en het CELEX-patroon
-mag maar één keer in `app.js` voorkomen. Ze raken geen netwerk. Verander je de structuur, dan hoeven alleen de
+terugval naar MarkItDown bij een ongeldige structuur), de settings-semantiek (leeg wist terug naar
+standaard), de batch-zip (eigen naam en eigen `attachments/`-map per document), de wiskunde-modus
+(paginasortering + paginagrens bij het rasteren, de stream-orchestratie: `\n\n`-join, voortgang per
+pagina, opgeteld tokengebruik, stil annuleren, en de streaming-endpoint) en de
+Nederlandse foutmeldingen. Enkele tests pinnen de front-end vast waar Python niet bij de
+JS kan: de id's die `app.js` per conventie opbouwt (`#bulk-<kind>-text`, `#ocr-mode` enz.) moeten in
+`index.html` bestaan, en het CELEX-patroon mag maar één keer in `app.js` voorkomen. Ze raken geen netwerk. Verander je de structuur, dan hoeven alleen de
 imports mee te verhuizen; blijft de suite groen, dan is het gedrag identiek.
 
 Eén test dwingt gelijktijdigheid af: `test_formex_footnotes_survive_concurrent_conversions`
@@ -1209,6 +223,20 @@ oppikten — met threaded Flask en parallelle uploads was dat echt bereikbaar.
 - Alles lokaal (macOS-launcher) óf via Docker. **Geen build-stap**, geen Node.js: de UI is
   platte HTML/CSS/JS. De opmaak lijkt op Radix Themes, maar er is geen Radix-dependency.
 - Toelichtingen en UI-teksten zijn in het Nederlands.
+- **Bronspecifieke voorbewerking hoort in de bronmodule, niet in `render.py`.** Die module is
+  bewust **bronloos**: geen klassenamen, geen profielparameter. `html_to_markdown` wordt gedeeld
+  met `hudoc.py`, `container_to_markdown` met `wetten.py`, `pasted_text.py`,
+  `fr_conseil_constitutionnel.py` en `de_openlegaldata.py` — en twee daarvan lossen een bijna
+  identiek markerpatroon al zélf op (`span.numero-considerant`, `span.absatzRechts` via
+  `_merge_absatz_pairs()`). Het spoor dat je volgt: `wetten.py` strip't portal-ruis op de soup,
+  `fr_conseil_constitutionnel.py` kiest zijn eigen container, `eurlex.py` normaliseert CLG-markup
+  — allemaal vóór de gedeelde render. Er is een test die afdwingt dat CLG-klassenamen niet in
+  `render.py` terechtkomen.
+- **De herkomst is niet voor de UI.** Een bron levert naast de markdown een `Herkomst`
+  (`mdconv/herkomst.py`) met de bronbytes en de geldigheid. `_doc_payload()` haalt haar
+  bewust uit het JSON-antwoord. Alleen een document met een kb-identiteit — wetgeving op
+  BWB of CELEX, een uitspraak op ECLI — krijgt een opaak `bundle_token`; de server maakt daar bij download de kb-zip en het `.source.json` van.
+  Andere documenten blijven een los `.md`-bestand. Tests leggen beide paden vast.
 - Domeincode kent geen Flask: alleen `mdconv/api.py` importeert het. Fouten gaan als
   `ConversionError` met een Nederlandse boodschap naar boven.
 - Geen `.venv`, `.env` of secrets in versiebeheer (zie `.gitignore`).

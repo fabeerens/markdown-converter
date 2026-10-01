@@ -41,6 +41,12 @@ class Fetched:
     bijlagen: list[dict] = field(default_factory=list)
     ident: str = ""      # het id waaronder de bron dit document kent (voor "al toegevoegd")
     name: str = ""       # voorstel voor de bestandsnaam (zonder extensie)
+    # Wat er bij het omzetten opviel (een terugval, een weigering van de strenge route);
+    # gaat als `Document.warnings` naar de UI en naar kb_fetch.
+    warnings: tuple[str, ...] = ()
+    # Herkomst met bronbewijs, alleen van een strenge route (een Kamerstuk uit de officiële
+    # XML). Zonder herkomst is het een losse download: geen kennisbankbundel (WP-77).
+    herkomst: object | None = None
 
 
 def bijlage(query: str, titel: str, rol: str, open_url: str | None = None) -> dict:

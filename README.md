@@ -9,12 +9,12 @@ De interface heeft drie tabbladen:
 ### 1. Jurisprudentie
 Plak een ECLI of link; de tool herkent de bron automatisch:
 - **Hof van Justitie EU** — EU-ECLI (bv. `ECLI:EU:C:2025:645`). Via het **Cellar**-archief van de Publicatiebureau.
-- **EHRM (ECtHR)** — een HUDOC-link, item-id (bv. `001-210077`) of een EHRM-ECLI (bv. `ECLI:CE:ECHR:2021:0525JUD005817013`). Via de HUDOC-zoek-API en document-export. De taalkeuze bepaalt de versie/vertaling (Engels/Frans origineel, of een vertaling indien als HTML beschikbaar — anders terugval op het origineel).
+- **EHRM (ECtHR)** — een HUDOC-link, item-id (bv. `001-210077`) of een EHRM-ECLI (bv. `ECLI:CE:ECHR:2021:0525JUD005817013`). Via de HUDOC-zoek-API en het Word-bestand van het Hof; alleen het Engelse origineel (HEJUD). HUDOC houdt de converter sinds september 2026 tegen met een Cloudflare-botcontrole (HTTP 403, "Just a moment..."); dat wordt niet omzeild. Download de bestanden dan in de browser en zet ze om met `kb_fetch --hudoc-map` (zie hieronder).
 - **Nederlandse rechtspraak** — een ECLI (bv. `ECLI:NL:HR:2012:BQ9251`) of een rechtspraak.nl-link. Via de officiële Open Data API van de Rechtspraak.
 - **Duitse rechtspraak** — een Duitse ECLI (bv. `ECLI:DE:BGH:2019:240919BVIZB39.18.0`). Via rechtsprechung-im-internet.de (BGH, BVerfG, BVerwG, BFH, BAG, BSG, BPatG).
 - **Belgische rechtspraak** — een Belgische ECLI (bv. `ECLI:BE:CASS:2021:ARR.20211019.2N.25`). Via Juportal.
 - **Frans Conseil constitutionnel** — een ECLI van dat hof (bv. `ECLI:FR:CC:2021:2021.931.QPC`). Andere Franse gerechten (Cour de cassation, Conseil d'État) zitten achter een bot-blokkade en worden (nog) niet ondersteund — de tool legt dat uit in de foutmelding.
-- Spaanse en Oostenrijkse rechtspraak zijn onderzocht maar (nog) niet haalbaar zonder CAPTCHA-omzeiling resp. een onbetrouwbare zoekopdracht — zie `CLAUDE.md` voor de details.
+- Spaanse en Oostenrijkse rechtspraak zijn onderzocht maar (nog) niet haalbaar zonder CAPTCHA-omzeiling resp. een onbetrouwbare zoekopdracht — zie `docs/bronnen/buitenlandse-rechtspraak.md` voor de details.
 
 ### 2. Wetgeving
 - **EU-wetgeving** — CELEX-nummer (bv. `32016R0679`, de AVG), een link, of een ELI-link (bv. `https://eur-lex.europa.eu/eli/reg/2016/679/oj`). Officiële tekst uit het Cellar-archief (met terugval op de EUR-Lex portal).
@@ -31,7 +31,7 @@ Kamerstukken, Kamervragen met antwoord, Handelingen, bijlagen en **Woo-documente
 
 **Zoeken** — in de volledige tekst van parlementaire stukken (zoekdienst van overheid.nl; een dossiernummer als `36600-VII` geeft alle stukken van dat dossier) of in de Woo-documenten van open.overheid.nl. Filter op soort en datum, sorteer op relevantie of datum, vink resultaten aan en haal ze in één keer op.
 
-Kamerstukken komen uit de **officiële XML**, dus met structuur: koppen (nummering en typografie bepalen het niveau), **voetnoten** (`[^1]`), **verwijzingen** als links, lijsten, tabellen en afbeeldingen (die komen als bijlage mee in de zip). Bestaat er alleen een PDF (nieuwe publicaties en bijlagen), dan wordt die omgezet, met een notitie. Woo-documenten worden omgezet vanuit hun bestand (meestal PDF) met een kopblok met soort, organisatie, datum en thema; een scan zonder tekstlaag levert een waarschuwing.
+Kamerstukken komen uit de **officiële XML**, dus met structuur: koppen (nummering en typografie bepalen het niveau), **voetnoten** (`[^1]`), **verwijzingen** als links, lijsten en tabellen, met een **herkomstbestand en bronbewijs** (de kennisbankbundel, zie onderaan); afbeeldingen worden niet opgehaald, de herkomst noemt ze. Bestaat er alleen een PDF (nieuwe publicaties en bijlagen), dan wordt die omgezet, met een notitie. Woo-documenten worden omgezet vanuit hun bestand (meestal PDF) met een kopblok met soort, organisatie, datum en thema; een scan zonder tekstlaag levert een waarschuwing.
 
 Bijlagen en gerelateerde documenten staan als **linklijst onderaan** het document; plak zo'n link bij Ophalen om dat document apart om te zetten. Na het ophalen klapt de zoeklijst in (hij blijft te openen).
 
@@ -57,6 +57,10 @@ document krijgt een eigen **tabblad** boven de uitvoer — je schakelt ertussen 
 bewerken, opschonen met AI (elk document met zijn eigen profiel/model) en los te downloaden.
 Mislukt een van de documenten (bv. een ongeldige ECLI), dan blijft de rest gewoon beschikbaar;
 de status onder de knop toont wat wel en niet is gelukt.
+
+Heb je een hele **lijst**? Bij Jurisprudentie, Wetgeving en Open overheid plak je die in één keer in een
+invoerregel (die splitst zich uit over losse regels) of via **Lijst plakken**, met één taalkeuze
+voor de hele lijst (Open overheid heeft geen taalkeuze). Opsommingstekens, koppen en dubbele regels worden er zelf uitgehaald.
 
 De kleuren volgen de huisstijl van [Lex Digitalis](https://www.lexdigitalis.nl): een lichte
 pagina met blauwe en oranje accenten. Er is geen donkere modus.
@@ -186,6 +190,43 @@ python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 .venv/bin/python app.py
 ```
+
+### Dezelfde versies als de ontwikkelaar, en de tests
+
+`requirements.txt` geeft ondergrenzen; `requirements.lock` is de `pip freeze` van de werkende
+`.venv` (Python uit `.python-version`, nu 3.13; lokaal werkt 3.14 ook). Wil je exact dezelfde
+versies, installeer dan daaruit:
+
+```bash
+.venv/bin/pip install -r requirements.lock
+.venv/bin/python -m pytest tests/ -q
+```
+
+Instellingen staan met uitleg in `.env.example` (kopieer naar `.env`). Twee tests lezen een gouden
+voorbeeld uit de juridische kennisbank; die map vinden ze via `KB_ROOT`, anders `~/Documents/kb`,
+anders `../kb`. Een gezette `KB_ROOT` die niet bestaat is een fout; zonder kennisbank (de kb is
+privé, dus ook in CI) slaan die twee tests over met de reden, en de rest draait gewoon.
+GitHub Actions (`.github/workflows/tests.yml`) draait pytest op elke push naar `sander` en bouwt
+de Docker-image om te controleren dat `meetlat/`, `tests/` en `.deploy-state/` er niet in zitten.
+
+### Kennisbankbundels vanaf de opdrachtregel
+
+`mdconv.kb_fetch` zet dezelfde bundel op schijf als de download in de browser, voor de
+kennisbank in `~/Documents/kb`:
+
+```bash
+.venv/bin/python -m mdconv.kb_fetch --uit <map> 32022L2464 BWBR0002320 ECLI:EU:C:2019:801
+```
+
+Voor EHRM-arresten die je zelf uit HUDOC hebt gedownload (`<itemid>.docx` plus het
+zoekresultaat als `hudoc-records.json` in één map):
+
+```bash
+.venv/bin/python -m mdconv.kb_fetch --hudoc-map <map> --uit <map>
+```
+
+Een map die niet eenduidig is (een bestand zonder record of andersom, een dubbel itemid)
+wordt geweigerd voordat er iets wordt geschreven.
 
 ## Voorbeelden
 

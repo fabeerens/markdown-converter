@@ -658,6 +658,15 @@ body {
   letter-spacing: .01em;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+.doc-warnings {
+  margin-bottom: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-4);
+  background: var(--accent-a3);
+  color: var(--accent-text);
+  box-shadow: inset 3px 0 0 var(--accent-9);
+  font-size: var(--fs-2); line-height: var(--lh-2);
+}
 
 /* De hoogte (en het vergroten) zit op `.viewer`, die de ruwe tekst en de weergave naast
    elkaar of los laat zien; editor en weergave vullen hem. */

@@ -10,3 +10,12 @@ run.sh
 serve.sh
 README.md
 CLAUDE.md
+docs/
+# Alleen wat de app draait. De meetlat (88 MB cache van Formex-bronnen), de tests en de
+# lokale staat horen niet in de image (kb WP-55): .deploy-state komt als volume binnen
+# (docker-compose.yml), de rest heeft de container nooit nodig.
+meetlat/
+tests/
+.deploy-state/
+.pytest_cache/
+.github/

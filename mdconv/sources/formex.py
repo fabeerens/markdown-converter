@@ -243,6 +243,16 @@ def _list_lines(el, ctx: _Ctx, depth: int) -> list[str]:
 
 
 def _table(el, ctx: _Ctx, level: int) -> None:
+    # Formex uses a separate table vocabulary. Until its span semantics have a
+    # verified adapter, refuse merged/nested tables instead of padding them to
+    # a rectangular but legally incorrect result.
+    for descendant in el.iter():
+        if descendant is not el and _local(descendant.tag) in {"TBL", "TABLE"}:
+            raise ConversionError("Geneste Formex-tabel vereist broncontrole; omzetting geweigerd.")
+        if _local(descendant.tag) in {"CELL", "ROW"}:
+            attrs = {_local(key): value for key, value in descendant.attrib.items()}
+            if any(key in attrs for key in ("COLSPAN", "ROWSPAN", "MOREROWS", "COL.START", "COL.END", "COLNAME", "NAMEST", "NAMEEND", "SPANNAME")):
+                raise ConversionError("Samengevoegde Formex-tabelcellen zijn nog niet brongecontroleerd; omzetting geweigerd.")
     rows = []
     for row in el.iter():
         if _local(row.tag) != "ROW":
@@ -254,7 +264,8 @@ def _table(el, ctx: _Ctx, level: int) -> None:
     if not rows:
         return
     width = max(len(r) for r in rows)
-    rows = [r + [""] * (width - len(r)) for r in rows]
+    if any(len(row) != width for row in rows):
+        raise ConversionError("Formex-tabel heeft onvolledige rijen; ontbrekende cellen worden niet geraden.")
     md = ["| " + " | ".join(rows[0]) + " |",
           "| " + " | ".join(["---"] * width) + " |"]
     for r in rows[1:]:

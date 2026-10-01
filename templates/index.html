@@ -42,9 +42,9 @@
         </div>
         <div class="rows" id="rows-jur"></div>
         <div class="bulk" id="bulk-jur" hidden>
-          <label class="visually-hidden" for="bulk-jur-text">Lijst met ECLI's of links</label>
+          <label class="visually-hidden" for="bulk-jur-text">Lijst met ECLI's, HUDOC-links of item-id's</label>
           <textarea id="bulk-jur-text" spellcheck="false"
-                    placeholder="Eén per regel — plak hier een hele lijst:&#10;&#10;ECLI:NL:HR:2023:1234&#10;ECLI:EU:C:2025:645&#10;- HvJ EU, zie https://curia.europa.eu/…&#10;&#10;Opsommingstekens, omringende tekst en dubbele regels worden er zelf uitgehaald."></textarea>
+                    placeholder="Eén per regel — plak hier een hele lijst:&#10;&#10;ECLI:NL:HR:2012:BQ9251&#10;ECLI:EU:C:2025:645&#10;- Uitspraak Rechtbank Rotterdam, zie https://uitspraken.rechtspraak.nl/details?id=ECLI:NL:RBROT:2025:15669&#10;&#10;Opsommingstekens, omringende tekst en dubbele regels worden er zelf uitgehaald."></textarea>
           <div class="bulk-bar">
             <span class="count" id="bulk-jur-count"></span>
             <select class="select lang" id="bulk-jur-lang" aria-label="Taal voor de hele lijst"></select>
@@ -60,9 +60,10 @@
         het <strong>EHRM</strong> (HUDOC-link, item-id of <code>ECLI:CE:ECHR:…</code>) en de
         <strong>Nederlandse rechtspraak</strong> (<code>ECLI:NL:…</code> of rechtspraak.nl-link).
         De taalkeuze bepaalt de versie of vertaling. Voeg meerdere documenten toe om ze in
-        één keer op te halen — elk komt in een eigen tabblad. Heb je een <strong>lijst</strong>?
-        Plak die in één keer — in een invoerregel (die splitst zich dan uit over losse regels)
-        of via <strong>Lijst plakken</strong> hierboven, met één taalkeuze voor de hele lijst.
+        één keer op te halen — elk komt in een eigen tabblad.
+        Heb je een <strong>lijst</strong>? Plak die in één keer — in een invoerregel
+        (die splitst zich dan uit over losse regels) of via <strong>Lijst plakken</strong>
+        hierboven, met één taalkeuze voor de hele lijst.
       </p>
     </section>
 
@@ -337,6 +338,7 @@
         <button type="button" class="btn btn-outline" id="download">Download .md</button>
         <button type="button" class="btn btn-outline" id="download-all" hidden>Alles downloaden</button>
       </div>
+      <div class="doc-warnings" id="doc-warnings" role="alert" hidden></div>
 
       <div class="viewer" id="viewer" data-view="split">
       <div class="editor" id="editor">

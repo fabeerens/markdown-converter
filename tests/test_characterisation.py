@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import zipfile
 from io import BytesIO
@@ -238,6 +239,9 @@ def test_consolidated_text_gets_the_preamble_of_the_base_act(monkeypatch):
     assert html.index("(1) Het opbouwen") < html.index("HOOFDSTUK I")
     assert "overgenomen uit de oorspronkelijke handeling" in html
     assert "CELEX:32014R0910" in html
+    # Geen cursieve regel meer, maar een blockquote met label; zie de sectie
+    # "CLG-markup" verderop voor waarom die vorm het verschil maakt.
+    assert "<blockquote>" in html and "Overwegingen:" in html
 
 
 def test_consolidated_text_without_eli_skeleton_uses_the_first_heading(monkeypatch):
@@ -375,7 +379,7 @@ def test_version_missing_in_this_language_falls_back_to_the_base_act(monkeypatch
         monkeypatch, {"32024R2979": BASE_ACT},
         index={"02024R2979-20241204": {"GLE", "SWE"}},
     )
-    markdown, source = eurlex.fetch_and_convert("CELEX:02024R2979-20241204", "NL")
+    markdown, source, _ = eurlex.fetch_and_convert("CELEX:02024R2979-20241204", "NL")
 
     assert "niet in het Nederlands" in markdown
     assert "Iers en Zweeds" in markdown
@@ -401,7 +405,7 @@ def test_unknown_date_uses_the_newest_version_before_it(monkeypatch):
             "02014R0910-20241018": {"NLD"},
         },
     )
-    markdown, source = eurlex.fetch_and_convert("02014R0910-20250101", "NL")
+    markdown, source, _ = eurlex.fetch_and_convert("02014R0910-20250101", "NL")
 
     assert "18-10-2024" in markdown
     assert "CELEX:02014R0910-20241018" in source
@@ -420,7 +424,7 @@ def test_a_later_version_is_never_substituted(monkeypatch):
         {"02014R0910-20241018": CONSOLIDATED_ACT, "32014R0910": BASE_ACT},
         index={"02014R0910-20241018": {"NLD"}},
     )
-    markdown, source = eurlex.fetch_and_convert("02014R0910-20150101", "NL")
+    markdown, source, _ = eurlex.fetch_and_convert("02014R0910-20150101", "NL")
 
     assert not any(url.endswith("02014R0910-20241018") for url in calls)
     assert "oorspronkelijke handeling" in markdown
@@ -437,7 +441,7 @@ def test_an_earlier_version_in_another_language_is_not_denied(monkeypatch):
         monkeypatch, {"32014R0910": BASE_ACT},
         index={"02014R0910-20140917": {"ENG"}, "02014R0910-20241018": {"NLD"}},
     )
-    markdown, _ = eurlex.fetch_and_convert("02014R0910-20150101", "NL")
+    markdown, _, _ = eurlex.fetch_and_convert("02014R0910-20150101", "NL")
 
     assert "geen eerdere geconsolideerde versie van deze handeling" not in markdown
     assert "de eerdere geconsolideerde versies bestaan niet in het Nederlands" in markdown
@@ -449,7 +453,7 @@ def test_unreachable_metadata_still_yields_a_document(monkeypatch):
     from mdconv.sources import eurlex
 
     _fake_cellar_map(monkeypatch, {"32014R0910": BASE_ACT}, index=None)
-    markdown, source = eurlex.fetch_and_convert("02014R0910-20161231", "NL")
+    markdown, source, _ = eurlex.fetch_and_convert("02014R0910-20161231", "NL")
 
     assert "lijst met beschikbare versies ook niet" in markdown
     assert "oorspronkelijke handeling" in source
@@ -483,6 +487,310 @@ def test_fetch_multipart_without_doc_links_reports_language_problem():
     from mdconv.errors import ConversionError
     with pytest.raises(ConversionError, match="Probeer een andere taal"):
         _fetch_multipart("<html><body>geen manifestaties hier</body></html>", "NL", "CELEX:x")
+
+
+# ---------------------------------------------------------------------------
+# CLG-markup: de Markdown die de gebruiker krijgt
+# ---------------------------------------------------------------------------
+#
+# De vier defecten die deze sectie vastpint waren op HTML-niveau allemaal
+# ONZICHTBAAR: de HTML klopte, de transformatie niet. Daarom asserteren deze
+# tests op de uiteindelijke Markdown-regels en niet op `html.index(a) < index(b)`
+# zoals de sectie hierboven. 181 tests bleven groen terwijl een geconsolideerde
+# tekst 280 losse lidnummers en 32 kapotte voetnoten opleverde.
+#
+# De fixtures hieronder zijn echte CLG-/OJ-markup van 02014R0910 (Cellar,
+# opgehaald 2026-09-16), ingekort tot één exemplaar per vorm. De newlines binnen
+# de `<a>` staan er zo in de bron: dáár brak de voetnootregel op.
+
+CLG_DOCUMENT = """<html><body><div class="eli-container">
+<p class="reference">02014R0910 — NL — 18.10.2024 — 003.001</p>
+<p class="arrow"><a href="http://publications.europa.eu/resource/celex/32014R0910" title="32014R0910">▶B</a></p>
+<div class="eli-main-title" id="tit_1"><p class="doc-ti">VERORDENING (EU) Nr. 910/2014</p></div>
+<div class="eli-subdivision" id="enc_1">
+<p class="title-article-norm">Artikel 1</p>
+<div class="norm"><span class="no-parag">1.&nbsp;&nbsp;</span>
+<div class="norm inline-element"><p class="norm inline-element">Om de goede werking van de interne markt te waarborgen.</p></div></div>
+<div class="grid-container grid-list">
+<div class="list grid-list-column-1"><span>a)&nbsp;</span></div>
+<div class="grid-list-column-2"><p class="norm">de doelstellingen van de regeling;</p></div></div>
+<div class="grid-container grid-list">
+<div class="list grid-list-column-1"><span>c bis)&nbsp;</span></div>
+<div class="grid-list-column-2"><p class="norm">een aanvullende regel;</p></div></div>
+<div class="grid-container grid-list">
+<div class="grid-list-column-2"><p class="modref">
+<a href="http://publications.europa.eu/resource/celex/32025R0037" title="32025R0037: REPLACED">▼M1</a> </p>
+<p class="norm">Een instantie beschikt te allen tijde over voldoende personeel.</p></div></div>
+<div class="norm"><span class="no-parag">10.&nbsp;&nbsp;</span>
+<div class="norm inline-element"><p class="modref">
+<a href="http://publications.europa.eu/resource/celex/32025R0037" title="32025R0037: REPLACED">▼M1</a> </p>
+<p class="norm">Het nummer hoort bij deze tekst, niet bij de markering.</p></div></div>
+</div>
+<p class="footnote">(<a href="#src.E0001" id="E0001">
+<span class="superscript">1</span>
+</a>)&nbsp;
+      Verordening (EU) nr.&nbsp;910/2014 van het Europees Parlement.</p>
+</div></body></html>
+"""
+
+# De drie `p.oj-note` staan BUITEN `#pbl_1`, als siblings in `div.eli-container` —
+# dat is gebrek G4 zelf. Noot 1 en 2 worden vanuit de preambule aangehaald, noot 3
+# alleen vanuit `#enc_1`: zonder dat onderscheid zou "neem alles mee" ook slagen.
+BASE_ACT_WITH_OJ_NOTES = """<html><body><div class="eli-container">
+<div class="eli-main-title" id="tit_1"><p class="doc-ti">VERORDENING (EU) Nr. 910/2014</p></div>
+<div class="eli-subdivision" id="pbl_1">
+<p class="oj-normal">HET EUROPEES PARLEMENT EN DE RAAD VAN DE EUROPESE UNIE,</p>
+<div class="eli-subdivision" id="cit_1"><p class="oj-normal">Gezien het advies van het Comité<a href="#ntr1-E0001" id="ntc1-E0001">(<span class="oj-super oj-note-tag">1</span>)</a>,</p></div>
+<p class="oj-normal">Overwegende hetgeen volgt:</p>
+<div class="eli-subdivision" id="rct_1"><p class="oj-normal">(1) Het opbouwen van vertrouwen<a href="#ntr1-E0002" id="ntc1-E0002">(<span class="oj-super oj-note-tag">2</span>)</a>.</p></div>
+<p class="oj-normal">HEBBEN DE VOLGENDE VERORDENING VASTGESTELD:</p>
+</div>
+<div class="eli-subdivision" id="enc_1"><p>Artikel 1</p>
+<p class="oj-normal">Deze verordening stelt regels vast<a href="#ntr1-E0003" id="ntc1-E0003">(<span class="oj-super oj-note-tag">3</span>)</a>.</p></div>
+<hr class="oj-note"/>
+<p class="oj-note"><a href="#ntc1-E0001" id="ntr1-E0001">(<span class="oj-super">1</span>)</a>&nbsp;&nbsp;
+      <a href="http://example.invalid/oj">PB C 227 van 28.6.2018, blz. 86</a>.</p>
+<p class="oj-note"><a href="#ntc1-E0002" id="ntr1-E0002">(<span class="oj-super">2</span>)</a>&nbsp;&nbsp;Standpunt van het Europees Parlement van 3 april 2014.</p>
+<p class="oj-note"><a href="#ntc1-E0003" id="ntr1-E0003">(<span class="oj-super">3</span>)</a>&nbsp;&nbsp;PB L 257 van 28.8.2014, blz. 73.</p>
+</div></body></html>
+"""
+
+# Een uitvoerregel die niets anders draagt dan een marker ("1.", "a)", "(3)") of
+# een stuk van een voetnootanker ("(", "1", ")"). Bewust een eigen patroon en niet
+# `render._MARKER_RE`: anders verzwakt de test mee zodra de productiecode opgerekt
+# wordt.
+_LOSSE_MARKER_RE = re.compile(r"^\(?(?:\d{1,3}|[a-z]|[ivxlcdm]{1,6})\)?[.)]?$", re.I)
+_HALVE_NOOT_RE = re.compile(r"^[()]{0,2}\d{0,3}[()]{0,2}$")
+# De intakepoort van de kennisbank weigert een volledig cursieve regel: dat is in
+# Markdown nadruk, geen herkomstvermelding.
+_CURSIEVE_REGEL_RE = re.compile(r"^\*[^*\n]{20,}\*\s*$")
+
+
+def _regels(markdown):
+    """Niet-lege uitvoerregels, met harde spaties genormaliseerd.
+
+    `&nbsp;` overleeft de conversie als `\\xa0`; zonder normalisatie slaagt of
+    faalt elke tekstvergelijking om de verkeerde reden.
+    """
+    return [r for r in (x.replace("\xa0", " ").strip() for x in markdown.splitlines()) if r]
+
+
+def _clg_markdown():
+    """De CLG-voorbewerking zonder preambule, dus zonder netwerk.
+
+    Precies het pad dat een bijlage in de multipart-route ook aflegt: markers
+    samenvoegen én de newlines uit de bron normaliseren.
+    """
+    from mdconv.render import html_to_markdown
+    from mdconv.sources import eurlex
+    return html_to_markdown(
+        eurlex._prepare_consolidated(
+            CLG_DOCUMENT, "02014R0910-20241018", "NL", with_preamble=False,
+        )
+    )
+
+
+def test_clg_paragraph_markers_stay_on_their_line():
+    """Het CLG-formaat zet een lidnummer in `span.no-parag` en een lijstletter in
+    `div.grid-list-column-1` — geen tweekoloms tabel, dus `_unwrap_marker_tables`
+    sloeg ze over en liet 280 losse nummers achter in 02019R0881-20250204.
+    """
+    regels = _regels(_clg_markdown())
+
+    assert "1. Om de goede werking van de interne markt te waarborgen." in regels
+    assert "a) de doelstellingen van de regeling;" in regels
+    # "c bis)" haalt de lengtegrens van _is_marker maar faalt op het patroon; de
+    # klassenaam is hier de garantie, niet de vorm van de tekst.
+    assert "c bis) een aanvullende regel;" in regels
+    assert [r for r in regels if _LOSSE_MARKER_RE.match(r)] == []
+
+
+def test_clg_footnote_markers_do_not_break_across_lines():
+    """De `<a>` om het nootcijfer bevat letterlijke newlines. `strip=["a"]` haalt
+    de tag weg maar niet de regeleinden, en `tidy()` voegt regels nooit samen —
+    zo viel elke voetnoot uiteen in "(", het cijfer en de tekst.
+    """
+    regels = _regels(_clg_markdown())
+
+    assert any(r.startswith("(1) Verordening (EU) nr. 910/2014") for r in regels)
+    assert [r for r in regels if _HALVE_NOOT_RE.match(r)] == []
+    assert [r for r in regels if r.startswith(")")] == []
+
+
+def test_a_change_marker_keeps_its_line_but_not_the_paragraph_number():
+    """De wijzigingsmarkeringen blijven bewust staan, maar een ▼M1 die vóór de
+    tekst van een lid staat mag het lidnummer niet opslokken: dan raakt het nummer
+    alsnog los van de alinea waar het bij hoort.
+    """
+    regels = _regels(_clg_markdown())
+
+    assert "▼M1" in regels
+    assert "10. Het nummer hoort bij deze tekst, niet bij de markering." in regels
+
+
+def test_marker_tables_still_unwrap():
+    """Het tweekoloms-tabelpad bestond al, maar werd door geen enkele test geraakt:
+    geen EUR-Lex-fixture bevatte een `<table>`. De CLG-route mag het niet vervangen.
+    """
+    from mdconv.render import html_to_markdown
+
+    html = (
+        "<html><body><table><tr>"
+        "<td><p>1.</p></td><td><p>Eerste lid van het artikel.</p></td>"
+        "</tr></table></body></html>"
+    )
+    assert "1. Eerste lid van het artikel." in _regels(html_to_markdown(html))
+
+
+def test_only_the_preamble_footnotes_travel_with_the_preamble(monkeypatch):
+    """De 32 `p.oj-note` van een basishandeling staan als siblings van `#pbl_1`,
+    niet erin. `find(id="pbl_1")` liet ze dus allemaal achter: de overwegingen
+    kwamen mét hun verwijzingen mee, zonder definities. Alleen de noten waarnaar
+    de preambule zélf verwijst horen mee — de rest heeft de geconsolideerde tekst al.
+    """
+    from mdconv.sources import eurlex
+
+    _fake_cellar(monkeypatch, BASE_ACT_WITH_OJ_NOTES)
+    fragment = str(eurlex._fetch_preamble("32014R0910", "NL"))
+
+    assert "PB C 227 van 28.6.2018" in fragment          # noot 1, uit #cit_1
+    assert "Standpunt van het Europees Parlement" in fragment  # noot 2, uit #rct_1
+    assert "PB L 257" not in fragment                    # noot 3 hoort bij #enc_1
+    # De <hr> ervoor blijft achter; die zou als `---` midden in de preambule komen.
+    assert "<hr" not in fragment
+
+
+def test_the_preamble_footnotes_stand_before_the_enacting_formula(monkeypatch):
+    """Op hun eigen plek: ná de laatste overweging en vóór de vaststellingsformule,
+    precies zoals het origineel ze heeft. De formule hoort tegen de artikelen aan.
+    """
+    from mdconv.render import html_to_markdown
+    from mdconv.sources import eurlex
+
+    _fake_cellar(monkeypatch, BASE_ACT_WITH_OJ_NOTES)
+    markdown = html_to_markdown(
+        eurlex._prepare_consolidated(CLG_DOCUMENT, "02014R0910-20241018", "NL")
+    )
+
+    noot = markdown.index("PB C 227 van 28.6.2018")
+    assert markdown.index("Het opbouwen van vertrouwen") < noot
+    assert noot < markdown.index("HEBBEN DE VOLGENDE VERORDENING VASTGESTELD:")
+    # De noot staat op één regel, niet gebroken tussen nummer en tekst.
+    assert any(r.startswith("(1) PB C 227") for r in _regels(markdown))
+
+
+def test_the_provenance_note_is_a_labelled_blockquote_not_an_italic_line(monkeypatch):
+    """De notitie stond als één volledig cursieve regel boven de tekst. Een
+    intakepoort rekent dat af als opmaakruis (`^\\*[^*\\n]{20,}\\*\\s*$`): cursief is
+    nadruk, geen herkomstvermelding. Het moet een blockquote met label zijn — wél
+    zichtbaar, dus "nooit stil" blijft overeind.
+    """
+    from mdconv.render import html_to_markdown
+    from mdconv.sources import eurlex
+
+    _fake_cellar(monkeypatch, BASE_ACT_WITH_OJ_NOTES)
+    markdown = html_to_markdown(
+        eurlex._prepare_consolidated(CLG_DOCUMENT, "02014R0910-20241018", "NL")
+    )
+
+    assert "> **Overwegingen:** Overwegingen en aanhef zijn overgenomen" in markdown
+    assert "CELEX:32014R0910" in markdown
+    assert [r for r in _regels(markdown) if _CURSIEVE_REGEL_RE.match(r)] == []
+
+
+def test_the_fallback_note_is_a_labelled_blockquote_too(monkeypatch):
+    """De terugvalnotitie had dezelfde cursieve vorm en dus dezelfde poortfout."""
+    from mdconv.sources import eurlex
+
+    _fake_cellar_map(
+        monkeypatch, {"32024R2979": BASE_ACT},
+        index={"02024R2979-20241204": {"GLE", "SWE"}},
+    )
+    markdown, _, _ = eurlex.fetch_and_convert("CELEX:02024R2979-20241204", "NL")
+
+    assert markdown.startswith("> **Herkomst:** ")
+    assert "niet in het Nederlands" in markdown
+    assert [r for r in _regels(markdown) if _CURSIEVE_REGEL_RE.match(r)] == []
+
+
+def test_a_consolidated_document_without_an_anchor_still_says_so(monkeypatch):
+    """`if anchor is None: return html` gaf de tekst terug zonder preambule én
+    zonder notitie. Dan lijkt de geconsolideerde tekst compleet terwijl de aanhef
+    en álle overwegingen ontbreken — precies het stille weglaten dat dit gat zo
+    lang onzichtbaar hield.
+    """
+    from mdconv.sources import eurlex
+
+    calls = _fake_cellar(monkeypatch, BASE_ACT_WITH_OJ_NOTES)
+    zonder_anker = (
+        '<html><body><div class="eli-main-title" id="tit_1"><p>VERORDENING (EU) Nr. 910/2014</p></div>'
+        "<p>Alleen lopende tekst, geen artikelkop.</p></body></html>"
+    )
+    html = eurlex._with_base_preamble(zonder_anker, "02014R0910-20241018", "NL")
+
+    assert "Alleen lopende tekst" in html
+    assert "Overwegingen" in html and "32014R0910" in html
+    # Zonder invoegpunt valt er niets te plaatsen: de basishandeling ophalen
+    # zou een verspild verzoek zijn.
+    assert calls == []
+
+
+def test_a_multipart_consolidated_document_also_gets_its_preamble(monkeypatch):
+    """Cellar geeft 300 voor documenten in meerdere HTML-onderdelen. Die route ging
+    rechtstreeks naar html_to_markdown, dus juist de grootste geconsolideerde
+    teksten kregen preambule noch notitie. De preambule hoort één keer: in het
+    eerste onderdeel, niet nog eens bij elke bijlage.
+    """
+    from mdconv.sources import eurlex
+
+    choices_html = (
+        '<html><body><ul><li title="manifestation">cellar:abc'
+        '<ul><li title="item"><a href="http://publications.europa.eu/resource/cellar/abc/DOC_1">1</a></li>'
+        '<li title="item"><a href="http://publications.europa.eu/resource/cellar/abc/DOC_2">2</a></li>'
+        "</ul></li></ul></body></html>"
+    )
+    bodies = {
+        "DOC_1": CLG_DOCUMENT,
+        "DOC_2": '<html><body><div class="eli-subdivision" id="anx_1"><p>BIJLAGE I</p></div></body></html>',
+        "32014R0910": BASE_ACT_WITH_OJ_NOTES,
+    }
+
+    class FakeResp:
+        def __init__(self, body):
+            self.status_code = 200 if body is not None else 404
+            self.apparent_encoding = "utf-8"
+            self.text = body or ""
+
+    def fake_get(url, headers=None, **kwargs):
+        return FakeResp(bodies.get(url.rsplit("/", 1)[-1]))
+
+    monkeypatch.setattr(
+        eurlex.net, "documents",
+        lambda: type("S", (), {"get": staticmethod(fake_get)})(),
+    )
+
+    markdown = eurlex._fetch_multipart(
+        choices_html, "NL", "CELEX:02014R0910-20241018", "02014R0910-20241018",
+    )
+
+    assert markdown.count("> **Overwegingen:**") == 1
+    assert markdown.count("Overwegende hetgeen volgt:") == 1
+    assert "BIJLAGE I" in markdown
+    # Ook in de multipart-route staan de lidnummers bij hun tekst.
+    assert [r for r in _regels(markdown) if _LOSSE_MARKER_RE.match(r)] == []
+
+
+def test_the_generic_renderer_stays_source_agnostic():
+    """`render.py` wordt gedeeld met HUDOC, wetten.overheid.nl, Juportal en de
+    Franse en Duitse bronnen. Twee daarvan lossen een bijna identiek markerpatroon
+    al zelf op (`span.numero-considerant`, `span.absatzRechts`). CLG-klassenamen
+    horen daarom in eurlex.py; deze test bewaakt dat tegen de volgende
+    goedbedoelde generalisatie.
+    """
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    source = open(os.path.join(root, "mdconv", "render.py"), encoding="utf-8").read()
+    for klasse in ("no-parag", "grid-list", "oj-note", "superscript", "modref"):
+        assert klasse not in source, f"{klasse} hoort niet in de gedeelde renderer"
 
 
 # ---------------------------------------------------------------------------
@@ -2383,6 +2691,19 @@ def test_tab_offers_both_input_forms(kind, has_lang):
     for element in elements:
         assert element in html, f"{element} ontbreekt in index.html"
     assert 'id="download-all"' in html
+
+
+def test_list_paste_kinds_match_initialised_list_modes():
+    """`LIST_PASTE_KINDS` (plakken splitst uit over de rijen) en `initListMode()`
+    (het tekstvak) horen bij dezelfde tabbladen: een tabblad met alleen de
+    ene helft geeft een halve lijstfunctie zonder foutmelding."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    js = open(os.path.join(root, "static", "app.js"), encoding="utf-8").read()
+    declared = re.search(r"LIST_PASTE_KINDS\s*=\s*new Set\(\[([^\]]*)\]\)", js)
+    assert declared, "LIST_PASTE_KINDS niet gevonden in app.js"
+    paste_kinds = set(re.findall(r'"(\w+)"', declared.group(1)))
+    list_modes = set(re.findall(r'initListMode\("(\w+)"\)', js))
+    assert paste_kinds == list_modes
 
 
 def test_frontend_has_one_celex_pattern():

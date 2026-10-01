@@ -16,11 +16,14 @@ import re
 import time
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, NavigableString
 
 from .. import net
 from ..errors import ConversionError
-from ..render import html_to_markdown
+from ..herkomst import Herkomst
+from ..source_structure import record_html, record_source
+from ..render import collapse_ws, html_to_markdown, marker_prefix, prefix_into
+from . import formex_hof, formex_xml
 
 # Een CELEX: sectorcijfer + jaar + documenttypeletter(s) + nummer, optioneel een
 # corrigendum-achtervoegsel `(01)` en — bij een geconsolideerde versie — de datum
@@ -61,6 +64,8 @@ _ELI_TYPE = {
 _CELLAR_TIMEOUT = 45
 _PORTAL_TIMEOUT = 30
 _PORTAL_ATTEMPTS = 6
+_FORMEX_MEDIA_TYPE = "application/zip;mtype=fmx4"
+_FORMEX_LANGUAGES = {"NL": "nld", "EN": "eng", "DE": "deu", "FR": "fra"}
 
 
 def extract_celex(text: str) -> str | None:
@@ -129,20 +134,14 @@ def eli_to_celex(text: str) -> str | None:
     return f"3{year}{letter}{int(num):04d}"
 
 
-def fetch_and_convert(text: str, lang: str = "NL") -> tuple[str, str]:
+def fetch_and_convert(text: str, lang: str = "NL") -> tuple:
     """Los de invoer op naar een document; geeft (markdown, bronvermelding)."""
     lang = (lang or "NL").upper()
 
-    # EU-rechtspraak op ECLI: via het Cellar-ECLI-endpoint.
+    # EU-rechtspraak op ECLI: de Cellar geeft de Formex ook op de ECLI zelf.
     ecli_m = _EU_ECLI_RE.search(text)
     if ecli_m:
-        ecli = ecli_m.group(0).upper()
-        markdown = _fetch_cellar_ecli(ecli, lang)
-        if markdown and len(markdown.strip()) > 80:
-            return markdown, f"EUR-Lex (Cellar) • {ecli} • {lang}"
-        raise ConversionError(
-            f"Kon {ecli} niet ophalen bij EUR-Lex (mogelijk niet beschikbaar in taal {lang})."
-        )
+        return _fetch_hof(ecli_m.group(0).upper(), lang, requested_url=text)
 
     celex = extract_celex(text) or eli_to_celex(text)
     if not celex:
@@ -152,11 +151,28 @@ def fetch_and_convert(text: str, lang: str = "NL") -> tuple[str, str]:
             "https://eur-lex.europa.eu/legal-content/NL/TXT/?uri=CELEX:32016R0679"
         )
 
+    # Sector 6 is rechtspraak van de Unie. Die heeft een eigen Formex-vorm en een
+    # eigen omzetter; de wetgevingsroute hieronder weigert haar (geen `.doc.xml`),
+    # en dat kwam als een onbegrijpelijke Formex-melding bij de gebruiker terecht.
+    if celex.startswith("6"):
+        return _fetch_hof(celex, lang, requested_url=text)
+
+    # De officiële Formex-manifestatie staat vóór de HTML-ladder. Alleen een
+    # echte zip activeert de route; een HTML-/metadatarespons is een gewone
+    # miss. Een eenmaal ontvangen zip gaat wel fail-closed door de omzetter.
+    formex_result, formex_melding = _fetch_formex(celex, lang, requested_url=text)
+    if formex_result is not None:
+        return formex_result
+
     # Strategie 1: officiële inhoud uit Cellar (betrouwbaar).
     try:
         markdown = _fetch_cellar(celex, lang)
         if markdown and len(markdown.strip()) > 80:
-            return markdown, f"EUR-Lex (Cellar) • CELEX:{celex} • {lang}"
+            return (
+                markdown,
+                f"EUR-Lex (Cellar HTML) • CELEX:{celex} • {lang}",
+                _html_herkomst(celex, lang, text, formex_melding),
+            )
     except ConversionError:
         raise
     except Exception:
@@ -167,11 +183,299 @@ def fetch_and_convert(text: str, lang: str = "NL") -> tuple[str, str]:
     # netwerkfout; de metadata weet wat er wél is en wat daarvan het dichtst bij
     # de gevraagde versie ligt.
     if celex.startswith("0"):
-        return _consolidated_fallback(celex, lang)
+        markdown, bron = _consolidated_fallback(celex, lang)
+        return markdown, bron, _html_herkomst(celex, lang, text, formex_melding)
 
     # Strategie 2: de EUR-Lex portal (met herhaalpogingen bij HTTP 202).
     html = _fetch_portal_html(celex, lang)
-    return html_to_markdown(html), f"EUR-Lex portal • CELEX:{celex} • {lang}"
+    return (
+        html_to_markdown(html),
+        f"EUR-Lex portal HTML • CELEX:{celex} • {lang}",
+        _html_herkomst(celex, lang, text, formex_melding, portal=True),
+    )
+
+
+def _formex_headers(lang: str) -> dict[str, str]:
+    return {
+        "Accept": _FORMEX_MEDIA_TYPE,
+        "Accept-Language": _FORMEX_LANGUAGES.get(lang.upper(), lang.lower()),
+    }
+
+
+def _response_bytes(response) -> bytes:
+    inhoud = getattr(response, "content", None)
+    if inhoud is not None:
+        return bytes(inhoud)
+    tekst = getattr(response, "text", "")
+    return tekst.encode(getattr(response, "encoding", None) or "utf-8")
+
+
+def _formex_zip(celex: str, lang: str):
+    """`(bytes, bron_url, None)` bij een echte zip, anders `(None, None, (soort, detail))`.
+
+    `soort` is "niet bereikbaar" (het netwerk) of "niet beschikbaar" (de Cellar
+    antwoordt, maar niet met een zip); beide staan letterlijk in de melding.
+    """
+    url = f"http://publications.europa.eu/resource/celex/{celex}"
+    try:
+        response = net.documents().get(
+            url, headers=_formex_headers(lang), timeout=_CELLAR_TIMEOUT, allow_redirects=True,
+        )
+    except Exception as exc:  # netwerk is de reden om de bestaande ladder te behouden
+        return None, None, ("niet bereikbaar", type(exc).__name__)
+    data = _response_bytes(response)
+    if response.status_code != 200 or not data.startswith(b"PK"):
+        detail = f"HTTP {response.status_code}" if response.status_code != 200 else "antwoord is geen zip"
+        return None, None, ("niet beschikbaar", detail)
+    return data, getattr(response, "url", "") or url, None
+
+
+def _fetch_formex(celex: str, lang: str, *, requested_url: str):
+    """Geef de Formex-uitkomst, of een melding waarmee HTML verdergaat."""
+    data, bron_url, fout = _formex_zip(celex, lang)
+    if data is None:
+        return None, f"Formex {fout[0]} ({fout[1]}); HTML-route gebruikt."
+
+    record_source(
+        data,
+        media_type=_FORMEX_MEDIA_TYPE,
+        source_format="formex",
+        source_url=bron_url,
+        identifier=celex,
+        language=lang,
+    )
+    markdown, eenheden, onbekend, extra = formex_xml.omzetten(data)
+    if onbekend:
+        # De walker weigert dit al; deze grendel voorkomt dat een latere
+        # versoepeling de download ongemerkt weer openzet.
+        raise ConversionError(f"Formex bevat elementen zonder behandeling: {onbekend}.")
+    metadata = extra["metadata"]
+    geconsolideerd = metadata.get("format") == "clg"
+    waarschuwingen = ["EUR-Lex is via de officiële Formex-manifestatie opgehaald."]
+    recitals_from = recitals_reason = None
+    if geconsolideerd and not any(e.soort == "overweging" for e in eenheden):
+        # CONS.ACT bevat de considerans niet. De HTML-route haalt die uit de
+        # basishandeling, en dat doet deze route ook. Lukt het niet, dan mag dat
+        # nooit stil zijn: zonder waarschuwing lijkt de tekst compleet terwijl
+        # alle rec-ankers ontbreken.
+        base = metadata.get("base_celex")
+        basis, basis_url, fout = _formex_zip(base, lang) if base else (None, None, ("onbekend", "geen basishandeling in de bron"))
+        preambule, reden_basis = (formex_xml.basis_preambule(basis, base) if basis is not None else (None, None))
+        if preambule is not None:
+            record_source(
+                basis,
+                media_type=_FORMEX_MEDIA_TYPE,
+                source_format="formex",
+                source_url=basis_url,
+                identifier=base,
+                language=lang,
+                role="preamble",
+            )
+            # Een ontvangen basishandeling die de controles niet haalt weigert
+            # de hele download, zoals bij de geconsolideerde zip zelf.
+            markdown, eenheden, onbekend, extra = formex_xml.omzetten(data, basis)
+            if onbekend:
+                raise ConversionError(f"Formex bevat elementen zonder behandeling: {onbekend}.")
+            metadata = extra["metadata"]
+            recitals_from = base
+            waarschuwingen.append(_PREAMBLE_NOTE.format(base=base))
+        else:
+            recitals_reason = (
+                f"de Formex van de basishandeling {base} is {fout[0]} ({fout[1]})" if basis is None
+                else reden_basis
+            )
+            waarschuwingen.append(
+                "De geconsolideerde Formex bevat geen considerans en die van de "
+                f"basishandeling kon niet worden ingevoegd: {recitals_reason}. "
+                "De overwegingen en hun rec-ankers ontbreken."
+            )
+    # De vindplaats en de wijzigende handelingen staan in de bron zelf; wat de
+    # omzetter daarbij niet kon lezen, komt als melding mee en is nooit stil.
+    waarschuwingen.extend(metadata.get("waarschuwingen", ()))
+    herkomst = Herkomst(
+        format="clg" if geconsolideerd else "formex",
+        celex=celex,
+        language=metadata.get("language") or lang.lower(),
+        oj_reference=metadata.get("oj_reference"),
+        base_celex=metadata.get("base_celex"),
+        amendments=tuple(metadata.get("amendments", ())),
+        consolidation_date=metadata.get("consolidation_date"),
+        version=metadata.get("version"),
+        recitals_from=recitals_from,
+        recitals_reason=recitals_reason,
+        geldend_van=metadata.get("valid_from"),
+        geldend_tot=metadata.get("valid_until"),
+        source_url=bron_url,
+        requested_url=requested_url,
+        waarschuwingen=tuple(waarschuwingen),
+        extra={
+            "formex_eenheden": len(eenheden),
+            "herhaalde_tabelcellen": extra["herhaalde_cellen"],
+            **({"afbeeldingen_weggelaten": metadata["afbeeldingen_weggelaten"]}
+               if metadata.get("afbeeldingen_weggelaten") else {}),
+        },
+    )
+    return (
+        markdown,
+        f"EUR-Lex (Cellar Formex) • CELEX:{celex} • {lang}",
+        herkomst,
+    ), None
+
+
+def _fetch_hof(ident: str, lang: str, *, requested_url: str):
+    """Rechtspraak van de Unie: alleen uit de officiële Formex, of een weigering.
+
+    Er is bewust geen terugval op de Curia-HTML. Twee routes per bron betekent twee
+    omzetters die allebei bewezen moeten worden, en de HTML van het Hof heeft in de
+    kennisbank juist de blokkades opgeleverd die de Formex bij de bron oplost (het
+    dictum als lay-outtabel, de procestaalnoot zonder definitie). Een arrest van
+    een paar dagen oud heeft nog geen Formex; dan is de weigering de juiste
+    uitkomst en de reden staat erbij.
+    """
+    if ident.upper().startswith("ECLI:"):
+        url = f"http://publications.europa.eu/resource/ecli/{quote(ident, safe='')}"
+    else:
+        url = f"http://publications.europa.eu/resource/celex/{ident}"
+    try:
+        response = net.documents().get(
+            url, headers=_formex_headers(lang), timeout=_CELLAR_TIMEOUT, allow_redirects=True,
+        )
+    except Exception as exc:
+        raise ConversionError(
+            f"De Cellar is niet bereikbaar ({type(exc).__name__}); {ident} is niet opgehaald."
+        ) from exc
+    data = _response_bytes(response)
+    if response.status_code != 200 or not data.startswith(b"PK"):
+        detail = (f"HTTP {response.status_code}" if response.status_code != 200
+                  else "het antwoord is geen zip")
+        raise ConversionError(
+            f"Voor {ident} is geen Formex-manifestatie in de Cellar ({detail}) in taal "
+            f"{lang}. Een arrest van de laatste dagen of weken staat er nog niet; "
+            "probeer het later opnieuw. Er is geen terugval op HTML."
+        )
+    bron_url = getattr(response, "url", "") or url
+    # Een oud arrest (Satamedia, 62007CJ0073, 2008) noemt in zijn Formex geen ECLI,
+    # terwijl de Cellar die wel kent (cdm:case-law_ecli). Zonder deze opzoeking
+    # weigerde een vraag op de ECLI ("de bron is 62007CJ0073 (zonder ECLI) en niet
+    # ECLI:EU:C:2008:727") en stond het arrest onder zijn CELEX in de kennisbank,
+    # waar de verwijzing kst-34851-nr-3 → ECLI:EU:C:2008:727 dangling bleef
+    # (T2-F14, kb WP-20). De ECLI uit de metadata krijgt zijn herkomst mee.
+    naam, root = formex_hof.openen(data)
+    eigen = formex_hof.metadata(root, naam)
+    verwacht, ecli_uit_cellar = ident, None
+    gezocht = eigen["celex"]
+    if not eigen["ecli"]:
+        ecli_uit_cellar = _ecli_uit_cellar(gezocht)
+        # Een arrest van vóór de aparte gerechtsletter (Lindqvist, `62001J0101`) noemt zich in
+        # de oude vorm; de Cellar koppelt de ECLI aan de nieuwe (`62001CJ0101`). Zonder deze
+        # tweede vraag weigerde de vraag op de ECLI, en landde het arrest onder de oude CELEX
+        # (T2-F14, kb WP-43; de fix van WP-20 dekte alleen Satamedia, al in de nieuwe vorm).
+        if ecli_uit_cellar is None and formex_hof._nieuw_celex(gezocht) != gezocht:
+            gezocht = formex_hof._nieuw_celex(gezocht)
+            ecli_uit_cellar = _ecli_uit_cellar(gezocht)
+        if ecli_uit_cellar and ident.upper() == ecli_uit_cellar:
+            verwacht = eigen["celex"]
+    markdown, meta = formex_hof.omzetten(data, verwacht)
+    ecli_herkomst = "formex" if meta["ecli"] else None
+    if not meta["ecli"] and ecli_uit_cellar:
+        meta["ecli"], ecli_herkomst = ecli_uit_cellar, "cellar-metadata"
+    # Pas na de identiteitscontrole vastleggen: een bron die een ander arrest blijkt
+    # te zijn hoort niet als bewijs bij deze aanvraag te staan.
+    record_source(
+        data,
+        media_type=_FORMEX_MEDIA_TYPE,
+        source_format="formex-hvj",
+        source_url=bron_url,
+        identifier=meta["ecli"] or meta["celex"],
+        language=lang,
+    )
+    waarschuwingen = ["EUR-Lex is via de officiële Formex-manifestatie opgehaald."]
+    if ecli_herkomst == "cellar-metadata":
+        waarschuwingen.append(
+            f"De bron noemt geen ECLI; {meta['ecli']} komt uit de Cellar-metadata (cdm:case-law_ecli) "
+            f"van {gezocht}.")
+    elif not meta["ecli"]:
+        waarschuwingen.append(
+            "De bron noemt geen ECLI; het CELEX-nummer is de identiteit van dit document.")
+    if meta.get("zaaknummers_melding"):
+        waarschuwingen.append(meta["zaaknummers_melding"])
+    if meta["opmaak_weggelaten"]:
+        waarschuwingen.append(
+            f"{meta['opmaak_weggelaten']} keer vet of cursief niet overgenomen; de tekst blijft.")
+    weg = meta["afbeeldingen_weggelaten"]
+    if weg:
+        waarschuwingen.append(
+            f"{len(weg)} {'afbeelding' if len(weg) == 1 else 'afbeeldingen'} uit de Formex-bron "
+            "niet overgenomen (TIFF); de tekst eromheen staat er wel: "
+            + ", ".join(b["fileref"] for b in weg) + ".")
+    herkomst = Herkomst(
+        format="formex-hvj",
+        celex=meta["celex"],
+        ecli=meta["ecli"],
+        title=" ".join(meta["titelregels"]) or None,
+        language=meta["taal"] or lang.lower(),
+        source_url=bron_url,
+        requested_url=requested_url,
+        koppen_bron=len(meta["secties"]),
+        koppen_markdown=len(meta["secties"]),
+        waarschuwingen=tuple(waarschuwingen),
+        extra={**{k: meta[k] for k in ("zaaknummers", "auteur", "partijen", "overige_partijen",
+                                       "secties", "paginakop", "soort", "noten", "bronbestand",
+                                       "titelregels", "datum", "procestaal",
+                                       "dictum_inleiding")},
+               **({"afbeeldingen_weggelaten": weg} if weg else {}),
+               **({"ecli_herkomst": ecli_herkomst} if ecli_herkomst else {})},
+    )
+    label = ident if ident.upper().startswith("ECLI:") else f"CELEX:{ident}"
+    return markdown, f"EUR-Lex (Cellar Formex) • {label} • {lang}", herkomst
+
+
+_ECLI_HOF = re.compile(r"ECLI:EU:[CTF]:\d{4}:\d+")
+
+
+def _ecli_uit_cellar(celex: str) -> str | None:
+    """De ECLI die de Cellar aan een arrest koppelt (`cdm:case-law_ecli`), of None.
+
+    None bij een storing, bij geen antwoord en bij meer dan één ECLI: dan is er niets
+    te bewijzen en blijft het CELEX-nummer de identiteit, met de melding erbij.
+    """
+    query = (
+        "PREFIX cdm: <http://publications.europa.eu/ontology/cdm#>\n"
+        "SELECT DISTINCT ?ecli WHERE {\n"
+        f'  ?w cdm:resource_legal_id_celex "{celex}"^^<http://www.w3.org/2001/XMLSchema#string> ;\n'
+        "     cdm:case-law_ecli ?ecli .\n"
+        "}"
+    )
+    try:
+        r = net.documents().get(
+            _SPARQL_URL,
+            params={"query": query, "format": "application/sparql-results+json"},
+            timeout=_SPARQL_TIMEOUT,
+        )
+        rows = r.json()["results"]["bindings"]
+    except Exception:
+        return None
+    eclis = {(row.get("ecli", {}).get("value") or "").strip().upper() for row in rows}
+    eclis.discard("")
+    if len(eclis) != 1:
+        return None
+    ecli = eclis.pop()
+    return ecli if _ECLI_HOF.fullmatch(ecli) else None
+
+
+def _html_herkomst(celex: str, lang: str, requested_url: str,
+                    formex_melding: str | None, *, portal: bool = False) -> Herkomst:
+    route = "EUR-Lex-portal" if portal else "Cellar"
+    waarschuwingen = tuple(x for x in (formex_melding, f"{route}-HTML-route gebruikt.") if x)
+    return Herkomst(
+        format="eurlex-html",
+        celex=celex,
+        language=lang.lower(),
+        source_url=(f"https://eur-lex.europa.eu/legal-content/{lang}/TXT/?uri=CELEX:{celex}"
+                    if portal else f"http://publications.europa.eu/resource/celex/{celex}"),
+        requested_url=requested_url,
+        waarschuwingen=waarschuwingen,
+    )
 
 
 def _cellar_headers(lang: str) -> dict[str, str]:
@@ -192,11 +496,12 @@ def _fetch_cellar(celex: str, lang: str) -> str | None:
     )
     if r.status_code == 200:
         html = net.decoded_text(r)
+        record_html(html, source_url=getattr(r, "url", "") or url, identifier=celex, language=lang)
         if _CONSOLIDATED_RE.match(celex):
-            html = _with_base_preamble(html, celex, lang)
+            html = _prepare_consolidated(html, celex, lang)
         return html_to_markdown(html)
     if r.status_code == 300:
-        return _fetch_multipart(r.text, lang, f"CELEX:{celex}")
+        return _fetch_multipart(r.text, lang, f"CELEX:{celex}", celex)
     # Elke andere status is hier gewoon een miss (404, maar ook 406 als de taal
     # niet bestaat). Waaróm een sector-0-CELEX niet op te halen is — datum
     # bestaat niet, of de versie is er niet in deze taal — staat in de metadata
@@ -387,8 +692,16 @@ def _try_cellar(celex: str, lang: str) -> str | None:
     return None
 
 
-def _with_note(markdown: str, note: str) -> str:
-    return f"*{note}*\n\n{markdown}"
+def _with_note(markdown: str, note: str, label: str) -> str:
+    """Zet de notitie als blockquote met label boven de tekst.
+
+    Niet als volledig cursieve regel: dat is in Markdown nadruk, geen
+    herkomstvermelding, en een intakepoort die op `^\\*[^*\\n]{20,}\\*\\s*$`
+    filtert rekent zo'n regel terecht af als opmaakruis. Een blockquote met
+    label zegt wát de mededeling is en blijft zichtbaar — "nooit stil" blijft
+    dus overeind.
+    """
+    return f"> **{label}:** {collapse_ws(note)}\n\n{markdown}"
 
 
 def _consolidated_fallback(celex: str, lang: str) -> tuple[str, str]:
@@ -403,7 +716,7 @@ def _consolidated_fallback(celex: str, lang: str) -> tuple[str, str]:
     3. een foutmelding die uit de metadata zegt wát er aan de hand is.
 
     Latere versies blijven buiten de ladder: die verwerken wijzigingen die op de
-    gevraagde datum nog niet golden. Elke terugval zet een cursieve notitie boven
+    gevraagde datum nog niet golden. Elke terugval zet een notitie als blockquote boven
     de tekst én noemt de afwijking in de bronvermelding — een ander document dan
     gevraagd stil doorgeven is de val die deze code eerder maakte, en dan lijkt de
     oorspronkelijke handeling de geconsolideerde versie te zijn.
@@ -434,7 +747,7 @@ def _consolidated_fallback(celex: str, lang: str) -> tuple[str, str]:
             f"EUR-Lex (Cellar) • CELEX:{cand} • {lang} • "
             f"i.p.v. de gevraagde versie per {_nl_date(wanted)}"
         )
-        return _with_note(markdown, note), source
+        return _with_note(markdown, note, "Herkomst"), source
 
     markdown = _try_cellar(base, lang)
     if markdown is not None:
@@ -447,7 +760,7 @@ def _consolidated_fallback(celex: str, lang: str) -> tuple[str, str]:
             f"EUR-Lex (Cellar) • CELEX:{base} • {lang} • oorspronkelijke handeling "
             f"i.p.v. de geconsolideerde versie per {_nl_date(wanted)}"
         )
-        return _with_note(markdown, note), source
+        return _with_note(markdown, note, "Herkomst"), source
 
     raise ConversionError(
         f"{reason} Ook de oorspronkelijke handeling (CELEX:{base}) was niet op te "
@@ -477,6 +790,115 @@ def _consolidated_error(celex: str) -> str:
 # dus het blok kan letterlijk terug op zijn eigen plek — geen tekstheuristiek,
 # geen taalafhankelijke zoektocht naar "Overwegende hetgeen volgt:".
 
+# --------------------------------------------------------------------------
+# CLG-markup is niet OJ-markup
+# --------------------------------------------------------------------------
+#
+# De geconsolideerde XHTML (CLG) zet een lidnummer NIET in een tweekoloms
+# tabel — waar `render._unwrap_marker_tables` op wacht — maar in div/span-markup:
+#
+#   <div class="norm"><span class="no-parag">1.&nbsp;&nbsp;</span>
+#     <div class="norm inline-element"><p>Om de goede werking …</p></div></div>
+#
+#   <div class="grid-container grid-list">
+#     <div class="list grid-list-column-1"><span>a)&nbsp;</span></div>
+#     <div class="grid-list-column-2"><p class="norm">de doelstellingen …</p></div></div>
+#
+# In beide gevallen staat de tekst in de *volgende sibling* van de marker. Zonder
+# samenvoeging wordt elk nummer een eigen alinea (280 stuks in 02019R0881-20250204)
+# en leest Markdown het als een leeg lijstitem.
+#
+# Voetnootankers dragen bovendien letterlijke newlines binnen de `<a>`; `strip=["a"]`
+# haalt de tag weg maar niet de regeleinden, en `tidy()` voegt regels nooit samen —
+# vandaar `(`, het cijfer en `)` elk op een eigen regel.
+#
+# Beide vormen komen 0x voor in de basishandeling (daar zijn het echte tabellen),
+# dus dit hoort hier en niet in de gedeelde `render.py`, die ook HUDOC bedient.
+
+_CLG_MARKERS = "span.no-parag, div.grid-list-column-1"
+# Het nootcijfer staat op een eigen regel bínnen het anker: `(<a>\n<span>1</span>\n</a>)`.
+# Daar moet de witruimte helemaal weg — een spatie zou er "( 1 )" van maken, terwijl
+# de haakjes in de bron buiten het anker staan en er dus "(1)" hoort te komen.
+_CLG_NOTE_ANCHORS = 'a[href^="#"]:has(> span.superscript)'
+
+# Witruimte in HTML is niet betekenisdragend, maar markdownify neemt een newline
+# uit de bron letterlijk over. De CLG-bron is pretty-printed, dus een voetnootanker
+# (`(<a>\n<span>1</span>\n</a>)`) en een inline ►M1-markering midden in een alinea
+# vallen zo uiteen over drie regels. Alles behalve `pre`/`code` mag dus veilig
+# genormaliseerd worden; blokgrenzen zijn tags, geen witruimte.
+_SOURCE_NEWLINE_RE = re.compile(r"\s*\n\s*")
+_VERBATIM_TAGS = ("pre", "code", "textarea", "script", "style")
+
+
+def _normalise_clg_markup(html: str) -> str:
+    """Zet elke CLG-marker bij de tekst die erbij hoort."""
+    soup = BeautifulSoup(html, "lxml")
+
+    # Achterstevoren, dus binnenste marker eerst: een geneste marker moet in zijn
+    # blok staan vóórdat een buitenste dat blok als geheel van een prefix voorziet.
+    # De lus gaat over de markers, niet over de containers — `div.norm` nest in
+    # `div.norm.inline-element`, dus een containerlus zou zichzelf in lopen.
+    # Geen `_is_marker`-filter: bij een tabel is de vorm het enige houvast, hier
+    # zegt de klassenaam het al. Dat filter zou hier juist schade doen — "c bis)"
+    # haalt de lengtegrens maar faalt op het patroon en zou stil verdwijnen.
+    for marker in reversed(soup.select(_CLG_MARKERS)):
+        block = marker.find_next_sibling()
+        if block is None or not block.get_text(strip=True):
+            continue
+        # Een wijzigingsmarkering (▼M1) kan vóór de eigenlijke tekst staan. Die
+        # hoort op haar eigen regel te blijven — en mag het lidnummer niet
+        # opslokken, want dan raakt het nummer alsnog los van zijn tekst.
+        container = marker.parent
+        while True:
+            first = block.find(recursive=False)
+            if first is None or "modref" not in (first.get("class") or []):
+                break
+            container.insert_before(first.extract())
+        prefix_into(soup, block, marker_prefix(collapse_ws(marker.get_text())))
+        marker.decompose()
+
+    for anchor in soup.select(_CLG_NOTE_ANCHORS):
+        anchor.string = collapse_ws(anchor.get_text())
+
+    return str(soup)
+
+
+def _collapse_source_newlines(html: str) -> str:
+    """Maak van een newline uit de bron weer gewone witruimte.
+
+    Geldt voor élke EUR-Lex-markup, niet alleen CLG: ook de uit de basishandeling
+    ingevoegde `p.oj-note` breekt anders tussen het nootnummer en zijn tekst.
+    Daarom draait dit ná het invoegen van de preambule, terwijl het samenvoegen
+    van markers — dat wél op CLG-klassen selecteert — eraan voorafgaat.
+    """
+    soup = BeautifulSoup(html, "lxml")
+    for text in soup.find_all(string=True):
+        if text.find_parent(_VERBATIM_TAGS) is not None:
+            continue
+        collapsed = _SOURCE_NEWLINE_RE.sub(" ", text)
+        if collapsed != text:
+            text.replace_with(collapsed)
+    return str(soup)
+
+
+def _prepare_consolidated(
+    html: str, celex: str, lang: str, *, with_preamble: bool = True
+) -> str:
+    """Normaliseer de CLG-markup en zet daarna pas de preambule terug.
+
+    De volgorde is de ingreep, niet een detail. De preambule komt uit de
+    *basishandeling* en draagt OJ-markup (`span.oj-super`); het CLG-document
+    gebruikt `span.superscript`. Die vocabulaires zijn vandaag disjunct, dus
+    andersom zou nu toevallig ook goed gaan — maar dan berust dat op een meting
+    in plaats van op structuur. Zo kan de CLG-normalisatie de ingevoegde
+    preambule domweg niet raken.
+    """
+    html = _normalise_clg_markup(html)
+    if with_preamble:
+        html = _with_base_preamble(html, celex, lang)
+    return _collapse_source_newlines(html)
+
+
 _PREAMBLE_NOTE = (
     "Overwegingen en aanhef zijn overgenomen uit de oorspronkelijke handeling "
     "(CELEX:{base}); de geconsolideerde tekst op EUR-Lex bevat deze niet."
@@ -484,6 +906,11 @@ _PREAMBLE_NOTE = (
 _PREAMBLE_MISSING_NOTE = (
     "De overwegingen uit de oorspronkelijke handeling (CELEX:{base}) konden niet "
     "worden opgehaald; hieronder staat alleen de geconsolideerde tekst."
+)
+_PREAMBLE_ANCHOR_NOTE = (
+    "De overwegingen uit de oorspronkelijke handeling (CELEX:{base}) konden niet "
+    "op hun plek worden gezet: dit document mist de gebruikelijke structuur. "
+    "Hieronder staat alleen de geconsolideerde tekst."
 )
 
 
@@ -497,12 +924,25 @@ def _with_base_preamble(html: str, celex: str, lang: str) -> str:
     soup = BeautifulSoup(html, "lxml")
     anchor = _enacting_terms(soup)
     if anchor is None:
-        return html
+        # Geen invoegpunt: de overwegingen kunnen nergens heen. Ook dát moet
+        # gezegd worden — zwijgend de geconsolideerde tekst teruggeven laat hem
+        # compleet lijken terwijl de aanhef en álle overwegingen ontbreken. De
+        # basishandeling wordt hier niet opgehaald; er valt toch niets te plaatsen.
+        note = _note_tag(
+            soup, _PREAMBLE_ANCHOR_NOTE.format(base=_base_celex(soup, celex)),
+            "Overwegingen",
+        )
+        title = soup.find(id="tit_1")
+        if title is not None:
+            title.insert_before(note)
+        else:
+            (soup.body or soup).insert(0, note)
+        return str(soup)
 
     base = _base_celex(soup, celex)
     preamble = _fetch_preamble(base, lang)
     note = _PREAMBLE_NOTE if preamble is not None else _PREAMBLE_MISSING_NOTE
-    anchor.insert_before(_note_tag(soup, note.format(base=base)))
+    anchor.insert_before(_note_tag(soup, note.format(base=base), "Overwegingen"))
     if preamble is not None:
         anchor.insert_before(preamble)
     return str(soup)
@@ -554,33 +994,72 @@ def _fetch_preamble(base_celex: str, lang: str):
         )
         if r.status_code != 200:
             return None
-        return BeautifulSoup(net.decoded_text(r), "lxml").find(id="pbl_1")
+        original_html = net.decoded_text(r)
+        soup = BeautifulSoup(original_html, "lxml")
+        pbl = soup.find(id="pbl_1")
+        if pbl is not None:
+            record_html(original_html, source_url=getattr(r, "url", "") or f"http://publications.europa.eu/resource/celex/{base_celex}", identifier=base_celex, language=lang, role="preamble")
+            _attach_preamble_notes(soup, pbl)
+        return pbl
     except Exception:
         return None
 
 
-def _note_tag(soup, text: str):
-    p = soup.new_tag("p")
-    em = soup.new_tag("em")
-    em.string = text
-    p.append(em)
-    return p
+def _attach_preamble_notes(soup, pbl) -> None:
+    """Verhuis de voetnootdefinities van de overwegingen mee ín de preambule.
 
+    De `p.oj-note`-definities staan niet ín `#pbl_1` maar ernaast, als siblings
+    binnen `div.eli-container`. Wie alleen `#pbl_1` kopieert neemt de overwegingen
+    mét hun verwijzingen (1)(2)(3) mee, maar laat de definities achter — dode
+    verwijzingen, en niets dat dat meldt.
 
-def _fetch_cellar_ecli(ecli: str, lang: str) -> str | None:
-    """EU-rechtspraak uit Cellar, geadresseerd op ECLI, of None.
-
-    De ECLI moet url-encoded (`ECLI%3AEU%3AC%3A…`), anders geeft Cellar 404.
+    Wélke noten meemoeten volgt uit de verwijzingen zelf: een noot hoort bij de
+    preambule dan en slechts dan als een anker bínnen `#pbl_1` ernaartoe wijst.
+    Zo blijven de noten van de artikelen vanzelf achter — die heeft de
+    geconsolideerde tekst zelf al — zonder dat er ergens een aantal in de code
+    staat dat bij de volgende handeling niet meer klopt.
     """
-    url = f"http://publications.europa.eu/resource/ecli/{quote(ecli, safe='')}"
-    r = net.documents().get(
-        url, headers=_cellar_headers(lang), timeout=_CELLAR_TIMEOUT, allow_redirects=True,
-    )
-    if r.status_code == 200:
-        return html_to_markdown(net.decoded_text(r))
-    if r.status_code == 300:
-        return _fetch_multipart(r.text, lang, ecli)
-    return None
+    wanted = set()
+    for a in pbl.select('a[href^="#"]'):
+        target = soup.find(id=a["href"][1:])
+        if target is None:
+            continue
+        note = target.find_parent("p", class_="oj-note")
+        if note is not None:
+            wanted.add(id(note))
+    if not wanted:
+        return
+
+    # `soup.select` geeft documentvolgorde; de `hr.oj-note` ervoor blijft bewust
+    # staan, want die zou als `---` midden in de preambule terechtkomen.
+    notes = [p for p in soup.select("p.oj-note") if id(p) in wanted]
+
+    # Ná de laatste overweging, dus vóór de vaststellingsformule — precies waar
+    # het origineel ze ook heeft. Die formule hoort tegen de artikelen aan.
+    recitals = pbl.select("div.eli-subdivision[id^='rct_']")
+    anchor = recitals[-1] if recitals else None
+    for note in notes:
+        if anchor is None:
+            pbl.append(note.extract())
+        else:
+            anchor.insert_after(note.extract())
+            anchor = note
+
+
+def _note_tag(soup, text: str, label: str):
+    """Een notitie als `<blockquote><p><strong>Label:</strong> …</p></blockquote>`.
+
+    markdownify maakt daar één regel `> **Label:** …` van. Zie `_with_note` voor
+    waarom het geen cursieve regel meer is.
+    """
+    quote = soup.new_tag("blockquote")
+    p = soup.new_tag("p")
+    strong = soup.new_tag("strong")
+    strong.string = f"{label}:"
+    p.append(strong)
+    p.append(NavigableString(f" {text}"))
+    quote.append(p)
+    return quote
 
 
 # Cellar meldt "multiple choices" ook voor documenten die uit meerdere
@@ -590,12 +1069,18 @@ def _fetch_cellar_ecli(ecli: str, lang: str) -> str | None:
 _DOC_PART_RE = re.compile(r'href="(https?://publications\.europa\.eu/resource/cellar/[^"]+?/DOC_\d+)"')
 
 
-def _fetch_multipart(choices_html: str, lang: str, identifier: str) -> str | None:
+def _fetch_multipart(
+    choices_html: str, lang: str, identifier: str, celex: str | None = None
+) -> str | None:
     """Haal en concateneer de onderdelen uit een Cellar 300-respons.
 
     Elk onderdeel moet met `Accept: text/html` opgehaald worden — de
     manifestatie-URL zelf heeft `text/html` als resource-mimetype, en een
     `application/xhtml+xml`-verzoek daarop geeft 406.
+
+    Een geconsolideerde versie kan óók langs deze weg binnenkomen, en kreeg dan
+    preambule noch notitie: deze route sloeg de hele voorbewerking over. Met
+    `celex` erbij gaat elk onderdeel door dezelfde poort als de 200-tak.
     """
     urls = _DOC_PART_RE.findall(choices_html)
     if not urls:
@@ -603,14 +1088,25 @@ def _fetch_multipart(choices_html: str, lang: str, identifier: str) -> str | Non
         raise ConversionError(
             f"Document niet beschikbaar in taal {lang} ({identifier}). Probeer een andere taal."
         )
+    consolidated = bool(celex and _CONSOLIDATED_RE.match(celex))
     parts = []
-    for part_url in urls:
+    for index, part_url in enumerate(urls):
         pr = net.documents().get(
             part_url, headers={"Accept": "text/html", "Accept-Language": lang.lower()},
             timeout=_CELLAR_TIMEOUT,
         )
-        if pr.status_code == 200:
-            parts.append(html_to_markdown(net.decoded_text(pr)))
+        if pr.status_code != 200:
+            continue
+        html = net.decoded_text(pr)
+        record_html(html, source_url=getattr(pr, "url", "") or part_url, identifier=celex or identifier, language=lang, role="document-part")
+        if consolidated:
+            # De preambule hoort één keer in het geheel, in het eerste onderdeel
+            # (de handeling zelf); de rest zijn bijlagen. `index == 0` in plaats
+            # van een vlag-op-succes houdt dat deterministisch.
+            html = _prepare_consolidated(
+                html, celex, lang, with_preamble=(index == 0),
+            )
+        parts.append(html_to_markdown(html))
     return "\n\n---\n\n".join(parts) if parts else None
 
 
@@ -633,4 +1129,6 @@ def _fetch_portal_html(celex: str, lang: str) -> str:
             f"in taal {lang}. Controleer het nummer/de taal, of download de Formex-XML en "
             f"upload die via het andere tabblad."
         )
-    return net.decoded_text(r)
+    html = net.decoded_text(r)
+    record_html(html, source_url=getattr(r, "url", "") or url, identifier=celex, language=lang)
+    return html
