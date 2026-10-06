@@ -67,6 +67,10 @@ _BOTCONTROLE = (
     "het Word-bestand en het zoekresultaat in de browser en zet ze om met "
     "`python -m mdconv.kb_fetch --hudoc-map <map> --uit <map>`.")
 
+# Cloudflare voor HUDOC geeft een 403-challenge aan de nagebootste Chrome-UA van
+# net.documents() (past niet bij requests' TLS-vingerafdruk); een neutrale UA komt door.
+_HEADERS = {"User-Agent": "Mozilla/5.0"}
+
 
 def fetch(query: str, lang: str = "EN") -> tuple[str, str, Herkomst]:
     """Haal een EHRM-uitspraak op; geeft (markdown, bronvermelding, herkomst)."""
@@ -161,7 +165,13 @@ def _botcontrole(r) -> bool:
 
 
 def _get(url: str, **kwargs):
-    """Een GET met één herhaling wanneer HUDOC het verzoek weigert (403 of 429)."""
+    """Een GET met één herhaling wanneer HUDOC het verzoek weigert (403 of 429).
+
+    Elk HUDOC-verzoek gaat met de neutrale User-Agent van `_HEADERS` (Floris, 6 oktober 2026):
+    de nagebootste Chrome-UA van `net.documents()` past niet bij de TLS-vingerafdruk van
+    `requests`, en dat is wat de Cloudflare-controle ziet. Een eigen `headers` in `kwargs` wint.
+    """
+    kwargs.setdefault("headers", _HEADERS)
     r = net.documents().get(url, **kwargs)
     if r.status_code in (403, 429):
         _pauze(_PAUZE_SECONDEN)
