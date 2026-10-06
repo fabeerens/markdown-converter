@@ -38,6 +38,10 @@ _QUERY_TIMEOUT = 30
 _BODY_TIMEOUT = 45
 _MIN_USEFUL_LENGTH = 40
 
+# Cloudflare voor HUDOC geeft een 403-challenge aan de nagebootste Chrome-UA van
+# net.documents() (past niet bij requests' TLS-vingerafdruk); een neutrale UA komt door.
+_HEADERS = {"User-Agent": "Mozilla/5.0"}
+
 
 def fetch(query: str, lang: str = "EN") -> tuple[str, str]:
     """Haal een EHRM-uitspraak op; geeft (markdown, bronvermelding)."""
@@ -93,7 +97,7 @@ def _search(query: str, select: str, length: int = 30) -> list[dict]:
     }
     r = net.documents().get(
         "https://hudoc.echr.coe.int/app/query/results",
-        params=params, timeout=_QUERY_TIMEOUT,
+        params=params, headers=_HEADERS, timeout=_QUERY_TIMEOUT,
     )
     if r.status_code != 200:
         return []
@@ -133,7 +137,7 @@ def _fetch_body(item_id: str) -> str | None:
     """De HTML-body van een HUDOC-document, of None als die niet bestaat."""
     url = ("https://hudoc.echr.coe.int/app/conversion/docx/html/body"
            f"?library=ECHR&id={item_id}")
-    r = net.documents().get(url, timeout=_BODY_TIMEOUT)
+    r = net.documents().get(url, headers=_HEADERS, timeout=_BODY_TIMEOUT)
     if r.status_code != 200 or not r.text.strip():
         return None
     return net.decoded_text(r)
