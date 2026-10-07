@@ -1951,14 +1951,24 @@ async function saveDownload(body, filename) {
     setStatus(data.error || "Downloaden is mislukt.", "err");
     return;
   }
+  // De server beslist of het een zip (bijlagen, of een kennisbankbundel) of een los
+  // .md wordt — een onbekende bijlagen-token, bv. na een herstart, geeft een .md —
+  // dus de naam volgt het antwoord, niet wat de aanroeper verwachtte. Verwachtte de
+  // aanroeper bijlagen en komt er toch een .md, dan hoort de gebruiker dat (Floris,
+  // 31dc203): anders mist hij stil zijn afbeeldingen.
   const blob = await response.blob();
   const extension = blob.type === "application/zip" ? "zip" : "md";
   const basename = filename.replace(/\.(?:md|zip)$/i, "");
+  if (/\.zip$/i.test(filename) && extension !== "zip" && body.attachments_token) {
+    setStatus("De afbeeldingen zijn niet meer beschikbaar (de server is herstart of de sessie is verlopen); alleen de markdown is gedownload. Converteer het bestand opnieuw voor de afbeeldingen.", "err");
+  }
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
   link.download = `${basename}.${extension}`;
+  document.body.appendChild(link);
   link.click();
-  URL.revokeObjectURL(link.href);
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(link.href), 10000);
 }
 
 async function downloadActive() {
