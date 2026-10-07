@@ -663,7 +663,7 @@ body {
    elkaar of los laat zien; editor en weergave vullen hem. */
 .viewer {
   display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-3);
-  height: 480px; min-height: 200px; resize: vertical; overflow: hidden;
+  height: max(720px, 78vh); min-height: 200px; resize: vertical; overflow: hidden;
 }
 .viewer[data-view="split"] { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 .viewer[data-view="raw"] .md-preview, .viewer[data-view="preview"] .editor { display: none; }
