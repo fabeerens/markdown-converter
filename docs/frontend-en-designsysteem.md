@@ -202,11 +202,8 @@ laat Safari/Firefox leeg (bevestigd in die library's eigen documentatie) —
 voor een eenpersoons-lokale-tool zonder build-stap een te zware, te breekbare
 afhankelijkheid voor een puur cosmetisch effect.
 
-**De kop zweeft** (`position: sticky`, i.p.v. gewoon meescrollen): een
-Liquid-Glass-navigatiebalk blijft zichtbaar boven de inhoud die erdoorheen
-scrolt. `initHeaderElevation()` zet `.is-scrolled` zodra `window.scrollY > 4`
-— die class heeft een hogere specificiteit dan `.glass` alleen (twee classes
-i.p.v. één), dus de iets diepere schaduw daarin wint zonder `!important`.
+**De kop scrolt gewoon mee** (niet sticky) — op verzoek losgemaakt (Floris, `a9abb10`); geen
+zweef-/schaduwlogica meer.
 
 **`.overlay` (de instellingendialoog) vervaagt de inhoud erachter** i.p.v.
 'm alleen te verduisteren (`backdrop-filter: blur(6px) saturate(140%)`) —

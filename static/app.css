@@ -247,22 +247,6 @@ body {
   margin: var(--space-5) auto 0;
   padding: var(--space-4) var(--space-5);
   border-radius: var(--diag-5);
-  /* Een Liquid Glass-navigatiebalk blijft zwevend zichtbaar terwijl de
-     inhoud erdoorheen scrolt, i.p.v. gewoon met de pagina mee te scrollen. */
-  position: sticky; top: var(--space-3); z-index: 30;
-  transition: box-shadow var(--dur-standard) var(--ease-standard);
-}
-/* Iets meer diepte zodra er onder de kop doorgescrold wordt (`initHeaderElevation()`
-   in app.js) — het onderscheid tussen "ligt boven op de pagina" en "zweeft
-   erboven". Twee classes = hogere specificiteit dan `.glass` alleen, dus dit
-   wint zonder `!important`. */
-.app-header.is-scrolled {
-  box-shadow:
-    inset 0 1px 0 0 var(--glass-rim-top),
-    inset 0 -1px 0 0 var(--glass-rim-bottom),
-    inset 0 0 0 1px var(--glass-rim-edge),
-    0 16px 40px -16px var(--gray-a7),
-    0 4px 16px -4px var(--black-a2);
 }
 /* Het kopvlak in de huisstijl: het indigo→blauw-verloop van de hero op
    lexdigitalis.nl. Twee classes, zodat dit de glas-achtergrond van `.glass`
@@ -672,7 +656,7 @@ body {
    elkaar of los laat zien; editor en weergave vullen hem. */
 .viewer {
   display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-3);
-  height: 480px; min-height: 200px; resize: vertical; overflow: hidden;
+  height: 95vh; min-height: 200px; resize: vertical; overflow: hidden;
 }
 .viewer[data-view="split"] { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 .viewer[data-view="raw"] .md-preview, .viewer[data-view="preview"] .editor { display: none; }
