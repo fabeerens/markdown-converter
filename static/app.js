@@ -1938,11 +1938,22 @@ async function saveDownload(body, filename) {
     setStatus(data.error || "Downloaden is mislukt.", "err");
     return;
   }
+  // De server beslist of het een zip of een los .md wordt (een onbekende
+  // bijlagen-token, bv. na een herstart, geeft een .md) — dus de naam en de
+  // melding volgen het antwoord, niet wat de aanroeper verwachtte.
+  const isZip = (response.headers.get("Content-Type") || "").includes("zip");
+  const expectedZip = /\.zip$/i.test(filename);
+  if (expectedZip && !isZip && body.attachments_token) {
+    filename = filename.replace(/\.zip$/i, ".md");
+    setStatus("De afbeeldingen zijn niet meer beschikbaar (de server is herstart of de sessie is verlopen); alleen de markdown is gedownload. Converteer het bestand opnieuw voor de afbeeldingen.", "err");
+  }
   const link = document.createElement("a");
   link.href = URL.createObjectURL(await response.blob());
   link.download = filename;
+  document.body.appendChild(link);
   link.click();
-  URL.revokeObjectURL(link.href);
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(link.href), 10000);
 }
 
 async function downloadActive() {
