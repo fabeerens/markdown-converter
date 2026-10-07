@@ -2330,18 +2330,6 @@ function initGlassSpecular() {
   });
 }
 
-/** De kop is `position: sticky` en krijgt iets meer diepte (schaduw) zodra
- * er onder hem doorgescrold wordt — het "zweeft over de inhoud"-gevoel van
- * een Liquid Glass-navigatiebalk, i.p.v. een kop die gewoon met de pagina
- * meescrolt. */
-function initHeaderElevation() {
-  const header = $(".app-header");
-  if (!header) return;
-  const update = () => header.classList.toggle("is-scrolled", window.scrollY > 4);
-  update();
-  window.addEventListener("scroll", update, { passive: true });
-}
-
 /* --------------------------------------------------------------------------
    Opstarten
    -------------------------------------------------------------------------- */
@@ -2354,7 +2342,6 @@ function init() {
   initUpload();
   initPreview();
   initGlassSpecular();
-  initHeaderElevation();
 
   initRows("jur", () => fetchLinks("jur"));
   initRows("wet", () => fetchLinks("wet"));
